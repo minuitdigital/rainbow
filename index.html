@@ -228,6 +228,7 @@
 </div>
 
 <script src="coast.js"></script>
+<script src="terrain.js"></script>
 <script>
 (() => {
   'use strict';
@@ -701,45 +702,295 @@
     ink.stroke();
   }
 
-  // L'arc va du rouge à l'extérieur au violet à l'intérieur — l'ordre réel
-  // d'un arc-en-ciel, à rebours de la rampe thermique du champ.
-  const SPEC = ['#d6342b','#ec841c','#e3c11c','#4fa83c','#1e9bb0','#2f62cc','#5b3fa8'];
-
-  function rainbowIcon(x, y) {
-    ink.lineCap = 'butt';
-    ink.strokeStyle = 'rgba(255,255,255,0.88)';
-    ink.lineWidth = 13;
-    ink.beginPath(); ink.arc(x, y + 5, 7.5, Math.PI, 0); ink.stroke();
-    ink.lineWidth = 1.35;
-    for (let i = 0; i < SPEC.length; i++) {
-      ink.strokeStyle = SPEC[i];
-      ink.beginPath();
-      ink.arc(x, y + 5, 12.6 - i * 1.5, Math.PI, 0);
-      ink.stroke();
-    }
+  // ========================================================== annotations
+  // Le sol : accessibilité et dégagement de l'horizon, un octet par degré.
+  const TR = window.TERRAIN;
+  const trB = (() => {
+    const b = atob(TR.d), u = new Uint8Array(b.length);
+    for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return u;
+  })();
+  function terrainAt(lon, lat) {
+    let i = Math.floor((lon + 180) / 360 * TR.w);
+    let j = Math.floor((90 - lat) / 180 * TR.h);
+    i = ((i % TR.w) + TR.w) % TR.w;
+    j = j < 0 ? 0 : j >= TR.h ? TR.h - 1 : j;
+    const b = trB[j * TR.w + i];
+    return [(b >> 4) / 15, (b & 15) / 15];        // accès, dégagement
   }
 
-  // On échantillonne l'indice sur une grille d'écran, on garde les maxima
-  // au-dessus du seuil, et on écarte ceux qui se marchent dessus.
-  function drawIcons(sun) {
-    const step = 26, dr = drift(), cand = [];
-    for (let py = step; py < H; py += step) {
-      for (let px = step; px < W; px += step) {
+  const wrap180 = d => { d = (d + 180) % 360; return (d < 0 ? d + 360 : d) - 180; };
+  const hash01 = n => {
+    n = Math.imul(n ^ (n >>> 15), 2246822519);
+    n = Math.imul(n ^ (n >>> 13), 3266489917);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  };
+
+  // Combien de temps la porte reste ouverte, en minutes. Exact : ne dépend
+  // que du soleil. Elle se referme soit quand il monte au-dessus de 42°,
+  // soit quand il touche l'horizon.
+  function openFor(lon, lat, sun) {
+    const phi = lat * DEG, dec = sun.decl * DEG;
+    const Hn = wrap180(lon - sun.sublon);
+    const cs = Math.cos(phi) * Math.cos(dec);
+    if (Math.abs(cs) < 1e-7) return null;
+    const sp = Math.sin(phi) * Math.sin(dec);
+    let Hx = null;
+    if (Hn < 0) {
+      const c42 = (Math.sin(42 * DEG) - sp) / cs;
+      if (c42 >= -1 && c42 <= 1) {
+        const H42 = Math.acos(c42) * RAD;
+        if (-H42 > Hn) Hx = -H42;
+      }
+    }
+    if (Hx === null) {
+      const c0 = -sp / cs;
+      if (c0 < -1 || c0 > 1) return null;         // jour ou nuit polaire
+      Hx = Math.acos(c0) * RAD;
+    }
+    const d = Hx - Hn;
+    return d > 0 ? d / 15 * 60 : null;
+  }
+
+  // Les ingrédients du chiffre affiché.
+  function estimate(lon, lat, sun, dr, seed, simH) {
+    const base = index(lon, lat, sun, dr);
+    if (base <= 0.02) return null;
+    const h = sunElev(lon, lat, sun);
+    const st = Math.max(0, Math.min(1, h / 6.5));
+    const geom = Math.pow(1 - h / 42, 1.3) * st * st * (3 - 2 * st);
+    const p = lat * DEG, lo = lon * DEG, cl = Math.cos(p), f = 3.6;
+    const raw = fbm(cl * Math.cos(lo) * f + dr, cl * Math.sin(lo) * f, Math.sin(p) * f);
+    const tt = (raw - 0.44) / 0.26;
+    const rain = tt <= 0 ? 0 : tt >= 1 ? 1 : tt * tt * (3 - 2 * tt);
+    const [acc, open] = terrainAt(lon, lat);
+    // la chance : elle oscille sans raison, à son propre rythme
+    const luck = 0.5 + 0.5 * Math.sin(simH * (2 * Math.PI / 1.3) + seed * 6.2832);
+    const soft = 0.58 + 0.42 * (0.34 * open + 0.24 * acc + 0.42 * luck);
+    return {
+      v: Math.max(0.05, Math.min(0.99, base * soft)),
+      geom, rain, acc, open, luck,
+      min: openFor(lon, lat, sun)
+    };
+  }
+
+  const PHRASES = {
+    imminent: ['imminent'],
+    nul:      ['personne pour voir', 'pleine mer', 'nul témoin'],
+    chance:   ['au hasard', 'un pressentiment', 'rien ne le justifie'],
+    soleil:   ['soleil rasant', 'angle juste'],
+    averse:   ['averse en cours', "l'averse s'éloigne"],
+    horizon:  ['horizon ouvert', 'depuis la crête'],
+    trouee:   ['le soleil perce', 'ciel déchiré']
+  };
+  function phraseFor(e, seed) {
+    let k;
+    if (e.v > 0.95) k = 'imminent';
+    else if (e.acc < 0.34) k = 'nul';
+    else if (e.luck > 0.84) k = 'chance';
+    else if (e.geom > 0.78) k = 'soleil';
+    else if (e.rain > 0.88) k = 'averse';
+    else if (e.open > 0.86) k = 'horizon';
+    else k = 'trouee';
+    const l = PHRASES[k];
+    return l[Math.floor(seed * 9973) % l.length];
+  }
+
+  // ---- zones : détectées, appariées d'une passe à l'autre, elles vivent
+  let zones = [], nextZone = 1, lastScan = -1e9;
+
+  function makePoints(id) {
+    const pts = [];
+    for (let i = 0; i < 5; i++) {
+      pts.push({
+        seed: hash01(id * 7919 + i * 104729),
+        ang: hash01(id * 131 + i * 977) * 6.2832,
+        rf: i === 0 ? 0 : 0.30 + 0.55 * hash01(id * 13 + i * 37),
+        on: 0, est: null, phrase: ''
+      });
+    }
+    return pts;
+  }
+
+  function scanZones(sun, dr, simH) {
+    const step = 30, found = [];
+    for (let py = step * 0.5; py < H; py += step) {
+      for (let px = step * 0.5; px < W; px += step) {
         const g = geoAt(px, py);
         if (!g) continue;
         const v = index(g[0], g[1], sun, dr);
-        if (v > 0.88) cand.push({ px, py, v });
+        if (v > 0.55) found.push({ px, py, v, lon: g[0], lat: g[1] });
       }
     }
-    cand.sort((a, b) => b.v - a.v);
-    const kept = [];
-    for (const c of cand) {
-      if (kept.length >= 26) break;
+    found.sort((a, b) => b.v - a.v);
+
+    const peaks = [];
+    for (const c of found) {
+      if (peaks.length >= 12) break;
       let far = true;
-      for (const k of kept) if (Math.hypot(k.px - c.px, k.py - c.py) < 74) { far = false; break; }
-      if (far) kept.push(c);
+      for (const p of peaks)
+        if (Math.hypot(p.px - c.px, p.py - c.py) < 150) { far = false; break; }
+      if (far) peaks.push(c);
     }
-    for (const k of kept) rainbowIcon(k.px, k.py);
+
+    // rayon apparent : on marche vers l'extérieur jusqu'à la mi-hauteur
+    for (const p of peaks) {
+      let sum = 0;
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4;
+        let r = 24;
+        for (; r < 400; r += 24) {
+          const g = geoAt(p.px + Math.cos(a) * r, p.py + Math.sin(a) * r);
+          if (!g) break;
+          if (index(g[0], g[1], sun, dr) < p.v * 0.5) break;
+        }
+        sum += r;
+      }
+      p.r = sum / 8;
+    }
+
+    // appariement géographique avec les zones déjà vivantes
+    const free = zones.slice();
+    for (const p of peaks) {
+      let best = null, bd = 14;                   // 14° de tolérance
+      for (const z of free) {
+        const d = Math.hypot(wrap180(z.lon - p.lon), z.lat - p.lat);
+        if (d < bd) { bd = d; best = z; }
+      }
+      if (best) {
+        free.splice(free.indexOf(best), 1);
+        best.lon += wrap180(p.lon - best.lon) * 0.45;
+        best.lat += (p.lat - best.lat) * 0.45;
+        best.r += (p.r - best.r) * 0.35;
+        best.peak = p.v;
+        best.seen = true;
+      } else {
+        const id = nextZone++;
+        zones.push({ id, lon: p.lon, lat: p.lat, r: p.r, peak: p.v,
+                     a: 0, seen: true, pts: makePoints(id) });
+      }
+    }
+    for (const z of zones) if (!z.seen) z.a = Math.max(0, z.a - 0.12);
+    zones = zones.filter(z => z.seen || z.a > 0.01);
+
+    // combien de points, où, et que valent-ils
+    const rGeoOf = z => (z.r / scale()) * 58;     // rayon écran -> degrés
+    for (const z of zones) {
+      z.a = z.seen ? Math.min(1, z.a + 0.18) : z.a;
+      const n = Math.max(1, Math.min(5, Math.round(z.r / 90)));
+      const rg = rGeoOf(z);
+      z.pts.forEach((pt, i) => {
+        pt.on += ((i < n ? 1 : 0) - pt.on) * 0.22;
+        const cl = Math.max(0.2, Math.cos(z.lat * DEG));
+        pt.lat = z.lat + pt.rf * rg * Math.sin(pt.ang);
+        pt.lon = wrap180(z.lon + pt.rf * rg * Math.cos(pt.ang) / cl);
+        pt.est = estimate(pt.lon, pt.lat, sun, dr, pt.seed, simH);
+        pt.phrase = pt.est ? phraseFor(pt.est, pt.seed) : '';
+      });
+      z.seen = false;
+    }
+  }
+
+  // ---- tracé d'une annotation
+  function drawCallout(x, y, l1, l2, alpha, boxes) {
+    ink.font = '12px "Fragment Mono", ui-monospace, monospace';
+    const w1 = ink.measureText(l1).width;
+    ink.font = 'italic 10px "Fragment Mono", ui-monospace, monospace';
+    const w2 = ink.measureText(l2).width;
+    const tw = Math.max(w1, w2), LEAD = 17, BAR = Math.max(58, tw + 8);
+
+    let sx = 1, sy = -1, ok = false;
+    for (const [cx, cy] of [[1,-1],[-1,-1],[1,1],[-1,1]]) {
+      const ex = x + cx * LEAD, bx = ex + cx * BAR, by = y + cy * LEAD;
+      const x0 = Math.min(ex, bx), x1 = Math.max(ex, bx);
+      const box = [x0 - 4, by - 34, x1 + 4, by + 6];
+      if (box[0] < 6 || box[2] > W - 6 || box[1] < 6 || box[3] > H - 6) continue;
+      let clash = false;
+      for (const b of boxes)
+        if (box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]) { clash = true; break; }
+      if (clash) continue;
+      sx = cx; sy = cy; boxes.push(box); ok = true; break;
+    }
+    if (!ok) return false;
+
+    const ex = x + sx * LEAD, ey = y + sy * LEAD, bx = ex + sx * BAR;
+    ink.globalAlpha = alpha;
+
+    ink.strokeStyle = 'rgba(20,22,26,0.72)';
+    ink.lineWidth = 1;
+    ink.beginPath();
+    ink.moveTo(x + sx * 4, y + sy * 4);
+    ink.lineTo(ex, ey);
+    ink.lineTo(bx, ey);
+    ink.stroke();
+
+    ink.fillStyle = 'rgba(20,22,26,0.85)';
+    ink.beginPath(); ink.arc(x, y, 2, 0, 6.2832); ink.fill();
+
+    ink.textAlign = sx > 0 ? 'left' : 'right';
+    ink.textBaseline = 'alphabetic';
+    ink.lineJoin = 'round';
+    const tx = ex + sx * 3;
+
+    ink.strokeStyle = 'rgba(255,255,255,0.92)';
+    ink.lineWidth = 3;
+    ink.font = '12px "Fragment Mono", ui-monospace, monospace';
+    ink.strokeText(l1, tx, ey - 18);
+    ink.fillStyle = '#14161a';
+    ink.fillText(l1, tx, ey - 18);
+
+    ink.font = 'italic 10px "Fragment Mono", ui-monospace, monospace';
+    ink.strokeStyle = 'rgba(255,255,255,0.92)';
+    ink.lineWidth = 3;
+    ink.strokeText(l2, tx, ey - 6);
+    ink.fillStyle = '#6b7279';
+    ink.fillText(l2, tx, ey - 6);
+
+    ink.globalAlpha = 1;
+    return true;
+  }
+
+  const MAX_CALLOUTS = 8;
+
+  function drawAnnotations() {
+    const all = [];
+    for (const z of zones)
+      for (const pt of z.pts) {
+        if (pt.on < 0.05 || !pt.est) continue;
+        const g = geoVec(pt.lon, pt.lat);
+        const p = matVec(matT(R), g);
+        const lam = Math.atan2(p[1], p[0]);
+        if (Math.abs(lam) > Math.PI * 0.995) continue;
+        const th = Math.asin(M * Math.max(-1, Math.min(1, p[2])));
+        const X = sx(lam * Math.cos(th) / (M * fyp(th)));
+        const Y = sy(fy(th));
+        if (X < -40 || X > W + 40 || Y < -40 || Y > H + 40) continue;
+        all.push({ X, Y, a: z.a * pt.on, e: pt.est, ph: pt.phrase });
+      }
+    all.sort((a, b) => b.e.v - a.e.v);
+
+    // on interdit d'emblée les coins où vit l'interface
+    const boxes = [
+      [0, 0, 300, 74],                                  // titre
+      [0, H - 96, 176, H],                              // lecture
+      [W - 336, H - 116, W, H],                         // légende
+      [W / 2 - 134, H - 62, W / 2 + 134, H]             // curseur
+    ];
+    let n = 0;
+    for (const c of all) {
+      if (n >= MAX_CALLOUTS) break;
+      let near = false;
+      for (const b of boxes) {
+        const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+        if (Math.hypot(cx - c.X, cy - c.Y) < 96) { near = true; break; }
+      }
+      if (near) continue;
+      const pct = Math.round(c.e.v * 100) + ' %';
+      const dur = c.e.min == null ? ''
+        : c.e.min >= 90 ? '  ·  ' + Math.round(c.e.min / 60 * 10) / 10 + ' h'
+        : '  ·  ' + Math.round(c.e.min) + ' min';
+      if (drawCallout(c.X, c.Y, '🌈 ' + pct + dur, c.ph, c.a, boxes)) n++;
+    }
   }
 
   function drawInk(centre, sun) {
@@ -759,7 +1010,7 @@
     ink.moveTo(cx, cy + g); ink.lineTo(cx, cy + a);
     ink.stroke();
 
-    if (sun) drawIcons(sun);
+    drawAnnotations();
   }
 
   let last = performance.now();
@@ -796,6 +1047,12 @@
     if (dirty || animating) {
       dirty = false;
       const sun = solar(simDate());
+      // les zones ne sont ré-examinées que cinq fois par seconde : le tracé,
+      // lui, suit chaque image, car les points sont stockés en géographique
+      if (now - lastScan > 200) {
+        lastScan = now;
+        scanZones(sun, drift(), elapsed() / 3600000);
+      }
       const g = [R[0], R[1], R[2]];   // le centre de l'écran, en géographique
       const centre = [Math.atan2(g[1], g[0]) * RAD,
                       Math.asin(Math.max(-1, Math.min(1, g[2]))) * RAD];
