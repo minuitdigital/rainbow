@@ -36,7 +36,8 @@ Aucune dépendance, aucun build : quatre fichiers statiques. WebGL 2 requis.
 | Fichier | Rôle |
 |---|---|
 | `index.html` | toute la page : shader, projection, navigation, estimation |
-| `earth.jpg` | relief gris en plate carrée, 8192 × 4096 — texture source |
+| `field.png` | champ hypsométrique, 8192 × 4096 — 0 fosses, 0.5 côte, 1 sommets |
+| `earth.jpg` | relief ombré, 8192 × 4096 — seconde lecture, touche `r` |
 | `mask.png` | coefficient de surface (mer / littoral / intérieur), 720 × 360 |
 | `coast.js` | traits de côte et lacs (Natural Earth 1:50 m, ~55 000 points) |
 
@@ -52,12 +53,15 @@ Deux conséquences :
 
 - **Le zoom précise au lieu de flouter.** On rééchantillonne la source
   8192 × 4096 à chaque échelle, on n'agrandit jamais une image déjà rendue.
-- **Il n'y a de butée nulle part.** La navigation n'est pas une translation
-  mais une vraie rotation de sphère sur deux axes. La silhouette de la
-  projection reste fixe ; la Terre tourne derrière elle. On peut filer vers
-  l'ouest indéfiniment, et vers le nord jusqu'à passer par-dessus le pôle
-  et redescendre de l'autre côté — la carte se retourne alors, comme sur
-  un globe. Aux latitudes obliques on obtient une Equal Earth inclinée.
+- **Il n'y a de butée nulle part.** La navigation est une rotation libre de
+  la sphère, façon boule de commande : le point saisi reste exactement sous
+  le doigt, partout, y compris aux pôles. Aucune singularité, aucune limite.
+  Le nord ne reste pas en haut — c'est le comportement d'un globe.
+- **Les aplats sont nets à n'importe quelle échelle.** Les paliers ne sont pas
+  stockés, ils sont découpés par le shader dans un champ continu, et leurs
+  bords sont anticrénelés par les dérivées d'écran. Pas d'escalier de pixels.
+- **Le cadrage couvre toujours l'écran.** Le zoom minimum remplit la fenêtre ;
+  la silhouette de la projection reste hors champ.
 
 Les traits de côte restent vectoriels, dessinés sur un canvas 2D par-dessus :
 ils sont nets à toutes les échelles.
@@ -71,6 +75,7 @@ ils sont nets à toutes les échelles.
 | double-clic | zoom ×2 (maj : ×0,5) |
 | `+` `−` | zoom |
 | `0` | recentrer |
+| `r` | aplats ↔ relief ombré |
 | `f` | plein écran |
 
 Les flèches existent pour préparer le mini-joystick : le réticule central est le
@@ -100,6 +105,7 @@ Les scripts de `build/` reconstruisent `earth.jpg`, `mask.png` et `coast.js`
 ```bash
 pip install pyproj numpy pillow
 python3 build/make_texture.py   # earth.jpg + mask.png
+python3 build/make_field.py     # field.png
 python3 build/make_coast.py     # coast.js
 ```
 
@@ -107,3 +113,26 @@ python3 build/make_coast.py     # coast.js
 
 Relief et vecteurs : Natural Earth (domaine public).
 Projection : Equal Earth, Šavrič, Patterson & Jenny (2018).
+
+## Les paliers
+
+Terre et mer viennent d'**ETOPO 2022** (60 arc-secondes, surface de la glace),
+sous-échantillonné à 2 km de maille. Huit paliers sur terre, sept en mer :
+
+```
+terre  0   100   300   700  1200  2000  3000  4200  5600 m
+mer    0  -200 -1000 -2500 -3500 -4500 -5500 -7000 m
+```
+
+Les seuils sont **cuits dans la texture** : `make_field.py` stocke déjà la
+fraction de palier, si bien que le découpage uniforme du shader tombe pile sur
+ces altitudes. Pour changer la hypsométrie, on modifie les deux listes en tête
+de `make_field.py` et on régénère — le shader n'a pas à savoir.
+
+Le trait de côte ne vient pas du signe de l'altitude mais de Natural Earth :
+les polders restent des terres, la Caspienne reste une eau, et la valeur 0,5
+suit exactement le trait vectoriel dessiné par-dessus.
+
+Le fichier source ETOPO (444 Mo) n'est pas dans ce dossier — il ne sert qu'à
+la génération. On le récupère sur le site du NCEI (NOAA) :
+`ETOPO_2022_v1_60s_N90W180_surface.tif`.

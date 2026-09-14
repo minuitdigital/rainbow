@@ -197,18 +197,60 @@
   const XMAX = Math.PI / (M * A1);
   const YMAX = fy(Math.asin(M));
 
-  // échelles locales au centre de la projection, en degrés par unité écran :
-  // un pixel de souris déplace la carte d'exactement un pixel, sur les deux axes
-  const K_LON = RAD * M * A1;        // ≈ 66.53
-  const K_LAT = RAD / (M * A1);      // ≈ 49.35
+  // ============================================================ algèbre 3×3
+  // Matrices en colonnes majeures, prêtes pour uniformMatrix3fv.
+  const matMul = (A, B) => {
+    const O = new Float32Array(9);
+    for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) {
+      let s = 0;
+      for (let k = 0; k < 3; k++) s += A[k*3 + r] * B[c*3 + k];
+      O[c*3 + r] = s;
+    }
+    return O;
+  };
+  const matVec = (A, v) => [
+    A[0]*v[0] + A[3]*v[1] + A[6]*v[2],
+    A[1]*v[0] + A[4]*v[1] + A[7]*v[2],
+    A[2]*v[0] + A[5]*v[1] + A[8]*v[2]
+  ];
+  const matT = A => {
+    const O = new Float32Array(9);
+    for (let c = 0; c < 3; c++) for (let r = 0; r < 3; r++) O[c*3 + r] = A[r*3 + c];
+    return O;
+  };
+  const rodrigues = (n, th) => {
+    const c = Math.cos(th), s = Math.sin(th), k = 1 - c, [x, y, z] = n;
+    return new Float32Array([
+      c + x*x*k,   y*x*k + z*s, z*x*k - y*s,
+      x*y*k - z*s, c + y*y*k,   z*y*k + x*s,
+      x*z*k + y*s, y*z*k - x*s, c + z*z*k
+    ]);
+  };
+  const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
+  const dot3 = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
 
-  const wrap180 = d => { d = (d + 180) % 360; return (d < 0 ? d + 360 : d) - 180; };
+  // La composition répétée dérive ; on re-orthonormalise de temps en temps.
+  function orthonormalize(A) {
+    let c0 = [A[0], A[1], A[2]], c1 = [A[3], A[4], A[5]];
+    let n = Math.hypot(...c0); c0 = c0.map(v => v / n);
+    const d = dot3(c1, c0);
+    c1 = c1.map((v, i) => v - d * c0[i]);
+    n = Math.hypot(...c1); c1 = c1.map(v => v / n);
+    const c2 = cross(c0, c1);
+    return new Float32Array([...c0, ...c1, ...c2]);
+  }
+
+  // rotation minimale menant le vecteur a sur le vecteur b
+  function between(a, b) {
+    const ax = cross(a, b), s = Math.hypot(...ax), d = dot3(a, b);
+    if (s < 1e-9) return null;
+    return rodrigues(ax.map(v => v / s), Math.atan2(s, d));
+  }
 
   // ============================================================ le shader
-  // Le fond est reprojeté par pixel, et la navigation est une VRAIE rotation
-  // de sphère sur deux axes. Il n'y a donc de butée nulle part : ni bord à
-  // l'est ou à l'ouest, ni plancher au nord ou au sud. La silhouette de la
-  // projection reste fixe, la Terre tourne derrière elle.
+  // Deux lectures du monde dans la même passe : les APLATS (paliers découpés
+  // dans un champ scalaire, bords calculés donc nets à tout zoom) et le
+  // RELIEF OMBRÉ (la texture d'avant). uMode fond de l'un à l'autre.
   const VERT = `#version 300 es
   in vec2 aPos;
   void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
@@ -217,16 +259,17 @@
   precision highp float;
 
   uniform vec2  uRes;
-  uniform float uScale, uLam0, uPhi0;
+  uniform float uScale, uMode;
+  uniform mat3  uRot;
   uniform float uDecl, uSublon, uDrift;
-  uniform sampler2D uEarth, uMask;
+  uniform sampler2D uEarth, uField, uMask;
   out vec4 fragColor;
 
   const float A1 = 1.340264, A2 = -0.081106, A3 = 0.000893, A4 = 0.003796;
   const float M   = 0.86602540378;
   const float PI  = 3.14159265359;
-  const float TAU = 6.28318530718;
   const float YMAX = 1.31736275916;
+  const float NSEA = 7.0, NLAND = 8.0;
 
   float fyf (float t){ float a=t*t, b=a*a*a; return t*(A1 + A2*a + b*(A3 + A4*a)); }
   float fypf(float t){ float a=t*t, b=a*a*a; return A1 + 3.0*A2*a + b*(7.0*A3 + 9.0*A4*a); }
@@ -270,28 +313,21 @@
     float sn  = sin(th) / M;
     float lam = M * x * fypf(th) / cos(th);
 
-    // couverture du contour, antialiasée par les dérivées d'écran.
-    // lam et sn restent continus : ils vivent avant la rotation.
+    // couverture du contour : lam et sn vivent avant la rotation, donc continus
     float cov = min(clamp((PI  - abs(lam)) / max(fwidth(lam), 1e-6) + 0.5, 0.0, 1.0),
                     clamp((1.0 - abs(sn))  / max(fwidth(sn),  1e-6) + 0.5, 0.0, 1.0));
 
-    // --- rotation de la sphère : (lam, phi) relatifs -> (lon, lat) réels
+    // --- rotation libre de la sphère
     float phiR = asin(clamp(sn, -1.0, 1.0));
     float cp = cos(phiR);
-    vec3 p = vec3(cp * cos(lam), cp * sin(lam), sin(phiR));
-
-    float c0 = cos(radians(uPhi0)), s0 = sin(radians(uPhi0));
-    vec3 q = vec3(p.x * c0 - p.z * s0, p.y, p.x * s0 + p.z * c0);
-    float cl = cos(radians(uLam0)), sl = sin(radians(uLam0));
-    vec3 g = vec3(q.x * cl - q.y * sl, q.x * sl + q.y * cl, q.z);
+    vec3 g = uRot * vec3(cp * cos(lam), cp * sin(lam), sin(phiR));
 
     float lat = degrees(asin(clamp(g.z, -1.0, 1.0)));
     float lon = degrees(atan(g.y, g.x));
 
-    // --- échantillonnage sans couture.
-    // u saute de 1 à 0 au méridien opposé : on calcule le gradient sur deux
-    // versions décalées d'un demi-tour et on garde le plus petit, sinon le
-    // mipmap choisirait le niveau le plus flou tout le long de la couture.
+    // --- échantillonnage sans couture : u saute au méridien opposé, donc on
+    // calcule le gradient sur deux versions décalées d'un demi-tour et on
+    // garde le plus petit, sinon le mipmap s'effondre le long de la couture.
     float v  = (lat + 90.0) / 180.0;
     float u1 = lon / 360.0 + 0.5;
     float u2 = fract(u1 + 0.5);
@@ -299,10 +335,27 @@
     vec2 d2 = vec2(dFdx(u2), dFdy(u2));
     vec2 du = dot(d1, d1) < dot(d2, d2) ? d1 : d2;
     vec2 dv = vec2(dFdx(v), dFdy(v));
+    vec2 uv = vec2(u1, v);
+    vec2 gx = vec2(du.x, dv.x), gy = vec2(du.y, dv.y);
 
-    float gr = textureGrad(uEarth, vec2(u1, v), vec2(du.x, dv.x), vec2(du.y, dv.y)).r;
-    float m  = texture(uMask, vec2(u1, v)).r;
+    // --- APLATS : paliers découpés dans le champ (0 = fosses, .5 = côte, 1 = sommets)
+    float f = textureGrad(uField, uv, gx, gy).r;
+    float bS = clamp((0.5 - f) * 2.0, 0.0, 1.0) * NSEA;
+    float bL = clamp((f - 0.5) * 2.0, 0.0, 1.0) * NLAND;
+    float wS = max(fwidth(bS), 1e-4), wL = max(fwidth(bL), 1e-4);
+    float qS = (floor(bS) + smoothstep(1.0 - wS, 1.0, fract(bS))) / NSEA;
+    float qL = (floor(bL) + smoothstep(1.0 - wL, 1.0, fract(bL))) / NLAND;
+    float wC = max(fwidth(f), 1e-5);
+    float isLand = smoothstep(0.5 - wC, 0.5 + wC, f);
+    float aplat = mix(0.950 - qS * 0.145, 0.995 - qL * 0.335, isLand);
 
+    // --- RELIEF OMBRÉ : l'ancienne lecture, pour comparer
+    float shaded = textureGrad(uEarth, uv, gx, gy).r;
+
+    float ground = mix(aplat, shaded, uMode);
+    float m = texture(uMask, uv).r;
+
+    // --- champ spectral
     float field = 0.0;
     vec3  hue   = vec3(1.0);
 
@@ -311,23 +364,18 @@
 
     if(h > 0.4 && h < 42.0){
       float geom = pow(1.0 - h / 42.0, 1.3) * min(1.0, h / 3.2);
-
       float ccl = cos(pl);
       vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * 3.6;
       float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
-
-      float surface = m;   // coefficient de surface, déjà lissé dans la texture
       float a = (lat - uDecl * 0.45) / 9.5;
       float b = (abs(lat) - 48.0) / 15.0;
-      float wet = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * surface;
-
-      // saturation douce : jamais de plateau, donc jamais d'arête franche
+      float wet = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
       float t = 1.0 - exp(-geom * rain * (wet / 1.2) * 6.0);
       field = pow(t, 0.7) * 0.92;
       hue   = ramp(t);
     }
 
-    vec3 col = vec3(gr) * mix(vec3(1.0), hue, field);
+    vec3 col = vec3(ground) * mix(vec3(1.0), hue, field);
     fragColor = vec4(mix(vec3(1.0), col, cov), 1.0);
   }`;
 
@@ -363,24 +411,24 @@
   gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
   const U = {};
-  for (const n of ['uRes','uScale','uLam0','uPhi0','uDecl','uSublon','uDrift','uEarth','uMask'])
+  for (const n of ['uRes','uScale','uMode','uRot','uDecl','uSublon','uDrift',
+                   'uEarth','uField','uMask'])
     U[n] = gl.getUniformLocation(prog, n);
   gl.uniform1i(U.uEarth, 0);
-  gl.uniform1i(U.uMask, 1);
+  gl.uniform1i(U.uField, 1);
+  gl.uniform1i(U.uMask, 2);
 
-  // Textures blanches 1×1 liées dès le départ : tant que les vraies images
-  // n'arrivent pas la carte est blanche, jamais noire.
-  function placeholder(unit) {
+  function placeholder(unit, val) {
     gl.activeTexture(gl.TEXTURE0 + unit);
     gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE,
-                  new Uint8Array([255, 255, 255]));
+                  new Uint8Array([val, val, val]));
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
-  placeholder(0); placeholder(1);
+  placeholder(0, 255); placeholder(1, 255); placeholder(2, 255);
 
   function makeTexture(unit, img, mip) {
     gl.activeTexture(gl.TEXTURE0 + unit);
@@ -415,41 +463,22 @@
     img.onerror = () => invalidate();
     img.src = src;
   };
+  load('field.png', 1, true);
+  load('mask.png', 2, false);
   load('earth.jpg', 0, true);
-  load('mask.png', 1, false);
 
   // ============================================================ état
   let W = 0, H = 0, dpr = 1, baseScale = 1;
-  const view = { lam0: 0, phi0: 0, zoom: 1 };   // deux angles, rien d'autre
-  let zoomTarget = 1;
+  let R = new Float32Array([1,0,0, 0,1,0, 0,0,1]);   // relatif -> géographique
+  let zoom = 1, zoomTarget = 1;
+  let mode = 0, modeTarget = 0;                      // 0 aplats, 1 relief ombré
   let anchorPt = null;
-  const vel = { lam: 0, phi: 0 };
+  const spin = { axis: null, rate: 0 };              // inertie
+  let opCount = 0;
 
-  const scale = () => baseScale * view.zoom;
+  const scale = () => baseScale * zoom;
   const sx = x => x * scale() + W / 2;
   const sy = y => -y * scale() + H / 2;
-
-  // (lam, phi) relatifs à la projection -> (lon, lat) réels
-  function relToGeo(lamDeg, phiDeg) {
-    const l = lamDeg * DEG, p = phiDeg * DEG, cp = Math.cos(p);
-    const px = cp * Math.cos(l), py = cp * Math.sin(l), pz = Math.sin(p);
-    const c0 = Math.cos(view.phi0 * DEG), s0 = Math.sin(view.phi0 * DEG);
-    const qx = px * c0 - pz * s0, qy = py, qz = px * s0 + pz * c0;
-    const cl = Math.cos(view.lam0 * DEG), sl = Math.sin(view.lam0 * DEG);
-    const gx = qx * cl - qy * sl, gy = qx * sl + qy * cl, gz = qz;
-    return [Math.atan2(gy, gx) * RAD, Math.asin(Math.max(-1, Math.min(1, gz))) * RAD];
-  }
-
-  // l'inverse : (lon, lat) réels -> (lam, phi) relatifs, pour tracer les côtes
-  function geoToRel(lonDeg, latDeg) {
-    const l = lonDeg * DEG, p = latDeg * DEG, cp = Math.cos(p);
-    const gx = cp * Math.cos(l), gy = cp * Math.sin(l), gz = Math.sin(p);
-    const cl = Math.cos(view.lam0 * DEG), sl = Math.sin(view.lam0 * DEG);
-    const tx = gx * cl + gy * sl, ty = -gx * sl + gy * cl, tz = gz;
-    const c0 = Math.cos(view.phi0 * DEG), s0 = Math.sin(view.phi0 * DEG);
-    const px = tx * c0 + tz * s0, py = ty, pz = -tx * s0 + tz * c0;
-    return [Math.atan2(py, px) * RAD, Math.asin(Math.max(-1, Math.min(1, pz))) * RAD];
-  }
 
   function invEE(x, y) {
     let th = Math.asin(Math.max(-1, Math.min(1, y / YMAX)) * M);
@@ -458,39 +487,37 @@
     if (s < -1 || s > 1) return null;
     const lam = M * x * fyp(th) / Math.cos(th);
     if (lam < -Math.PI || lam > Math.PI) return null;
-    return [lam * RAD, Math.asin(s) * RAD];
+    return [lam, Math.asin(s)];
   }
 
-  function geoAt(px, py) {
+  // direction unitaire, dans le repère de la projection, sous un point écran
+  function relDir(px, py) {
     const r = invEE((px - W / 2) / scale(), -(py - H / 2) / scale());
-    return r ? relToGeo(r[0], r[1]) : null;
+    if (!r) return null;
+    const cp = Math.cos(r[1]);
+    return [cp * Math.cos(r[0]), cp * Math.sin(r[0]), Math.sin(r[1])];
+  }
+  const geoVec = (lon, lat) => {
+    const cp = Math.cos(lat * DEG);
+    return [cp * Math.cos(lon * DEG), cp * Math.sin(lon * DEG), Math.sin(lat * DEG)];
+  };
+  const geoAt = (px, py) => {
+    const p = relDir(px, py);
+    if (!p) return null;
+    const g = matVec(R, p);
+    return [Math.atan2(g[1], g[0]) * RAD, Math.asin(Math.max(-1, Math.min(1, g[2]))) * RAD];
+  };
+
+  // amène (lon, lat) sous (px, py) sans contrainte d'orientation
+  function anchorTo(lon, lat, px, py) {
+    const pNew = relDir(px, py);
+    if (!pNew) return;
+    const pR = matVec(matT(R), geoVec(lon, lat));
+    const q = between(pNew, pR);
+    if (q) R = matMul(R, q);
   }
 
-  // amène (lon, lat) sous (px, py) en résolvant les deux angles — zoom au curseur
-  function setAnchor(lon, lat, px, py) {
-    const r = invEE((px - W / 2) / scale(), -(py - H / 2) / scale());
-    if (!r) return;
-    const l = r[0] * DEG, ph = r[1] * DEG, cp = Math.cos(ph);
-    const pX = cp * Math.cos(l), pY = cp * Math.sin(l), pZ = Math.sin(ph);
-    const gz = Math.sin(lat * DEG);
-
-    // q.z = pX·sin φ0 + pZ·cos φ0 = g.z  →  R·sin(φ0 + δ) = g.z
-    const R = Math.hypot(pX, pZ);
-    if (R < 1e-9) return;
-    const delta = Math.atan2(pZ, pX);
-    view.phi0 = (Math.asin(Math.max(-1, Math.min(1, gz / R))) - delta) * RAD;
-
-    const c0 = Math.cos(view.phi0 * DEG), s0 = Math.sin(view.phi0 * DEG);
-    const qx = pX * c0 - pZ * s0, qy = pY;
-    view.lam0 = wrap180(lon - Math.atan2(qy, qx) * RAD);
-    clampView();
-  }
-
-  function clampView() {
-    view.zoom = Math.max(1, Math.min(8, view.zoom));
-    view.lam0 = wrap180(view.lam0);
-    view.phi0 = wrap180(view.phi0);   // aucune butée : on passe par-dessus le pôle
-  }
+  const bump = () => { if ((++opCount & 63) === 0) R = orthonormalize(R); };
 
   // ============================================================ soleil
   function solar(date) {
@@ -554,8 +581,9 @@
     W = glCv.clientWidth; H = glCv.clientHeight;
     for (const c of [glCv, inkCv]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
     ink.setTransform(dpr, 0, 0, dpr, 0, 0);
-    baseScale = Math.min(W / (2 * XMAX), H / (2 * YMAX)) * 0.94;
-    clampView();
+    // « couvrir » et non « contenir » : la carte remplit toujours l'écran,
+    // la silhouette de la projection reste hors champ
+    baseScale = Math.max(W / (2 * XMAX), H / (2 * YMAX));
     invalidate();
   }
 
@@ -565,29 +593,25 @@
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.uniform2f(U.uRes, glCv.width, glCv.height);
     gl.uniform1f(U.uScale, scale() * dpr);
-    gl.uniform1f(U.uLam0, view.lam0);
-    gl.uniform1f(U.uPhi0, view.phi0);
+    gl.uniform1f(U.uMode, mode);
+    gl.uniformMatrix3fv(U.uRot, false, R);
     gl.uniform1f(U.uDecl, sun.decl);
     gl.uniform1f(U.uSublon, sun.sublon);
     gl.uniform1f(U.uDrift, drift());
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  // rayon angulaire visible depuis le centre de vue, en degrés
   function visibleRadius() {
-    if (view.zoom <= 1.02) return 181;
-    const halfDiag = Math.hypot(W / 2, H / 2) / scale();
-    return Math.min(181, halfDiag * 58 + 12);
+    if (zoom < 2) return 181;
+    return Math.min(181, Math.hypot(W / 2, H / 2) / scale() * 75 + 15);
   }
-
-  // distance angulaire (deg) entre le centre de vue et un point
-  function angDist(lon, lat) {
-    const a = lat * DEG, b = view.phi0 * DEG, dl = (lon - view.lam0) * DEG;
+  function angDist(lon, lat, c) {
+    const a = lat * DEG, b = c[1] * DEG, dl = (lon - c[0]) * DEG;
     return Math.acos(Math.max(-1, Math.min(1,
       Math.sin(a) * Math.sin(b) + Math.cos(a) * Math.cos(b) * Math.cos(dl)))) * RAD;
   }
 
-  function drawRings(rings, radius, width, alpha) {
+  function drawRings(rings, radius, centre, Rt, width, alpha) {
     ink.lineWidth = width;
     ink.strokeStyle = `rgba(20,22,26,${alpha})`;
     ink.lineJoin = 'round';
@@ -595,21 +619,20 @@
     ink.beginPath();
     for (const ring of rings) {
       const b = ring.b;
-      if (radius < 180) {
-        const span = Math.max(b[1] - b[0], b[3] - b[2]);
-        if (span < 300) {
-          const rr = Math.hypot(b[1] - b[0], b[3] - b[2]) / 2 + 1;
-          if (angDist((b[0] + b[1]) / 2, (b[2] + b[3]) / 2) - rr > radius) continue;
-        }
+      if (radius < 180 && Math.max(b[1] - b[0], b[3] - b[2]) < 300) {
+        const rr = Math.hypot(b[1] - b[0], b[3] - b[2]) / 2 + 1;
+        if (angDist((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, centre) - rr > radius) continue;
       }
       const p = ring.p;
       let started = false, prev = 0;
       for (let i = 0; i < p.length; i += 2) {
-        const r = geoToRel(p[i], p[i + 1]);
-        const lam = r[0];
+        const cp = Math.cos(p[i+1] * DEG);
+        const q = matVec(Rt, [cp * Math.cos(p[i] * DEG), cp * Math.sin(p[i] * DEG),
+                              Math.sin(p[i+1] * DEG)]);
+        const lam = Math.atan2(q[1], q[0]) * RAD;
         if (started && Math.abs(lam - prev) > 180) started = false;
         prev = lam;
-        const th = Math.asin(M * Math.sin(r[1] * DEG));
+        const th = Math.asin(M * Math.max(-1, Math.min(1, q[2])));
         const X = sx((lam * DEG) * Math.cos(th) / (M * fyp(th)));
         const Y = sy(fy(th));
         if (!started) { ink.moveTo(X, Y); started = true; } else ink.lineTo(X, Y);
@@ -618,12 +641,12 @@
     ink.stroke();
   }
 
-  function drawInk() {
+  function drawInk(centre) {
     ink.clearRect(0, 0, W, H);
-    const radius = visibleRadius();
-    const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));
-    drawRings(window.COAST.coast, radius, lw, 0.92);
-    drawRings(window.COAST.lakes, radius, lw * 0.8, 0.5);
+    const radius = visibleRadius(), Rt = matT(R);
+    const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(zoom) * 0.24));
+    drawRings(window.COAST.coast, radius, centre, Rt, lw, 0.92);
+    drawRings(window.COAST.lakes, radius, centre, Rt, lw * 0.8, 0.5);
 
     const cx = W / 2, cy = H / 2, g = 7, a = 17;
     ink.strokeStyle = 'rgba(20,22,26,0.42)';
@@ -642,54 +665,53 @@
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     let animating = false;
 
-    if (Math.abs(zoomTarget - view.zoom) > 1e-4) {
-      view.zoom += (zoomTarget - view.zoom) * (1 - Math.exp(-dt * 16));
-      clampView();
-      if (anchorPt) setAnchor(anchorPt.lon, anchorPt.lat, anchorPt.px, anchorPt.py);
+    if (Math.abs(zoomTarget - zoom) > 1e-4) {
+      zoom += (zoomTarget - zoom) * (1 - Math.exp(-dt * 16));
+      if (anchorPt) anchorTo(anchorPt.lon, anchorPt.lat, anchorPt.px, anchorPt.py);
       animating = true;
-    } else if (view.zoom !== zoomTarget) {
-      view.zoom = zoomTarget; clampView();
-      if (anchorPt) setAnchor(anchorPt.lon, anchorPt.lat, anchorPt.px, anchorPt.py);
+    } else if (zoom !== zoomTarget) {
+      zoom = zoomTarget;
+      if (anchorPt) anchorTo(anchorPt.lon, anchorPt.lat, anchorPt.px, anchorPt.py);
       anchorPt = null;
       animating = true;
     }
 
-    if (!drag && (Math.abs(vel.lam) > 0.02 || Math.abs(vel.phi) > 0.02)) {
-      view.lam0 += vel.lam * dt;
-      view.phi0 += vel.phi * dt;
-      const k = Math.exp(-dt / 0.19);
-      vel.lam *= k; vel.phi *= k;
-      clampView();
+    if (Math.abs(modeTarget - mode) > 1e-3) {
+      mode += (modeTarget - mode) * (1 - Math.exp(-dt * 8));
+      animating = true;
+    } else if (mode !== modeTarget) { mode = modeTarget; animating = true; }
+
+    if (!drag && spin.axis && Math.abs(spin.rate) > 0.02) {
+      R = matMul(R, rodrigues(spin.axis, spin.rate * dt));
+      spin.rate *= Math.exp(-dt / 0.2);
+      bump();
       animating = true;
     }
 
     if (dirty || animating) {
       dirty = false;
       const sun = solar(new Date());
+      const g = [R[0], R[1], R[2]];   // le centre de l'écran, en géographique
+      const centre = [Math.atan2(g[1], g[0]) * RAD,
+                      Math.asin(Math.max(-1, Math.min(1, g[2]))) * RAD];
       drawGL(sun);
-      drawInk();
-      readout(sun);
+      drawInk(centre);
+      readout(sun, centre);
     }
     if (animating) rafId = requestAnimationFrame(frame);
   }
 
   // ============================================================ lecture
   const el = id => document.getElementById(id);
-  function readout(sun) {
+  function readout(sun, c) {
     const now = new Date();
-    const lon = wrap180(view.lam0), lat = view.phi0;
-    // au-delà du pôle la carte est retournée : on ramène la lecture au réel
-    const flip = Math.abs(wrap180(lat)) > 90;
-    const rLat = flip ? (lat > 0 ? 180 - lat : -180 - lat) : lat;
-    const rLon = flip ? wrap180(lon + 180) : lon;
-    el('r-lat').textContent = `${Math.abs(rLat).toFixed(1)}° ${rLat >= 0 ? 'N' : 'S'}`;
-    el('r-lon').textContent = `${Math.abs(rLon).toFixed(1)}° ${rLon >= 0 ? 'E' : 'O'}`;
-    el('r-sun').textContent = `${sunElev(rLon, rLat, sun).toFixed(1)}°`;
-    const v = index(rLon, rLat, sun, drift());
+    el('r-lat').textContent = `${Math.abs(c[1]).toFixed(1)}° ${c[1] >= 0 ? 'N' : 'S'}`;
+    el('r-lon').textContent = `${Math.abs(c[0]).toFixed(1)}° ${c[0] >= 0 ? 'E' : 'O'}`;
+    el('r-sun').textContent = `${sunElev(c[0], c[1], sun).toFixed(1)}°`;
+    const v = index(c[0], c[1], sun, drift());
     const idx = el('r-idx');
     idx.textContent = v <= 0.02 ? '—' : v.toFixed(2);
     idx.classList.toggle('hot', v > 0.6);
-
     el('r-time').textContent =
       `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')} UTC`;
     el('r-date').textContent =
@@ -704,6 +726,8 @@
     idleTimer = setTimeout(() => document.body.classList.add('idle'), 4200);
   }
 
+  // Rotation façon boule de commande : le point saisi reste sous le doigt,
+  // partout, y compris aux pôles. Aucune singularité, aucune butée.
   let drag = null;
   const pointers = new Map();
   let pinch = null;
@@ -715,12 +739,12 @@
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
       const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2];
-      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: view.zoom,
-                geo: geoAt(mid[0], mid[1]), mid };
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: zoom, geo: geoAt(mid[0], mid[1]) };
       drag = null;
     } else {
-      drag = { x: e.clientX, y: e.clientY, t: performance.now() };
-      vel.lam = vel.phi = 0;
+      const p = relDir(e.clientX, e.clientY);
+      drag = { R0: R.slice(), p0: p, pPrev: p, t: performance.now() };
+      spin.rate = 0;
       inkCv.classList.add('dragging');
     }
   });
@@ -731,29 +755,35 @@
 
     if (pinch && pointers.size === 2) {
       const [a, b] = [...pointers.values()];
-      const d = Math.hypot(a.x - b.x, a.y - b.y);
       const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2];
-      zoomTarget = view.zoom = Math.max(1, Math.min(8, pinch.zoom * (d / pinch.d)));
-      clampView();
-      if (pinch.geo) setAnchor(pinch.geo[0], pinch.geo[1], mid[0], mid[1]);
+      zoom = zoomTarget = Math.max(1, Math.min(8, pinch.z * (Math.hypot(a.x-b.x, a.y-b.y) / pinch.d)));
+      if (pinch.geo) anchorTo(pinch.geo[0], pinch.geo[1], mid[0], mid[1]);
       invalidate();
       return;
     }
-    if (!drag) return;
+    if (!drag || !drag.p0) return;
 
+    const pNow = relDir(e.clientX, e.clientY);
+    if (!pNow) return;
+
+    const q = between(pNow, drag.p0);
+    R = q ? matMul(drag.R0, q) : drag.R0.slice();
+    bump();
+
+    // vitesse angulaire, pour l'inertie
     const now = performance.now();
-    const dt = Math.max(1, now - drag.t) / 1000;
-    const s = scale();
-    const dLam = -(e.clientX - drag.x) * K_LON / s;
-    const dPhi =  (e.clientY - drag.y) * K_LAT / s;
-
-    view.lam0 += dLam;
-    view.phi0 += dPhi;
-    clampView();
-
-    vel.lam = vel.lam * 0.65 + (dLam / dt) * 0.35;
-    vel.phi = vel.phi * 0.65 + (dPhi / dt) * 0.35;
-    drag = { x: e.clientX, y: e.clientY, t: now };
+    const dt = Math.max(8, now - drag.t) / 1000;
+    const inc = between(pNow, drag.pPrev);
+    if (inc) {
+      const ax = [inc[5] - inc[7], inc[6] - inc[2], inc[1] - inc[3]];
+      const s = Math.hypot(...ax) / 2, c = (inc[0] + inc[4] + inc[8] - 1) / 2;
+      const ang = Math.atan2(s, c);
+      if (s > 1e-7) {
+        spin.axis = ax.map(v => v / (2 * s));
+        spin.rate = spin.rate * 0.55 + (ang / dt) * 0.45;
+      }
+    }
+    drag.pPrev = pNow; drag.t = now;
     invalidate();
   });
 
@@ -788,18 +818,28 @@
     invalidate();
   });
 
-  // clavier : parité avec le futur mini-joystick, quatre directions sans butée
+  // clavier : parité avec le futur mini-joystick
+  function nudge(dx, dy) {
+    const cx = W / 2, cy = H / 2;
+    const a = relDir(cx, cy), b = relDir(cx + dx, cy + dy);
+    if (!a || !b) return;
+    const q = between(b, a);
+    if (q) { R = matMul(R, q); bump(); }
+  }
   window.addEventListener('keydown', e => {
     let hit = true;
-    const s = scale(), step = 90;
+    const s = 90;
     switch (e.key) {
-      case 'ArrowLeft':  view.lam0 -= step * K_LON / s; break;
-      case 'ArrowRight': view.lam0 += step * K_LON / s; break;
-      case 'ArrowUp':    view.phi0 += step * K_LAT / s; break;
-      case 'ArrowDown':  view.phi0 -= step * K_LAT / s; break;
+      case 'ArrowLeft':  nudge( s, 0); break;
+      case 'ArrowRight': nudge(-s, 0); break;
+      case 'ArrowUp':    nudge(0,  s); break;
+      case 'ArrowDown':  nudge(0, -s); break;
       case '+': case '=': anchorPt = null; zoomTarget = Math.min(8, zoomTarget * 1.3); break;
       case '-': case '_': anchorPt = null; zoomTarget = Math.max(1, zoomTarget / 1.3); break;
-      case '0': anchorPt = null; view.lam0 = view.phi0 = 0; zoomTarget = view.zoom = 1; break;
+      case '0':
+        anchorPt = null; R = new Float32Array([1,0,0, 0,1,0, 0,0,1]);
+        zoom = zoomTarget = 1; break;
+      case 'r': case 'R': modeTarget = modeTarget > 0.5 ? 0 : 1; break;   // aplats / ombré
       case 'f': case 'F':
         if (document.fullscreenElement) document.exitFullscreen();
         else document.documentElement.requestFullscreen?.();
@@ -809,7 +849,6 @@
     if (!hit) return;
     e.preventDefault();
     wake();
-    clampView();
     invalidate();
   });
 
