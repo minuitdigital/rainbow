@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Carte mondiale en projection Equal Earth signalant les zones ou un arc-en-ciel est sur le point d'apparaitre.">
+<style>*{box-sizing:border-box}html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Estimateur d'arcs-en-ciel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fragment+Mono:ital@0;1&display=swap">
+<style>
+  /* ---------------------------------------------------------------
+     Papier blanc, encre froide, le spectre comme seule couleur.
+     L'objet final est un panneau e-ink blanc : la page assume un
+     seul thème, clair, et le peint explicitement.
+     --------------------------------------------------------------- */
+  :root {
+    --paper:     #ffffff;
+    --ink:       #14161a;
+    --ink-soft:  #9aa1a9;
+    --ink-faint: #c9ced4;
+    --rule:      #e6e8ec;
+
+    --sp-0: #5b3fa8; --sp-1: #2f62cc; --sp-2: #1e9bb0; --sp-3: #4fa83c;
+    --sp-4: #e3c11c; --sp-5: #ec841c; --sp-6: #d62f26;
+
+    --mono: "Fragment Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  html, body { height: 100%; background: var(--paper); color: var(--ink); }
+  body {
+    margin: 0;
+    font-family: var(--mono);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .layer {
+    position: fixed;
+    inset: 0;
+    /* un canvas est un élément remplacé : sans width/height explicites
+       il conserve sa taille intrinsèque malgré inset:0 */
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  #gl  { z-index: 0; background: var(--paper); }
+  #ink { z-index: 1; touch-action: none; cursor: grab; }
+  #ink.dragging { cursor: grabbing; }
+
+  /* ---------------------------------------------------- chrome minimal */
+  .chrome {
+    position: fixed;
+    z-index: 2;
+    pointer-events: none;
+    font-size: 10px;
+    line-height: 1.5;
+    letter-spacing: .08em;
+    color: var(--ink-soft);
+    transition: opacity .9s ease;
+  }
+  body.idle .chrome { opacity: .28; }
+  @media (prefers-reduced-motion: reduce) {
+    .chrome { transition: none; }
+    body.idle .chrome { opacity: 1; }
+  }
+
+  .mark {
+    top: 18px; left: 18px;
+    text-transform: uppercase;
+    letter-spacing: .22em;
+    color: var(--ink);
+  }
+  .mark small {
+    display: block;
+    margin-top: 5px;
+    letter-spacing: .1em;
+    text-transform: none;
+    color: var(--ink-soft);
+    font-style: italic;
+  }
+
+  .readout {
+    bottom: 18px; left: 18px;
+    display: grid;
+    grid-template-columns: auto auto;
+    column-gap: 14px;
+    row-gap: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .readout dt { color: var(--ink-faint); }
+  .readout dd { margin: 0; color: var(--ink); text-align: right; }
+  .readout dd.hot { color: var(--sp-6); }
+
+  .legend {
+    bottom: 18px; right: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    text-align: right;
+    max-width: min(46vw, 310px);
+  }
+  .ramp {
+    width: 168px; height: 5px;
+    background: linear-gradient(90deg,
+      var(--sp-0), var(--sp-1), var(--sp-2), var(--sp-3),
+      var(--sp-4), var(--sp-5), var(--sp-6));
+  }
+  .ramp-ends {
+    width: 168px;
+    display: flex;
+    justify-content: space-between;
+    color: var(--ink-faint);
+  }
+  .note {
+    color: var(--ink-faint);
+    font-style: italic;
+    letter-spacing: .04em;
+    line-height: 1.6;
+  }
+  .clock {
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    padding-top: 2px;
+    border-top: 1px solid var(--rule);
+    width: 168px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .fallback {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    display: grid;
+    place-content: center;
+    padding: 24px;
+    text-align: center;
+    background: var(--paper);
+    color: var(--ink-soft);
+    font-size: 12px;
+    line-height: 1.8;
+    letter-spacing: .06em;
+  }
+
+  @media (max-width: 620px) {
+    .readout { bottom: 14px; left: 14px; }
+    .legend  { bottom: 14px; right: 14px; }
+    .mark    { top: 14px; left: 14px; }
+    .ramp, .ramp-ends, .clock { width: 128px; }
+    .note { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl" class="layer"></canvas>
+<canvas id="ink" class="layer"></canvas>
+
+<div class="chrome mark">
+  Estimateur d'arcs-en-ciel
+  <small>où le ciel est sur le point de se plier</small>
+</div>
+
+<dl class="chrome readout">
+  <dt>lat</dt><dd id="r-lat">—</dd>
+  <dt>lon</dt><dd id="r-lon">—</dd>
+  <dt>soleil</dt><dd id="r-sun">—</dd>
+  <dt>indice</dt><dd id="r-idx">—</dd>
+</dl>
+
+<div class="chrome legend">
+  <p class="note">Au-delà de 42° de hauteur solaire, le centre de l'arc passe sous l'horizon : aucun arc-en-ciel n'est possible.</p>
+  <div class="ramp" aria-hidden="true"></div>
+  <div class="ramp-ends"><span>faible</span><span>forte</span></div>
+  <div class="clock"><span id="r-date">—</span><span id="r-time">— UTC</span></div>
+</div>
+
+<div class="fallback" id="fallback" hidden>
+  Cette carte est calculée par le processeur graphique.<br>
+  WebGL 2 n'est pas disponible dans ce navigateur.
+</div>
+
+<script src="coast.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  // ============================================================ projection
+  // Equal Earth — Šavrič, Patterson & Jenny (2018).
+  const A1 = 1.340264, A2 = -0.081106, A3 = 0.000893, A4 = 0.003796;
+  const M = Math.sqrt(3) / 2;
+  const DEG = Math.PI / 180, RAD = 180 / Math.PI;
+
+  const fy  = t => { const a = t*t, b = a*a*a; return t * (A1 + A2*a + b*(A3 + A4*a)); };
+  const fyp = t => { const a = t*t, b = a*a*a; return A1 + 3*A2*a + b*(7*A3 + 9*A4*a); };
+
+  const XMAX = Math.PI / (M * A1);
+  const YMAX = fy(Math.asin(M));
+
+  // échelles locales au centre de la projection, en degrés par unité écran :
+  // un pixel de souris déplace la carte d'exactement un pixel, sur les deux axes
+  const K_LON = RAD * M * A1;        // ≈ 66.53
+  const K_LAT = RAD / (M * A1);      // ≈ 49.35
+
+  const wrap180 = d => { d = (d + 180) % 360; return (d < 0 ? d + 360 : d) - 180; };
+
+  // ============================================================ le shader
+  // Le fond est reprojeté par pixel, et la navigation est une VRAIE rotation
+  // de sphère sur deux axes. Il n'y a donc de butée nulle part : ni bord à
+  // l'est ou à l'ouest, ni plancher au nord ou au sud. La silhouette de la
+  // projection reste fixe, la Terre tourne derrière elle.
+  const VERT = `#version 300 es
+  in vec2 aPos;
+  void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+  const FRAG = `#version 300 es
+  precision highp float;
+
+  uniform vec2  uRes;
+  uniform float uScale, uLam0, uPhi0;
+  uniform float uDecl, uSublon, uDrift;
+  uniform sampler2D uEarth, uMask;
+  out vec4 fragColor;
+
+  const float A1 = 1.340264, A2 = -0.081106, A3 = 0.000893, A4 = 0.003796;
+  const float M   = 0.86602540378;
+  const float PI  = 3.14159265359;
+  const float TAU = 6.28318530718;
+  const float YMAX = 1.31736275916;
+
+  float fyf (float t){ float a=t*t, b=a*a*a; return t*(A1 + A2*a + b*(A3 + A4*a)); }
+  float fypf(float t){ float a=t*t, b=a*a*a; return A1 + 3.0*A2*a + b*(7.0*A3 + 9.0*A4*a); }
+
+  float hash31(vec3 p){
+    p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+  float vnoise(vec3 x){
+    vec3 i = floor(x), f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash31(i + vec3(0,0,0)), hash31(i + vec3(1,0,0)), f.x),
+                   mix(hash31(i + vec3(0,1,0)), hash31(i + vec3(1,1,0)), f.x), f.y),
+               mix(mix(hash31(i + vec3(0,0,1)), hash31(i + vec3(1,0,1)), f.x),
+                   mix(hash31(i + vec3(0,1,1)), hash31(i + vec3(1,1,1)), f.x), f.y), f.z);
+  }
+  float fbm(vec3 p){
+    return 0.56 * vnoise(p) + 0.29 * vnoise(p * 2.13) + 0.15 * vnoise(p * 4.37);
+  }
+
+  vec3 ramp(float t){
+    vec3 c = vec3(0.357, 0.247, 0.659);
+    c = mix(c, vec3(0.184, 0.384, 0.800), smoothstep(0.00, 0.18, t));
+    c = mix(c, vec3(0.118, 0.608, 0.690), smoothstep(0.18, 0.36, t));
+    c = mix(c, vec3(0.310, 0.659, 0.235), smoothstep(0.36, 0.52, t));
+    c = mix(c, vec3(0.890, 0.757, 0.110), smoothstep(0.52, 0.68, t));
+    c = mix(c, vec3(0.925, 0.518, 0.110), smoothstep(0.68, 0.84, t));
+    c = mix(c, vec3(0.839, 0.184, 0.149), smoothstep(0.84, 1.00, t));
+    return c;
+  }
+
+  void main(){
+    float x = (gl_FragCoord.x - uRes.x * 0.5) / uScale;
+    float y = (gl_FragCoord.y - uRes.y * 0.5) / uScale;
+
+    // --- inverse de la projection (Newton sur theta)
+    float th = asin(clamp(y / YMAX, -1.0, 1.0) * M);
+    for(int i = 0; i < 6; i++) th -= (fyf(th) - y) / fypf(th);
+
+    float sn  = sin(th) / M;
+    float lam = M * x * fypf(th) / cos(th);
+
+    // couverture du contour, antialiasée par les dérivées d'écran.
+    // lam et sn restent continus : ils vivent avant la rotation.
+    float cov = min(clamp((PI  - abs(lam)) / max(fwidth(lam), 1e-6) + 0.5, 0.0, 1.0),
+                    clamp((1.0 - abs(sn))  / max(fwidth(sn),  1e-6) + 0.5, 0.0, 1.0));
+
+    // --- rotation de la sphère : (lam, phi) relatifs -> (lon, lat) réels
+    float phiR = asin(clamp(sn, -1.0, 1.0));
+    float cp = cos(phiR);
+    vec3 p = vec3(cp * cos(lam), cp * sin(lam), sin(phiR));
+
+    float c0 = cos(radians(uPhi0)), s0 = sin(radians(uPhi0));
+    vec3 q = vec3(p.x * c0 - p.z * s0, p.y, p.x * s0 + p.z * c0);
+    float cl = cos(radians(uLam0)), sl = sin(radians(uLam0));
+    vec3 g = vec3(q.x * cl - q.y * sl, q.x * sl + q.y * cl, q.z);
+
+    float lat = degrees(asin(clamp(g.z, -1.0, 1.0)));
+    float lon = degrees(atan(g.y, g.x));
+
+    // --- échantillonnage sans couture.
+    // u saute de 1 à 0 au méridien opposé : on calcule le gradient sur deux
+    // versions décalées d'un demi-tour et on garde le plus petit, sinon le
+    // mipmap choisirait le niveau le plus flou tout le long de la couture.
+    float v  = (lat + 90.0) / 180.0;
+    float u1 = lon / 360.0 + 0.5;
+    float u2 = fract(u1 + 0.5);
+    vec2 d1 = vec2(dFdx(u1), dFdy(u1));
+    vec2 d2 = vec2(dFdx(u2), dFdy(u2));
+    vec2 du = dot(d1, d1) < dot(d2, d2) ? d1 : d2;
+    vec2 dv = vec2(dFdx(v), dFdy(v));
+
+    float gr = textureGrad(uEarth, vec2(u1, v), vec2(du.x, dv.x), vec2(du.y, dv.y)).r;
+    float m  = texture(uMask, vec2(u1, v)).r;
+
+    float field = 0.0;
+    vec3  hue   = vec3(1.0);
+
+    float d = radians(uDecl), pl = radians(lat), Hh = radians(lon - uSublon);
+    float h = degrees(asin(clamp(sin(pl) * sin(d) + cos(pl) * cos(d) * cos(Hh), -1.0, 1.0)));
+
+    if(h > 0.4 && h < 42.0){
+      float geom = pow(1.0 - h / 42.0, 1.3) * min(1.0, h / 3.2);
+
+      float ccl = cos(pl);
+      vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * 3.6;
+      float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
+
+      float surface = m;   // coefficient de surface, déjà lissé dans la texture
+      float a = (lat - uDecl * 0.45) / 9.5;
+      float b = (abs(lat) - 48.0) / 15.0;
+      float wet = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * surface;
+
+      // saturation douce : jamais de plateau, donc jamais d'arête franche
+      float t = 1.0 - exp(-geom * rain * (wet / 1.2) * 6.0);
+      field = pow(t, 0.7) * 0.92;
+      hue   = ramp(t);
+    }
+
+    vec3 col = vec3(gr) * mix(vec3(1.0), hue, field);
+    fragColor = vec4(mix(vec3(1.0), col, cov), 1.0);
+  }`;
+
+  // ============================================================ contexte
+  const glCv = document.getElementById('gl');
+  const inkCv = document.getElementById('ink');
+  const ink = inkCv.getContext('2d');
+  const gl = glCv.getContext('webgl2', { antialias: false, alpha: false });
+
+  if (!gl) { document.getElementById('fallback').hidden = false; return; }
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src.replace(/^\s+/, ''));
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS))
+      throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS))
+    throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+
+  gl.bindVertexArray(gl.createVertexArray());
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const U = {};
+  for (const n of ['uRes','uScale','uLam0','uPhi0','uDecl','uSublon','uDrift','uEarth','uMask'])
+    U[n] = gl.getUniformLocation(prog, n);
+  gl.uniform1i(U.uEarth, 0);
+  gl.uniform1i(U.uMask, 1);
+
+  // Textures blanches 1×1 liées dès le départ : tant que les vraies images
+  // n'arrivent pas la carte est blanche, jamais noire.
+  function placeholder(unit) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, 1, 1, 0, gl.RGB, gl.UNSIGNED_BYTE,
+                  new Uint8Array([255, 255, 255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  placeholder(0); placeholder(1);
+
+  function makeTexture(unit, img, mip) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    let src = img;
+    const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    if (img.width > max) {
+      const c = document.createElement('canvas');
+      c.width = max; c.height = Math.round(img.height * max / img.width);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      src = c;
+    }
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB8, gl.RGB, gl.UNSIGNED_BYTE, src);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    if (mip) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
+  }
+
+  const load = (src, unit, mip) => {
+    const img = new Image();
+    img.onload = () => {
+      try { makeTexture(unit, img, mip); } catch (err) { /* on garde le blanc */ }
+      invalidate();
+    };
+    img.onerror = () => invalidate();
+    img.src = src;
+  };
+  load('earth.jpg', 0, true);
+  load('mask.png', 1, false);
+
+  // ============================================================ état
+  let W = 0, H = 0, dpr = 1, baseScale = 1;
+  const view = { lam0: 0, phi0: 0, zoom: 1 };   // deux angles, rien d'autre
+  let zoomTarget = 1;
+  let anchorPt = null;
+  const vel = { lam: 0, phi: 0 };
+
+  const scale = () => baseScale * view.zoom;
+  const sx = x => x * scale() + W / 2;
+  const sy = y => -y * scale() + H / 2;
+
+  // (lam, phi) relatifs à la projection -> (lon, lat) réels
+  function relToGeo(lamDeg, phiDeg) {
+    const l = lamDeg * DEG, p = phiDeg * DEG, cp = Math.cos(p);
+    const px = cp * Math.cos(l), py = cp * Math.sin(l), pz = Math.sin(p);
+    const c0 = Math.cos(view.phi0 * DEG), s0 = Math.sin(view.phi0 * DEG);
+    const qx = px * c0 - pz * s0, qy = py, qz = px * s0 + pz * c0;
+    const cl = Math.cos(view.lam0 * DEG), sl = Math.sin(view.lam0 * DEG);
+    const gx = qx * cl - qy * sl, gy = qx * sl + qy * cl, gz = qz;
+    return [Math.atan2(gy, gx) * RAD, Math.asin(Math.max(-1, Math.min(1, gz))) * RAD];
+  }
+
+  // l'inverse : (lon, lat) réels -> (lam, phi) relatifs, pour tracer les côtes
+  function geoToRel(lonDeg, latDeg) {
+    const l = lonDeg * DEG, p = latDeg * DEG, cp = Math.cos(p);
+    const gx = cp * Math.cos(l), gy = cp * Math.sin(l), gz = Math.sin(p);
+    const cl = Math.cos(view.lam0 * DEG), sl = Math.sin(view.lam0 * DEG);
+    const tx = gx * cl + gy * sl, ty = -gx * sl + gy * cl, tz = gz;
+    const c0 = Math.cos(view.phi0 * DEG), s0 = Math.sin(view.phi0 * DEG);
+    const px = tx * c0 + tz * s0, py = ty, pz = -tx * s0 + tz * c0;
+    return [Math.atan2(py, px) * RAD, Math.asin(Math.max(-1, Math.min(1, pz))) * RAD];
+  }
+
+  function invEE(x, y) {
+    let th = Math.asin(Math.max(-1, Math.min(1, y / YMAX)) * M);
+    for (let i = 0; i < 7; i++) th -= (fy(th) - y) / fyp(th);
+    const s = Math.sin(th) / M;
+    if (s < -1 || s > 1) return null;
+    const lam = M * x * fyp(th) / Math.cos(th);
+    if (lam < -Math.PI || lam > Math.PI) return null;
+    return [lam * RAD, Math.asin(s) * RAD];
+  }
+
+  function geoAt(px, py) {
+    const r = invEE((px - W / 2) / scale(), -(py - H / 2) / scale());
+    return r ? relToGeo(r[0], r[1]) : null;
+  }
+
+  // amène (lon, lat) sous (px, py) en résolvant les deux angles — zoom au curseur
+  function setAnchor(lon, lat, px, py) {
+    const r = invEE((px - W / 2) / scale(), -(py - H / 2) / scale());
+    if (!r) return;
+    const l = r[0] * DEG, ph = r[1] * DEG, cp = Math.cos(ph);
+    const pX = cp * Math.cos(l), pY = cp * Math.sin(l), pZ = Math.sin(ph);
+    const gz = Math.sin(lat * DEG);
+
+    // q.z = pX·sin φ0 + pZ·cos φ0 = g.z  →  R·sin(φ0 + δ) = g.z
+    const R = Math.hypot(pX, pZ);
+    if (R < 1e-9) return;
+    const delta = Math.atan2(pZ, pX);
+    view.phi0 = (Math.asin(Math.max(-1, Math.min(1, gz / R))) - delta) * RAD;
+
+    const c0 = Math.cos(view.phi0 * DEG), s0 = Math.sin(view.phi0 * DEG);
+    const qx = pX * c0 - pZ * s0, qy = pY;
+    view.lam0 = wrap180(lon - Math.atan2(qy, qx) * RAD);
+    clampView();
+  }
+
+  function clampView() {
+    view.zoom = Math.max(1, Math.min(8, view.zoom));
+    view.lam0 = wrap180(view.lam0);
+    view.phi0 = wrap180(view.phi0);   // aucune butée : on passe par-dessus le pôle
+  }
+
+  // ============================================================ soleil
+  function solar(date) {
+    const n = (date - Date.UTC(date.getUTCFullYear(), 0, 0)) / 86400000;
+    const utc = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+    return {
+      decl: -23.44 * Math.cos(2 * Math.PI * (n + 10) / 365.24),
+      sublon: -15 * (utc - 12)
+    };
+  }
+  const sunElev = (lon, lat, sun) => {
+    const d = sun.decl * DEG, p = lat * DEG, Hh = (lon - sun.sublon) * DEG;
+    return Math.asin(Math.sin(p) * Math.sin(d) + Math.cos(p) * Math.cos(d) * Math.cos(Hh)) * RAD;
+  };
+
+  // miroir JS du bruit du shader, pour la lecture sous le réticule
+  const fr = Math.fround;
+  const fract = v => v - Math.floor(v);
+  function hash31(x, y, z) {
+    x = fract(fr(x * 0.3183099 + 0.1)) * 17;
+    y = fract(fr(y * 0.3183099 + 0.2)) * 17;
+    z = fract(fr(z * 0.3183099 + 0.3)) * 17;
+    return fract(fr(x * y * z * (x + y + z)));
+  }
+  function vnoise(x, y, z) {
+    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+    let fx = x - ix, fyy = y - iy, fz = z - iz;
+    fx = fx*fx*(3-2*fx); fyy = fyy*fyy*(3-2*fyy); fz = fz*fz*(3-2*fz);
+    const L = (a, b, t) => a + (b - a) * t;
+    return L(L(L(hash31(ix,iy,iz),     hash31(ix+1,iy,iz),     fx),
+               L(hash31(ix,iy+1,iz),   hash31(ix+1,iy+1,iz),   fx), fyy),
+             L(L(hash31(ix,iy,iz+1),   hash31(ix+1,iy,iz+1),   fx),
+               L(hash31(ix,iy+1,iz+1), hash31(ix+1,iy+1,iz+1), fx), fyy), fz);
+  }
+  const fbm = (x, y, z) =>
+    0.56 * vnoise(x,y,z) + 0.29 * vnoise(x*2.13,y*2.13,z*2.13)
+    + 0.15 * vnoise(x*4.37,y*4.37,z*4.37);
+
+  function index(lon, lat, sun, drift) {
+    const h = sunElev(lon, lat, sun);
+    if (h <= 0.4 || h >= 42) return 0;
+    const geom = Math.pow(1 - h / 42, 1.3) * Math.min(1, h / 3.2);
+    const p = lat * DEG, lo = lon * DEG, cl = Math.cos(p), f = 3.6;
+    const raw = fbm(cl * Math.cos(lo) * f + drift, cl * Math.sin(lo) * f, Math.sin(p) * f);
+    const t = (raw - 0.44) / 0.26;
+    const rain = t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+    if (rain <= 0) return 0;
+    const a = (lat - sun.decl * 0.45) / 9.5, b = (Math.abs(lat) - 48) / 15;
+    const wet = 0.14 + 0.92 * Math.exp(-a * a) + 0.74 * Math.exp(-b * b);
+    return 1 - Math.exp(-geom * rain * (wet / 1.2) * 6.0);
+  }
+
+  const drift = () => (Date.now() / 3600000) * 0.09;
+
+  // ============================================================ rendu
+  let dirty = true, rafId = 0;
+  const invalidate = () => { dirty = true; if (!rafId) rafId = requestAnimationFrame(frame); };
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = glCv.clientWidth; H = glCv.clientHeight;
+    for (const c of [glCv, inkCv]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); }
+    ink.setTransform(dpr, 0, 0, dpr, 0, 0);
+    baseScale = Math.min(W / (2 * XMAX), H / (2 * YMAX)) * 0.94;
+    clampView();
+    invalidate();
+  }
+
+  function drawGL(sun) {
+    gl.viewport(0, 0, glCv.width, glCv.height);
+    gl.clearColor(1, 1, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform2f(U.uRes, glCv.width, glCv.height);
+    gl.uniform1f(U.uScale, scale() * dpr);
+    gl.uniform1f(U.uLam0, view.lam0);
+    gl.uniform1f(U.uPhi0, view.phi0);
+    gl.uniform1f(U.uDecl, sun.decl);
+    gl.uniform1f(U.uSublon, sun.sublon);
+    gl.uniform1f(U.uDrift, drift());
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  // rayon angulaire visible depuis le centre de vue, en degrés
+  function visibleRadius() {
+    if (view.zoom <= 1.02) return 181;
+    const halfDiag = Math.hypot(W / 2, H / 2) / scale();
+    return Math.min(181, halfDiag * 58 + 12);
+  }
+
+  // distance angulaire (deg) entre le centre de vue et un point
+  function angDist(lon, lat) {
+    const a = lat * DEG, b = view.phi0 * DEG, dl = (lon - view.lam0) * DEG;
+    return Math.acos(Math.max(-1, Math.min(1,
+      Math.sin(a) * Math.sin(b) + Math.cos(a) * Math.cos(b) * Math.cos(dl)))) * RAD;
+  }
+
+  function drawRings(rings, radius, width, alpha) {
+    ink.lineWidth = width;
+    ink.strokeStyle = `rgba(20,22,26,${alpha})`;
+    ink.lineJoin = 'round';
+    ink.lineCap = 'round';
+    ink.beginPath();
+    for (const ring of rings) {
+      const b = ring.b;
+      if (radius < 180) {
+        const span = Math.max(b[1] - b[0], b[3] - b[2]);
+        if (span < 300) {
+          const rr = Math.hypot(b[1] - b[0], b[3] - b[2]) / 2 + 1;
+          if (angDist((b[0] + b[1]) / 2, (b[2] + b[3]) / 2) - rr > radius) continue;
+        }
+      }
+      const p = ring.p;
+      let started = false, prev = 0;
+      for (let i = 0; i < p.length; i += 2) {
+        const r = geoToRel(p[i], p[i + 1]);
+        const lam = r[0];
+        if (started && Math.abs(lam - prev) > 180) started = false;
+        prev = lam;
+        const th = Math.asin(M * Math.sin(r[1] * DEG));
+        const X = sx((lam * DEG) * Math.cos(th) / (M * fyp(th)));
+        const Y = sy(fy(th));
+        if (!started) { ink.moveTo(X, Y); started = true; } else ink.lineTo(X, Y);
+      }
+    }
+    ink.stroke();
+  }
+
+  function drawInk() {
+    ink.clearRect(0, 0, W, H);
+    const radius = visibleRadius();
+    const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));
+    drawRings(window.COAST.coast, radius, lw, 0.92);
+    drawRings(window.COAST.lakes, radius, lw * 0.8, 0.5);
+
+    const cx = W / 2, cy = H / 2, g = 7, a = 17;
+    ink.strokeStyle = 'rgba(20,22,26,0.42)';
+    ink.lineWidth = 1;
+    ink.beginPath();
+    ink.moveTo(cx - a, cy); ink.lineTo(cx - g, cy);
+    ink.moveTo(cx + g, cy); ink.lineTo(cx + a, cy);
+    ink.moveTo(cx, cy - a); ink.lineTo(cx, cy - g);
+    ink.moveTo(cx, cy + g); ink.lineTo(cx, cy + a);
+    ink.stroke();
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    rafId = 0;
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    let animating = false;
+
+    if (Math.abs(zoomTarget - view.zoom) > 1e-4) {
+      view.zoom += (zoomTarget - view.zoom) * (1 - Math.exp(-dt * 16));
+      clampView();
+      if (anchorPt) setAnchor(anchorPt.lon, anchorPt.lat, anchorPt.px, anchorPt.py);
+      animating = true;
+    } else if (view.zoom !== zoomTarget) {
+      view.zoom = zoomTarget; clampView();
+      if (anchorPt) setAnchor(anchorPt.lon, anchorPt.lat, anchorPt.px, anchorPt.py);
+      anchorPt = null;
+      animating = true;
+    }
+
+    if (!drag && (Math.abs(vel.lam) > 0.02 || Math.abs(vel.phi) > 0.02)) {
+      view.lam0 += vel.lam * dt;
+      view.phi0 += vel.phi * dt;
+      const k = Math.exp(-dt / 0.19);
+      vel.lam *= k; vel.phi *= k;
+      clampView();
+      animating = true;
+    }
+
+    if (dirty || animating) {
+      dirty = false;
+      const sun = solar(new Date());
+      drawGL(sun);
+      drawInk();
+      readout(sun);
+    }
+    if (animating) rafId = requestAnimationFrame(frame);
+  }
+
+  // ============================================================ lecture
+  const el = id => document.getElementById(id);
+  function readout(sun) {
+    const now = new Date();
+    const lon = wrap180(view.lam0), lat = view.phi0;
+    // au-delà du pôle la carte est retournée : on ramène la lecture au réel
+    const flip = Math.abs(wrap180(lat)) > 90;
+    const rLat = flip ? (lat > 0 ? 180 - lat : -180 - lat) : lat;
+    const rLon = flip ? wrap180(lon + 180) : lon;
+    el('r-lat').textContent = `${Math.abs(rLat).toFixed(1)}° ${rLat >= 0 ? 'N' : 'S'}`;
+    el('r-lon').textContent = `${Math.abs(rLon).toFixed(1)}° ${rLon >= 0 ? 'E' : 'O'}`;
+    el('r-sun').textContent = `${sunElev(rLon, rLat, sun).toFixed(1)}°`;
+    const v = index(rLon, rLat, sun, drift());
+    const idx = el('r-idx');
+    idx.textContent = v <= 0.02 ? '—' : v.toFixed(2);
+    idx.classList.toggle('hot', v > 0.6);
+
+    el('r-time').textContent =
+      `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')} UTC`;
+    el('r-date').textContent =
+      now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+
+  // ============================================================ navigation
+  let idleTimer = 0;
+  function wake() {
+    document.body.classList.remove('idle');
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => document.body.classList.add('idle'), 4200);
+  }
+
+  let drag = null;
+  const pointers = new Map();
+  let pinch = null;
+
+  inkCv.addEventListener('pointerdown', e => {
+    inkCv.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    wake();
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: view.zoom,
+                geo: geoAt(mid[0], mid[1]), mid };
+      drag = null;
+    } else {
+      drag = { x: e.clientX, y: e.clientY, t: performance.now() };
+      vel.lam = vel.phi = 0;
+      inkCv.classList.add('dragging');
+    }
+  });
+
+  inkCv.addEventListener('pointermove', e => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pinch && pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2];
+      zoomTarget = view.zoom = Math.max(1, Math.min(8, pinch.zoom * (d / pinch.d)));
+      clampView();
+      if (pinch.geo) setAnchor(pinch.geo[0], pinch.geo[1], mid[0], mid[1]);
+      invalidate();
+      return;
+    }
+    if (!drag) return;
+
+    const now = performance.now();
+    const dt = Math.max(1, now - drag.t) / 1000;
+    const s = scale();
+    const dLam = -(e.clientX - drag.x) * K_LON / s;
+    const dPhi =  (e.clientY - drag.y) * K_LAT / s;
+
+    view.lam0 += dLam;
+    view.phi0 += dPhi;
+    clampView();
+
+    vel.lam = vel.lam * 0.65 + (dLam / dt) * 0.35;
+    vel.phi = vel.phi * 0.65 + (dPhi / dt) * 0.35;
+    drag = { x: e.clientX, y: e.clientY, t: now };
+    invalidate();
+  });
+
+  function release(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (pointers.size === 0 && drag) {
+      drag = null;
+      inkCv.classList.remove('dragging');
+      invalidate();
+    }
+  }
+  inkCv.addEventListener('pointerup', release);
+  inkCv.addEventListener('pointercancel', release);
+
+  inkCv.addEventListener('wheel', e => {
+    e.preventDefault();
+    wake();
+    const g = geoAt(e.clientX, e.clientY);
+    if (g) anchorPt = { lon: g[0], lat: g[1], px: e.clientX, py: e.clientY };
+    const k = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.03 : 0.0022));
+    zoomTarget = Math.max(1, Math.min(8, zoomTarget * k));
+    invalidate();
+  }, { passive: false });
+
+  inkCv.addEventListener('dblclick', e => {
+    e.preventDefault();
+    wake();
+    const g = geoAt(e.clientX, e.clientY);
+    if (g) anchorPt = { lon: g[0], lat: g[1], px: e.clientX, py: e.clientY };
+    zoomTarget = Math.max(1, Math.min(8, zoomTarget * (e.shiftKey ? 0.5 : 2)));
+    invalidate();
+  });
+
+  // clavier : parité avec le futur mini-joystick, quatre directions sans butée
+  window.addEventListener('keydown', e => {
+    let hit = true;
+    const s = scale(), step = 90;
+    switch (e.key) {
+      case 'ArrowLeft':  view.lam0 -= step * K_LON / s; break;
+      case 'ArrowRight': view.lam0 += step * K_LON / s; break;
+      case 'ArrowUp':    view.phi0 += step * K_LAT / s; break;
+      case 'ArrowDown':  view.phi0 -= step * K_LAT / s; break;
+      case '+': case '=': anchorPt = null; zoomTarget = Math.min(8, zoomTarget * 1.3); break;
+      case '-': case '_': anchorPt = null; zoomTarget = Math.max(1, zoomTarget / 1.3); break;
+      case '0': anchorPt = null; view.lam0 = view.phi0 = 0; zoomTarget = view.zoom = 1; break;
+      case 'f': case 'F':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen?.();
+        break;
+      default: hit = false;
+    }
+    if (!hit) return;
+    e.preventDefault();
+    wake();
+    clampView();
+    invalidate();
+  });
+
+  window.addEventListener('resize', resize);
+  setInterval(invalidate, 30000);
+
+  resize();
+  wake();
+})();
+</script>
+</body>
+</html>
