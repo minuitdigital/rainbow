@@ -75,6 +75,7 @@ ils sont nets à toutes les échelles.
 | double-clic | zoom ×2 (maj : ×0,5) |
 | `+` `−` | zoom |
 | `0` | recentrer |
+| curseur bas | vitesse du temps simulé (0 = figé, jusqu'à ×100 000) |
 | `r` | aplats ↔ relief ombré |
 | `f` | plein écran |
 
@@ -88,8 +89,8 @@ Trois facteurs entrent dans l'indice affiché :
 1. **Géométrie solaire — réelle.** Hauteur du soleil calculée pour chaque point.
    En dessous de l'horizon ou au-dessus de **42°**, aucun arc n'est possible : le
    centre de l'arc, à l'opposé du soleil, passe sous l'horizon.
-2. **Pluie — simulée.** Bruit fractal cohérent sur la sphère, dérivant lentement.
-   À remplacer par les précipitations horaires d'Open-Meteo.
+2. **Pluie — simulée.** Bruit fractal cohérent sur la sphère, dérivant avec le
+   temps simulé. À remplacer par les précipitations horaires d'Open-Meteo.
 3. **Trouée — approximée.** Climatologie grossière (ZCIT, rails dépressionnaires,
    littoraux). À remplacer par le rayonnement direct et la couverture nuageuse.
 
@@ -136,3 +137,23 @@ suit exactement le trait vectoriel dessiné par-dessus.
 Le fichier source ETOPO (444 Mo) n'est pas dans ce dossier — il ne sert qu'à
 la génération. On le récupère sur le site du NCEI (NOAA) :
 `ETOPO_2022_v1_60s_N90W180_surface.tif`.
+
+## Le temps simulé
+
+Le curseur du bas accélère l'horloge. Le soleil tourne pour de vrai — déclinaison
+et point subsolaire recalculés — et le champ de pluie dérive avec lui. À ×3 600,
+une seconde vaut une heure : on voit l'anneau crépusculaire faire le tour du
+globe en vingt secondes. À 0, tout se fige.
+
+**Attention à la précision.** Le décalage du bruit doit rester petit. Une version
+antérieure y injectait `Date.now()` converti en heures, soit ~45 000 : en float32
+il ne restait que deux décimales, le bruit se cassait en blocs et le champ était
+tranché par de longues droites verticales. Le décalage est maintenant relatif au
+démarrage et borné à 512.
+
+## Les icônes
+
+Un arc-en-ciel est dessiné là où l'indice dépasse 0,88. Les maxima sont cherchés
+sur une grille d'écran puis écartés les uns des autres pour qu'ils ne se
+chevauchent pas. L'arc va du rouge à l'extérieur au violet à l'intérieur —
+l'ordre réel d'un arc-en-ciel, à rebours de la rampe thermique du champ.

@@ -128,6 +128,48 @@
     justify-content: space-between;
   }
 
+  /* le curseur de vitesse : seul élément qui ne s'estompe pas, il sert */
+  .speed {
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+  body.idle .speed { opacity: .55; }
+  .speed input {
+    pointer-events: auto;
+    -webkit-appearance: none;
+    appearance: none;
+    width: 210px; height: 14px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .speed input::-webkit-slider-runnable-track {
+    height: 1px; background: var(--ink-faint);
+  }
+  .speed input::-moz-range-track { height: 1px; background: var(--ink-faint); }
+  .speed input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 9px; height: 9px;
+    margin-top: -4px;
+    background: var(--ink);
+    border: 0; border-radius: 0;
+  }
+  .speed input::-moz-range-thumb {
+    width: 9px; height: 9px;
+    background: var(--ink);
+    border: 0; border-radius: 0;
+  }
+  .speed input:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
+  .speed-read {
+    display: flex; gap: 16px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+  .speed-read b { font-weight: normal; color: var(--ink); }
+
   .fallback {
     position: fixed;
     inset: 0;
@@ -173,6 +215,11 @@
   <div class="ramp" aria-hidden="true"></div>
   <div class="ramp-ends"><span>faible</span><span>forte</span></div>
   <div class="clock"><span id="r-date">—</span><span id="r-time">— UTC</span></div>
+</div>
+
+<div class="chrome speed">
+  <input id="spd" type="range" min="0" max="100" step="1" value="72" aria-label="Vitesse du temps">
+  <div class="speed-read"><b id="r-speed">—</b><span id="r-simtime">—</span></div>
 </div>
 
 <div class="fallback" id="fallback" hidden>
@@ -363,7 +410,7 @@
     float h = degrees(asin(clamp(sin(pl) * sin(d) + cos(pl) * cos(d) * cos(Hh), -1.0, 1.0)));
 
     if(h > 0.4 && h < 42.0){
-      float geom = pow(1.0 - h / 42.0, 1.3) * min(1.0, h / 3.2);
+      float geom = pow(1.0 - h / 42.0, 1.3) * smoothstep(0.0, 6.5, h);
       float ccl = cos(pl);
       vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * 3.6;
       float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
@@ -559,7 +606,8 @@
   function index(lon, lat, sun, drift) {
     const h = sunElev(lon, lat, sun);
     if (h <= 0.4 || h >= 42) return 0;
-    const geom = Math.pow(1 - h / 42, 1.3) * Math.min(1, h / 3.2);
+    const st = Math.max(0, Math.min(1, h / 6.5));
+    const geom = Math.pow(1 - h / 42, 1.3) * st * st * (3 - 2 * st);
     const p = lat * DEG, lo = lon * DEG, cl = Math.cos(p), f = 3.6;
     const raw = fbm(cl * Math.cos(lo) * f + drift, cl * Math.sin(lo) * f, Math.sin(p) * f);
     const t = (raw - 0.44) / 0.26;
@@ -570,7 +618,19 @@
     return 1 - Math.exp(-geom * rain * (wet / 1.2) * 6.0);
   }
 
-  const drift = () => (Date.now() / 3600000) * 0.09;
+  // ---- horloge simulée ------------------------------------------------
+  // Le curseur accélère le temps : le soleil tourne, et les précipitations
+  // simulées dérivent avec lui. C'est faux, mais ça montre le mouvement.
+  const T0_MS = Date.now(), T0_PERF = performance.now();
+  let speed = 3981;
+  const elapsed = () => (performance.now() - T0_PERF) * speed;
+  const simDate = () => new Date(T0_MS + elapsed());
+
+  // Le décalage du bruit DOIT rester petit. En float32, ajouter ~45 000 aux
+  // coordonnées de bruit (ce que donnait Date.now() en heures) ne laissait
+  // plus que deux décimales : le champ se cassait en blocs à bords droits.
+  // C'était la « coupure nette » visible dans l'Atlantique.
+  const drift = () => (elapsed() / 3600000 * 0.03) % 512;
 
   // ============================================================ rendu
   let dirty = true, rafId = 0;
@@ -641,7 +701,48 @@
     ink.stroke();
   }
 
-  function drawInk(centre) {
+  // L'arc va du rouge à l'extérieur au violet à l'intérieur — l'ordre réel
+  // d'un arc-en-ciel, à rebours de la rampe thermique du champ.
+  const SPEC = ['#d6342b','#ec841c','#e3c11c','#4fa83c','#1e9bb0','#2f62cc','#5b3fa8'];
+
+  function rainbowIcon(x, y) {
+    ink.lineCap = 'butt';
+    ink.strokeStyle = 'rgba(255,255,255,0.88)';
+    ink.lineWidth = 13;
+    ink.beginPath(); ink.arc(x, y + 5, 7.5, Math.PI, 0); ink.stroke();
+    ink.lineWidth = 1.35;
+    for (let i = 0; i < SPEC.length; i++) {
+      ink.strokeStyle = SPEC[i];
+      ink.beginPath();
+      ink.arc(x, y + 5, 12.6 - i * 1.5, Math.PI, 0);
+      ink.stroke();
+    }
+  }
+
+  // On échantillonne l'indice sur une grille d'écran, on garde les maxima
+  // au-dessus du seuil, et on écarte ceux qui se marchent dessus.
+  function drawIcons(sun) {
+    const step = 26, dr = drift(), cand = [];
+    for (let py = step; py < H; py += step) {
+      for (let px = step; px < W; px += step) {
+        const g = geoAt(px, py);
+        if (!g) continue;
+        const v = index(g[0], g[1], sun, dr);
+        if (v > 0.88) cand.push({ px, py, v });
+      }
+    }
+    cand.sort((a, b) => b.v - a.v);
+    const kept = [];
+    for (const c of cand) {
+      if (kept.length >= 26) break;
+      let far = true;
+      for (const k of kept) if (Math.hypot(k.px - c.px, k.py - c.py) < 74) { far = false; break; }
+      if (far) kept.push(c);
+    }
+    for (const k of kept) rainbowIcon(k.px, k.py);
+  }
+
+  function drawInk(centre, sun) {
     ink.clearRect(0, 0, W, H);
     const radius = visibleRadius(), Rt = matT(R);
     const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(zoom) * 0.24));
@@ -657,6 +758,8 @@
     ink.moveTo(cx, cy - a); ink.lineTo(cx, cy - g);
     ink.moveTo(cx, cy + g); ink.lineTo(cx, cy + a);
     ink.stroke();
+
+    if (sun) drawIcons(sun);
   }
 
   let last = performance.now();
@@ -688,14 +791,16 @@
       animating = true;
     }
 
+    if (speed > 0) animating = true;   // le temps avance : on redessine
+
     if (dirty || animating) {
       dirty = false;
-      const sun = solar(new Date());
+      const sun = solar(simDate());
       const g = [R[0], R[1], R[2]];   // le centre de l'écran, en géographique
       const centre = [Math.atan2(g[1], g[0]) * RAD,
                       Math.asin(Math.max(-1, Math.min(1, g[2]))) * RAD];
       drawGL(sun);
-      drawInk(centre);
+      drawInk(centre, sun);
       readout(sun, centre);
     }
     if (animating) rafId = requestAnimationFrame(frame);
@@ -704,7 +809,7 @@
   // ============================================================ lecture
   const el = id => document.getElementById(id);
   function readout(sun, c) {
-    const now = new Date();
+    const now = simDate();
     el('r-lat').textContent = `${Math.abs(c[1]).toFixed(1)}° ${c[1] >= 0 ? 'N' : 'S'}`;
     el('r-lon').textContent = `${Math.abs(c[0]).toFixed(1)}° ${c[0] >= 0 ? 'E' : 'O'}`;
     el('r-sun').textContent = `${sunElev(c[0], c[1], sun).toFixed(1)}°`;
@@ -716,6 +821,13 @@
       `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')} UTC`;
     el('r-date').textContent =
       now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+    el('r-speed').textContent = speed < 1
+      ? 'figé'
+      : '×' + Math.round(speed).toLocaleString('fr-FR');
+    el('r-simtime').textContent = now.toLocaleString('fr-FR', {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+      timeZone: 'UTC'
+    });
   }
 
   // ============================================================ navigation
@@ -852,8 +964,16 @@
     invalidate();
   });
 
+  const spd = document.getElementById('spd');
+  const applySpeed = () => {
+    const v = +spd.value;
+    speed = v <= 0 ? 0 : Math.pow(10, (v / 100) * 5);
+    invalidate();
+  };
+  spd.addEventListener('input', () => { wake(); applySpeed(); });
+  applySpeed();
+
   window.addEventListener('resize', resize);
-  setInterval(invalidate, 30000);
 
   resize();
   wake();
