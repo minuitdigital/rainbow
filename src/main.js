@@ -9,7 +9,8 @@
 //  jamais de retour en arrière :
 //
 //      projection   maths pures, ne connaît personne
-//      sky          le soleil, le bruit, l'indice
+//      legends      les hauts lieux de la croyance, écrits à la main
+//      sky          la porte du soleil, et le partage de la croyance
 //      ground       le relief et les lieux
 //      view         le seul état mutable : où, de quelle distance, quand
 //      zones        ce qui vit d'une image à l'autre
@@ -20,8 +21,8 @@
 //      main         ici
 // =========================================================================
 
-import { view, measure, centre, coast, anchorTo, simDate, elapsedHours, drift }
-  from './view.js';
+import { view, measure, centre, coast, anchorTo, simDate, elapsedHours,
+         drift, driftChance, beliefWeights } from './view.js';
 import { solar } from './sky.js';
 import { scan } from './zones.js';
 import { initMap, paint } from './map.js';
@@ -92,7 +93,7 @@ function frame(now) {
     // géographiques, pas en pixels.
     if (now - lastScan > 200) {
       lastScan = now;
-      scan(sun, drift(), elapsedHours());
+      scan(sun, drift(), driftChance(), elapsedHours(), beliefWeights());
     }
 
     const c = centre();

@@ -41,6 +41,7 @@ ORDER = [
     'data/terrain.js',
     'data/cities.js',
     'src/projection.js',
+    'src/legends.js',
     'src/sky.js',
     'src/ground.js',
     'src/view.js',

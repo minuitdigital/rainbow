@@ -16,7 +16,7 @@
 
 import { DEG, wrap180 } from './projection.js';
 import { view, scale, geoAt } from './view.js';
-import { rainbowIndex, sunElev, geomAt, rainAt, openFor } from './sky.js';
+import { rainbowIndex, ingredients, openFor, nearestLegend } from './sky.js';
 import { terrainAt } from './ground.js';
 
 /** Les zones vivantes. Réassigné à chaque passe : c'est une liaison vive. */
@@ -35,25 +35,28 @@ const hash01 = n => {
 /**
  * Les ingrédients du pourcentage. Il est COMPOSITE ET VOLONTAIREMENT
  * POÉTIQUE : ce que la carte affiche, le dégagement de l'horizon,
- * l'accessibilité du lieu, et une part de chance qui oscille sans raison,
- * propre à chaque point. Il est fait pour osciller et déplacer le regard
+ * l'accessibilité du lieu, et une part de chance propre à l'observateur
+ * qui oscille sans raison. Il est fait pour osciller et déplacer le regard
  * d'une zone à l'autre. La durée, elle, est exacte.
+ *
+ * À ne pas confondre : la CHANCE du champ est un lieu du monde où la
+ * chance se tient ; la chance d'ici est celle d'une personne. La première
+ * se partage entre voisins, la seconde non.
  */
-export function estimate(lon, lat, sun, drift, seed, simH) {
-  const base = rainbowIndex(lon, lat, sun, drift);
+export function estimate(lon, lat, sun, drift, driftC, w, seed, simH) {
+  const base = rainbowIndex(lon, lat, sun, drift, driftC, w);
   if (base <= 0.02) return null;
 
-  const geom = geomAt(sunElev(lon, lat, sun));
-  const rain = rainAt(lon, lat, drift);
+  const ing = ingredients(lon, lat, sun, drift, driftC);
   const [acc, open] = terrainAt(lon, lat);
-
-  // La chance : elle oscille sans raison, à son propre rythme.
   const luck = 0.5 + 0.5 * Math.sin(simH * (2 * Math.PI / 1.3) + seed * 6.2832);
   const soft = 0.58 + 0.42 * (0.34 * open + 0.24 * acc + 0.42 * luck);
 
   return {
     v: Math.max(0.05, Math.min(0.99, base * soft)),
-    geom, rain, acc, open, luck,
+    lon, lat,
+    gate: ing.gate, meteo: ing.meteo, legende: ing.legende, chance: ing.chance,
+    acc, open, luck,
     min: openFor(lon, lat, sun)
   };
 }
@@ -68,18 +71,36 @@ const PHRASES = {
   trouee:   ['le soleil perce', 'ciel déchiré']
 };
 
-/** La phrase dit ce qui PORTE le chiffre, pas ce qu'il vaut. */
-export function phraseFor(e, seed) {
-  let k;
-  if (e.v > 0.95)        k = 'imminent';
-  else if (e.acc < 0.34) k = 'nul';
-  else if (e.luck > 0.84) k = 'chance';
-  else if (e.geom > 0.78) k = 'soleil';
-  else if (e.rain > 0.88) k = 'averse';
-  else if (e.open > 0.86) k = 'horizon';
-  else                    k = 'trouee';
+const pick = (k, seed) => {
   const l = PHRASES[k];
   return l[Math.floor(seed * 9973) % l.length];
+};
+
+/**
+ * La phrase dit ce qui PORTE le chiffre, pas ce qu'il vaut.
+ *
+ * Quand c'est la légende qui le porte, c'est la légende qui parle : la
+ * carte cite la croyance du lieu plutôt que de la résumer. « Au pied de
+ * l'arc, le chaudron d'or du leprechaun » — voilà ce que dit une carte
+ * dont le spectateur a poussé le curseur vers la légende.
+ */
+export function phraseFor(e, seed, w) {
+  if (e.v > 0.95) return pick('imminent', seed);
+  if (e.acc < 0.34) return pick('nul', seed);
+
+  // qui, des trois, porte réellement le chiffre ?
+  const pm = w.m * e.meteo, pl = w.l * e.legende, pc = w.c * e.chance;
+
+  if (pl >= pm && pl >= pc && e.legende > 0.35) {
+    const L = nearestLegend(e.lon, e.lat);
+    if (L) return L.dit;
+  }
+  if (pc >= pm && pc >= pl) return pick('chance', seed);
+
+  if (e.gate > 0.78) return pick('soleil', seed);
+  if (e.meteo > 0.88) return pick('averse', seed);
+  if (e.open > 0.86) return pick('horizon', seed);
+  return pick('trouee', seed);
 }
 
 // ------------------------------------------------------------- le balayage
@@ -98,13 +119,13 @@ function makePoints(id) {
 }
 
 /** Les sommets du champ visibles à l'écran, espacés d'au moins 150 px. */
-function findPeaks(sun, drift) {
+function findPeaks(sun, drift, driftC, w) {
   const step = 30, found = [];
   for (let py = step * 0.5; py < view.H; py += step) {
     for (let px = step * 0.5; px < view.W; px += step) {
       const g = geoAt(px, py);
       if (!g) continue;
-      const v = rainbowIndex(g[0], g[1], sun, drift);
+      const v = rainbowIndex(g[0], g[1], sun, drift, driftC, w);
       if (v > 0.55) found.push({ px, py, v, lon: g[0], lat: g[1] });
     }
   }
@@ -128,7 +149,7 @@ function findPeaks(sun, drift) {
       for (; r < 400; r += 24) {
         const g = geoAt(p.px + Math.cos(a) * r, p.py + Math.sin(a) * r);
         if (!g) break;
-        if (rainbowIndex(g[0], g[1], sun, drift) < p.v * 0.5) break;
+        if (rainbowIndex(g[0], g[1], sun, drift, driftC, w) < p.v * 0.5) break;
       }
       sum += r;
     }
@@ -143,8 +164,8 @@ function findPeaks(sun, drift) {
  * lui, suit chaque image, parce que les points sont rangés en coordonnées
  * géographiques et non en pixels.
  */
-export function scan(sun, drift, simH) {
-  const peaks = findPeaks(sun, drift);
+export function scan(sun, drift, driftC, simH, w) {
+  const peaks = findPeaks(sun, drift, driftC, w);
 
   // Appariement géographique avec les zones déjà vivantes.
   const free = zones.slice();
@@ -183,8 +204,8 @@ export function scan(sun, drift, simH) {
       pt.on += ((i < n ? 1 : 0) - pt.on) * 0.22;
       pt.lat = z.lat + pt.rf * rg * Math.sin(pt.ang);
       pt.lon = wrap180(z.lon + pt.rf * rg * Math.cos(pt.ang) / cl);
-      pt.est = estimate(pt.lon, pt.lat, sun, drift, pt.seed, simH);
-      pt.phrase = pt.est ? phraseFor(pt.est, pt.seed) : '';
+      pt.est = estimate(pt.lon, pt.lat, sun, drift, driftC, w, pt.seed, simH);
+      pt.phrase = pt.est ? phraseFor(pt.est, pt.seed, w) : '';
     }
     z.seen = false;
   }

@@ -90,7 +90,8 @@ mur.
 | `index.html` | la structure de la page, et rien d'autre — 2 Ko |
 | `style.css` | le registre : papier, encre, spectre |
 | `src/projection.js` | Equal Earth, aller et retour, et l'algèbre de la sphère |
-| `src/sky.js` | soleil, bruit, indice, durée d'ouverture |
+| `src/legends.js` | les hauts lieux de la croyance — écrits à la main, à tailler |
+| `src/sky.js` | la porte du soleil, et le partage de la croyance |
 | `src/ground.js` | relief accessible, villes, plus proche lieu |
 | `src/view.js` | où l'on regarde, de quelle distance, et quand |
 | `src/zones.js` | détection des taches, suivi, les cinq observateurs |
@@ -177,6 +178,9 @@ bandes du noir au gris clair. Pas d'emoji — un emoji couleur deviendrait un
 pâté au tramage de l'e-ink, et le contraste était insuffisant.
 
 **Le pourcentage est poétique**, la durée est exacte. Voir §6.
+
+**Le soleil n'est pas un curseur.** Les trois curseurs partagent une
+croyance finie ; le soleil, lui, reste une porte. Voir §6.
 
 **Pas de frontières, des villes.** Une frontière est une convention et elle ne
 dit pas où se tient quelqu'un ; une ville si. La carte n'affiche donc aucune
@@ -276,11 +280,68 @@ monde, elle est un signal qu'on lit d'un continent à l'autre ; de près, on est
     Maintenant `file://` bloque les modules eux-mêmes : écran blanc. La
     veille le dit, mais autant le savoir.
 
+16. **Le cache du navigateur mélange deux versions.** Douze modules qui
+    s'importent : si le navigateur en reprend un seul de son cache pendant
+    qu'il recharge les autres, la page tourne avec un assemblage qui n'a
+    jamais existé. Symptôme observé : la veille se déclenchait sur une page
+    parfaitement saine, parce qu'elle venait du nouvel `index.html` et
+    attendait un drapeau posé par un `main.js` encore ancien. Une heure
+    perdue. D'où `serve.py` et son `no-store`.
+
+17. **Vérifier chez l'auteur, pas dans un bac à sable.** Le rendu validé
+    ailleurs ne prouve rien sur la machine où l'œuvre vit. Le navigateur
+    intégré atteint `localhost` de ce poste : s'en servir avant de dire
+    que c'est fait.
+
 ---
 
 ## 6. L'algorithme actuel
 
-Trois conditions doivent se rencontrer au même endroit.
+**Une porte, puis une croyance.**
+
+```
+indice = SOLEIL × ( wMétéo·M + wLégende·L + wChance·C )
+                   avec wM + wL + wC = 1
+```
+
+**La porte, exacte et sans curseur.** Le soleil doit se tenir entre
+l'horizon et 42° ; au-delà, le centre de l'arc passe sous l'horizon. Porte
+fermée : zéro, et aucun réglage ne peut rien y faire. On ne croit pas en la
+hauteur du soleil, on la calcule — c'est ce qui empêche la pièce de devenir
+un jouet. `S = (1 − h/42)^1,3 × montée douce de 0° à 6,5°`, plafond ≈ 0,80.
+
+**Une SOMME à l'intérieur, pas un produit.** Avec un produit, un seul zéro
+éteindrait tout : le spectateur qui ne croit qu'aux légendes ne verrait
+rien nulle part. Avec une somme pondérée, il voit une carte allumée à ses
+hauts lieux, et c'est ce que la pièce a à dire.
+
+**Les trois parts.**
+
+- **Météo** — `1 − exp(−pluie × trouée/1,2 × 6)`. Le bruit fractal et la
+  climatologie grossière d'avant, ramenés entre 0 et 1. *À remplacer par
+  Open-Meteo, voir §7.*
+- **Légende** — un plancher de 0,09 partout, relevé par le haut lieu le
+  plus proche : `max(plancher, force × exp(−corde²/rayon²))`. Un **maximum**
+  et non une somme, deux traditions voisines ne s'additionnent pas.
+  Les points sont dans `src/legends.js`, versés au shader comme un tableau
+  d'uniformes (48 places réservées).
+- **Chance** — un second bruit, plus lent (`×0,62`, ~2 850 km) et avec sa
+  propre horloge, seuillé serré à `smoothstep(0,46 · 0,76)` : des poches,
+  pas un voile.
+
+`GAIN = 1,8` ramène le plein au plein, puis `field = t^1,15 × 0,98`.
+
+**Les curseurs ne bougent pas tout seuls.** Chacun dit combien on tient à
+sa raison ; c'est le **pourcentage affiché** qui se redistribue, et c'est
+là que l'arbitrage se voit. Poignées prévisibles, arbitrage lisible.
+
+**Quand la légende porte le chiffre, la légende parle** : la phrase de
+l'étiquette devient la croyance du lieu — « K'uychi, on ne montre pas
+l'arc du doigt » — au lieu d'un résumé. Voir `phraseFor` dans `zones.js`.
+
+### L'ancien assemblage, pour mémoire
+
+Trois conditions devaient se rencontrer au même endroit.
 
 **La géométrie du soleil — exacte.** Le soleil doit se tenir entre l'horizon et
 **42°**. Au-delà, le centre de l'arc, situé à l'opposé du soleil, passe sous
@@ -388,6 +449,15 @@ Densité et intensité des taches · nombre de cycles dans l'irisation · format
 cible 4:3 pour coller au 10,3" · retirer `earth.jpg` et la touche `r` une fois
 le choix arrêté (−3,9 Mo).
 
+*Ouvert depuis les curseurs de croyance :*
+- La liste de `src/legends.js` est un premier jet de vingt entrées. Les
+  traditions vivantes — terre d'Arnhem, Aotearoa, Dinétah, Cusco, Wallmapu —
+  méritent d'être relues par quelqu'un qui les connaît mieux qu'une ligne.
+- Faut-il une seconde famille de points, non mythologiques : les lieux où
+  l'arc est physiquement chez lui (Mosi-oa-Tunya, Hilo, Niagara) ? C'est
+  une autre catégorie, elle brouillerait peut-être le mot « légende ».
+- Le glyphe à la baguette n'a pas encore été jugé au tramage e-ink.
+
 *Ouvert depuis le test des villes :*
 - À ×32, les cinq observateurs d'une même zone disent presque la même chose
   (« 89 % · Tchita », « 88 % · Tchita »…). Le grain n'est appliqué que dans le
@@ -428,8 +498,14 @@ modules ES exigent eux aussi un serveur :
 
 ```bash
 cd "C:\00 - CREATIONS\RAINBOW ESTIMATEUR\GIT\rainbow"
-python -m http.server 8000
+python serve.py
 ```
+
+**Pas `python -m http.server`** : il laisse le navigateur mettre les modules
+en cache, et il suffit qu'un seul des douze soit repris de l'ancienne
+version pendant que les autres sont rechargés pour que la page mélange deux
+états. Voir piège n°16. `serve.py` répond `no-store` et corrige au passage
+les types MIME sous Windows.
 
 puis `http://localhost:8000`
 

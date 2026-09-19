@@ -46,8 +46,25 @@ export const view = {
   dragging: false,
 
   /** Vitesse du temps simulé. 0 fige tout. */
-  speed: 3981
+  speed: 3981,
+
+  /**
+   * LE PARTAGE DE LA CROYANCE. Trois parts brutes, telles que les
+   * curseurs les posent ; ce qui compte est leur RAPPORT, pas leur
+   * valeur. Pousser la météo affaiblit les deux autres sans toucher à
+   * leurs poignées — c'est le pourcentage affiché qui bouge, et c'est là
+   * que l'arbitrage se voit.
+   */
+  belief: { m: 55, l: 20, c: 25 }
 };
+
+/** Les trois parts ramenées à une somme de 1. */
+export function beliefWeights() {
+  const b = view.belief;
+  const s = b.m + b.l + b.c;
+  if (s <= 0) return { m: 1/3, l: 1/3, c: 1/3 };   // ne jamais tout éteindre
+  return { m: b.m / s, l: b.l / s, c: b.c / s };
+}
 
 // --------------------------------------------------------------- l'échelle
 
@@ -164,6 +181,12 @@ export const elapsedHours = () => elapsed() / 3600000;
  * droits, et une longue coupure nette traversait l'Atlantique.
  */
 export const drift = () => (elapsedHours() * 0.03) % 512;
+
+/**
+ * La chance a sa propre horloge, plus lente que la météo. Sans quoi les
+ * deux champs dériveraient de concert et l'on croirait à une cause.
+ */
+export const driftChance = () => (elapsedHours() * 0.011) % 512;
 
 /**
  * Combien de grain, et combien la tache s'efface. Nul au monde entier —

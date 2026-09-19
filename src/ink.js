@@ -11,7 +11,8 @@
 //
 //      1. les coins où vit l'interface, interdits d'emblée
 //      2. les étiquettes d'arc
-//      3. les noms de lieux, dans ce qui reste
+//      3. les hauts lieux de la croyance
+//      4. les noms de villes, dans ce qui reste
 //
 //  Une ville qui gênerait un arc disparaît, jamais l'inverse : c'est le
 //  ciel le sujet, pas la géographie.
@@ -21,6 +22,7 @@ import { DEG, flatten, matT, geoVec, angDist } from './projection.js';
 import { view, scale, sx, sy } from './view.js';
 import { zones } from './zones.js';
 import { CITY, tierAt, placeLine } from './ground.js';
+import { LEGEND_POINTS } from './sky.js';
 import { COAST } from '../data/coast.js';
 
 const FACE = '"Fragment Mono", ui-monospace, monospace';
@@ -224,7 +226,114 @@ function drawCallouts(boxes, Rt) {
   }
 }
 
-// ---------------------------------------------------------- les lieux
+
+// ----------------------------------------------------- les hauts lieux
+// Un petit arc et une baguette : ici, on y croit. Dessinés à la main en
+// gris, comme le glyphe des étiquettes — un emoji couleur deviendrait un
+// pâté au tramage de l'e-ink, et ces points-là doivent survivre au
+// tableau.
+//
+// Muets de loin, ils disent leur nom en s'approchant, puis la croyance
+// elle-même. Même logique de paliers que les villes : ce qui mérite
+// d'être lu dépend de la distance à laquelle on se tient.
+
+const LEG_NAME_ZOOM = 2.5;
+const LEG_SAY_ZOOM  = 5;
+
+function wandGlyph(cx, cy) {
+  const arcX = cx - 3, arcY = cy + 5;
+
+  // deux passes : le halo blanc d'abord, l'encre ensuite. Le trait doit
+  // tenir par-dessus une tache irisée.
+  for (const pass of [0, 1]) {
+    ink.lineCap = 'round';
+    ink.lineJoin = 'round';
+
+    if (pass === 0) {
+      ink.strokeStyle = 'rgba(255,255,255,0.95)';
+      ink.lineWidth = 3.4;
+    }
+
+    // l'arc, trois bandes espacées de 2 px pour 1,1 px de trait
+    for (let i = 0; i < 3; i++) {
+      if (pass === 1) {
+        ink.strokeStyle = ARC[i];
+        ink.lineWidth = 1.1;
+      }
+      ink.beginPath();
+      ink.arc(arcX, arcY, 7 - i * 2, Math.PI, 0);
+      ink.stroke();
+    }
+
+    // la baguette, penchée, et son étincelle à quatre branches
+    if (pass === 1) { ink.strokeStyle = ARC[1]; ink.lineWidth = 1.1; }
+    ink.beginPath();
+    ink.moveTo(cx + 4, cy + 7);
+    ink.lineTo(cx + 10, cy - 4);
+    ink.stroke();
+
+    if (pass === 1) { ink.strokeStyle = ARC[0]; ink.lineWidth = 1; }
+    const sx0 = cx + 11, sy0 = cy - 6, b = 3;
+    ink.beginPath();
+    ink.moveTo(sx0 - b, sy0); ink.lineTo(sx0 + b, sy0);
+    ink.moveTo(sx0, sy0 - b); ink.lineTo(sx0, sy0 + b);
+    ink.stroke();
+  }
+}
+
+function drawLegends(boxes, Rt) {
+  const say = view.zoom >= LEG_SAY_ZOOM;
+  const named = view.zoom >= LEG_NAME_ZOOM;
+
+  ink.textAlign = 'left';
+  ink.textBaseline = 'alphabetic';
+
+  for (const l of LEGEND_POINTS) {
+    const f = flatten(Rt, l.v);
+    if (Math.abs(f[2]) > 179.1) continue;
+    const X = sx(f[0]), Y = sy(f[1]);
+    if (X < 14 || X > view.W - 14 || Y < 16 || Y > view.H - 10) continue;
+
+    ink.font = `10px ${FACE}`;
+    const wn = named ? ink.measureText(l.nom).width : 0;
+    ink.font = `italic 9px ${FACE}`;
+    const wd = say ? ink.measureText(l.dit).width : 0;
+
+    // Le haut lieu que l'on vise ne doit jamais être celui qu'on cache :
+    // sous le réticule, le glyphe passe outre l'encombrement. Son nom,
+    // lui, reste soumis à la règle commune.
+    const aimed = Math.hypot(X - view.W / 2, Y - view.H / 2) < 26;
+
+    const tw = Math.max(wn, wd);
+    const box = [X - 13, Y - 12,
+                 X + 13 + (tw ? tw + 6 : 0),
+                 Y + 12 + (say ? 10 : 0)];
+    if (!aimed && overlaps(box, boxes)) continue;
+    if (!aimed) boxes.push(box);
+
+    wandGlyph(X, Y);
+
+    if (!named || (aimed && overlaps(box, boxes))) continue;
+    if (aimed) boxes.push(box);
+    const tx = X + 17;
+    ink.strokeStyle = 'rgba(255,255,255,0.95)';
+
+    ink.font = `10px ${FACE}`;
+    ink.lineWidth = 4;
+    ink.strokeText(l.nom, tx, Y + 3);
+    ink.fillStyle = '#4b525b';
+    ink.fillText(l.nom, tx, Y + 3);
+
+    if (!say) continue;
+    ink.font = `italic 9px ${FACE}`;
+    ink.lineWidth = 4;
+    ink.strokeText(l.dit, tx, Y + 15);
+    ink.fillStyle = '#878e98';
+    ink.fillText(l.dit, tx, Y + 15);
+  }
+}
+
+// ---------------------------------------------------------- les villes
 
 const MAX_PLACES = 44;
 
@@ -298,12 +407,12 @@ export function trace(centre) {
   drawReticle(cx, cy);
 
   const boxes = [
-    [0, 0, 300, 74],                              // le titre
-    [0, H - 96, 176, H],                          // la lecture
-    [W - 336, H - 116, W, H],                     // la légende
-    [W / 2 - 134, H - 62, W / 2 + 134, H],        // le curseur
-    [cx - 26, cy - 26, cx + 26, cy + 26]          // le réticule
+    [cx - 26, cy - 26, cx + 26, cy + 26],         // le réticule
+    [cx + 22, cy + 2, cx + 134, cy + 58],         // la lecture, contre lui
+    [W / 2 - 218, H - 102, W / 2 + 218, H],       // croyance et vitesse
+    [W - 240, H - 72, W, H]                       // échelle et « ? »
   ];
   drawCallouts(boxes, Rt);
+  drawLegends(boxes, Rt);
   drawPlaces(boxes, Rt);
 }

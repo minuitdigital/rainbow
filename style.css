@@ -16,9 +16,6 @@
   --ink-faint: #b6bcc4;
   --rule:      #e2e5ea;
 
-  --sp-0: #5b3fa8; --sp-1: #2f62cc; --sp-2: #1e9bb0; --sp-3: #4fa83c;
-  --sp-4: #e3c11c; --sp-5: #ec841c; --sp-6: #d62f26;
-
   --mono: "Fragment Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
@@ -56,75 +53,63 @@ body {
   letter-spacing: .08em;
   color: var(--ink-soft);
   transition: opacity .9s ease;
+  /* Le mobilier ne vit plus dans les marges mais SUR la carte : il lui
+     faut le même halo blanc qu'aux étiquettes, sinon il disparaît dans
+     une tache irisée. */
+  text-shadow:
+     0  1px 0 rgba(255,255,255,.92), 0 -1px 0 rgba(255,255,255,.92),
+     1px 0   0 rgba(255,255,255,.92), -1px 0  0 rgba(255,255,255,.92),
+     1px 1px 0 rgba(255,255,255,.92), -1px 1px 0 rgba(255,255,255,.92),
+     1px -1px 0 rgba(255,255,255,.92), -1px -1px 0 rgba(255,255,255,.92);
 }
 body.idle .chrome { opacity: .28; }
+/* La lecture est l'instrument : elle s'estompe moins que le reste. */
+body.idle .readout { opacity: .62; }
 @media (prefers-reduced-motion: reduce) {
   .chrome { transition: none; }
   body.idle .chrome { opacity: 1; }
 }
 
-.mark {
-  top: 18px; left: 18px;
-  text-transform: uppercase;
-  letter-spacing: .22em;
-  color: var(--ink);
-}
-.mark small {
-  display: block;
-  margin-top: 5px;
-  letter-spacing: .1em;
-  text-transform: none;
-  color: var(--ink-soft);
-  font-style: italic;
-}
-
+/* La lecture se tient contre le réticule, au centre exact de l'écran, et
+   se pose en bas à droite de lui. Elle décrit ce point-là. */
 .readout {
-  bottom: 18px; left: 18px;
+  top: 50%; left: 50%;
+  transform: translate(28px, 12px);
+  margin: 0;
   display: grid;
   grid-template-columns: auto auto;
-  column-gap: 14px;
-  row-gap: 3px;
+  column-gap: 10px;
+  row-gap: 1px;
   font-variant-numeric: tabular-nums;
 }
-.readout dt { color: var(--ink-faint); }
+.readout dt { color: var(--ink-soft); }
 .readout dd { margin: 0; color: var(--ink); text-align: right; }
-.readout dd.hot { color: var(--sp-6); }
+.readout dd.hot { color: #c62f26; }
+.readout dd.mute { color: var(--ink-faint); font-style: italic; }
 
-.legend {
-  bottom: 18px; right: 18px;
+/* ---------------------------------------------- le partage de la croyance */
+
+.dials {
+  bottom: 62px; left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 26px;
+}
+body.idle .dials { opacity: .55; }
+.dial {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  text-align: right;
-  max-width: min(46vw, 310px);
+  align-items: center;
+  gap: 3px;
 }
-.ramp {
-  width: 168px; height: 5px;
-  background: linear-gradient(90deg,
-    var(--sp-0), var(--sp-1), var(--sp-2), var(--sp-3),
-    var(--sp-4), var(--sp-5), var(--sp-6));
+.dial label {
+  color: var(--ink-soft);
+  letter-spacing: .16em;
 }
-.ramp-ends {
-  width: 168px;
-  display: flex;
-  justify-content: space-between;
-  color: var(--ink-faint);
-}
-.note {
-  color: var(--ink-faint);
-  font-style: italic;
-  letter-spacing: .04em;
-  line-height: 1.6;
-}
-.clock {
+.dial b {
+  font-weight: normal;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-  padding-top: 2px;
-  border-top: 1px solid var(--rule);
-  width: 168px;
-  display: flex;
-  justify-content: space-between;
 }
 
 /* Le curseur de vitesse : seul élément qui ne s'estompe pas, il sert. */
@@ -137,35 +122,168 @@ body.idle .chrome { opacity: .28; }
   gap: 5px;
 }
 body.idle .speed { opacity: .55; }
-.speed input {
-  pointer-events: auto;
-  -webkit-appearance: none;
-  appearance: none;
-  width: 210px; height: 14px;
-  background: transparent;
-  cursor: pointer;
-}
-.speed input::-webkit-slider-runnable-track { height: 1px; background: var(--ink-faint); }
-.speed input::-moz-range-track           { height: 1px; background: var(--ink-faint); }
-.speed input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 9px; height: 9px;
-  margin-top: -4px;
-  background: var(--ink);
-  border: 0; border-radius: 0;
-}
-.speed input::-moz-range-thumb {
-  width: 9px; height: 9px;
-  background: var(--ink);
-  border: 0; border-radius: 0;
-}
-.speed input:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
 .speed-read {
   display: flex; gap: 16px;
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
 }
 .speed-read b { font-weight: normal; color: var(--ink); }
+
+/* un seul dessin de curseur pour toute la page */
+input[type="range"] {
+  pointer-events: auto;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+.speed input { width: 210px; }
+.dial  input { width: 104px; }
+input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--ink-faint); }
+input[type="range"]::-moz-range-track            { height: 1px; background: var(--ink-faint); }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 9px; height: 9px;
+  margin-top: -4px;
+  background: var(--ink);
+  border: 0; border-radius: 0;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 9px; height: 9px;
+  background: var(--ink);
+  border: 0; border-radius: 0;
+}
+input[type="range"]:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
+
+/* ------------------------------------------------------------ la légende */
+
+.legend {
+  bottom: 18px; right: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+.ramp { display: block; width: 168px; height: 6px; }
+.ramp-ends {
+  width: 168px;
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-faint);
+}
+.clock {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  padding-top: 2px;
+  border-top: 1px solid var(--rule);
+  width: 168px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* --------------------------------------------------------- l'explication */
+
+.help-btn {
+  position: fixed;
+  z-index: 3;
+  bottom: 18px; right: 18px;
+  width: 22px; height: 22px;
+  padding: 0;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--ink-faint);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: opacity .9s ease, color .2s, border-color .2s;
+}
+body.idle .help-btn { opacity: .28; }
+.help-btn:hover { color: var(--ink); border-color: var(--ink); }
+.help-btn:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(255, 255, 255, .82);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+.sheet-inner {
+  position: relative;
+  max-width: 560px;
+  max-height: 100%;
+  overflow: auto;
+  padding: 30px 34px 34px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  font-size: 12px;
+  line-height: 1.75;
+  color: #3d444d;
+  letter-spacing: .02em;
+}
+.sheet-close {
+  position: absolute;
+  top: 10px; right: 12px;
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-faint);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.sheet-close:hover { color: var(--ink); }
+.sheet h1 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: normal;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.sheet .lead {
+  margin: 0 0 22px;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+.sheet h2 {
+  margin: 22px 0 6px;
+  font-size: 10px;
+  font-weight: normal;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.sheet p { margin: 0 0 10px; }
+.sheet b { font-weight: normal; color: var(--ink); }
+.sheet pre {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  background: #f6f7f9;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink);
+  overflow-x: auto;
+}
+.sheet .terms {
+  margin: 0 0 12px;
+  display: grid;
+  grid-template-columns: 82px 1fr;
+  column-gap: 12px;
+  row-gap: 2px;
+}
+.sheet .terms dt { color: var(--ink); }
+.sheet .terms dd { margin: 0; }
+
+/* --------------------------------------------------------------- le repli */
 
 .fallback {
   position: fixed;
@@ -181,11 +299,13 @@ body.idle .speed { opacity: .55; }
   line-height: 1.8;
   letter-spacing: .06em;
 }
+.fallback code { color: var(--ink); }
 
 @media (max-width: 620px) {
-  .readout { bottom: 14px; left: 14px; }
-  .legend  { bottom: 14px; right: 14px; }
-  .mark    { top: 14px; left: 14px; }
+  .legend  { bottom: 14px; right: 46px; }
   .ramp, .ramp-ends, .clock { width: 128px; }
-  .note { display: none; }
+  .dials { gap: 14px; bottom: 58px; }
+  .dial input { width: 74px; }
+  .speed input { width: 160px; }
+  .sheet-inner { padding: 26px 20px 28px; }
 }

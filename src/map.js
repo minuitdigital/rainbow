@@ -9,14 +9,16 @@
 //  pas de bibliothèque. Toute la carte est un calcul par pixel.
 // =========================================================================
 
-import { view, scale, drift, detail } from './view.js';
-import { VERTEX, FRAGMENT } from './shader.js';
+import { view, scale, drift, driftChance, detail, beliefWeights } from './view.js';
+import { VERTEX, FRAGMENT, MAX_LEGENDS } from './shader.js';
+import { LEGEND_POINTS } from './sky.js';
 
 let gl = null;
 const U = {};
 
 const UNIFORMS = ['uRes', 'uScale', 'uMode', 'uRot', 'uDecl', 'uSublon',
-                  'uDrift', 'uDetail', 'uEarth', 'uField', 'uMask'];
+                  'uDrift', 'uDriftC', 'uDetail', 'uBelief',
+                  'uLegN', 'uLegP', 'uLegQ', 'uEarth', 'uField', 'uMask'];
 
 /**
  * Les textures arrivent quand elles arrivent. On lie donc des textures
@@ -103,6 +105,7 @@ export function initMap(canvas, onReady) {
   gl.uniform1i(U.uMask, 2);
 
   placeholder(0); placeholder(1); placeholder(2);
+  uploadLegends();
 
   const load = (src, unit, mip) => {
     const img = new Image();
@@ -120,6 +123,29 @@ export function initMap(canvas, onReady) {
   return true;
 }
 
+/**
+ * Les hauts lieux de la croyance ne bougent jamais : on les verse une
+ * fois pour toutes. Quarante-huit places réservées dans le shader — s'il
+ * en faut davantage, changer MAX_LEGENDS dans shader.js.
+ */
+function uploadLegends() {
+  const n = Math.min(LEGEND_POINTS.length, MAX_LEGENDS);
+  const pos = new Float32Array(MAX_LEGENDS * 4);
+  const rad = new Float32Array(MAX_LEGENDS);
+  for (let i = 0; i < n; i++) {
+    const l = LEGEND_POINTS[i];
+    pos[i*4] = l.v[0]; pos[i*4+1] = l.v[1]; pos[i*4+2] = l.v[2];
+    pos[i*4+3] = l.f;
+    rad[i] = l.q;
+  }
+  gl.uniform1i(U.uLegN, n);
+  gl.uniform4fv(U.uLegP, pos);
+  gl.uniform1fv(U.uLegQ, rad);
+  if (LEGEND_POINTS.length > MAX_LEGENDS)
+    console.warn('légendes : %d au-delà de la place réservée, ignorées',
+                 LEGEND_POINTS.length - MAX_LEGENDS);
+}
+
 export function paint(canvas, sun) {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(1, 1, 1, 1);
@@ -131,6 +157,9 @@ export function paint(canvas, sun) {
   gl.uniform1f(U.uDecl, sun.decl);
   gl.uniform1f(U.uSublon, sun.sublon);
   gl.uniform1f(U.uDrift, drift());
+  gl.uniform1f(U.uDriftC, driftChance());
   gl.uniform1f(U.uDetail, detail());
+  const w = beliefWeights();
+  gl.uniform3f(U.uBelief, w.m, w.l, w.c);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }

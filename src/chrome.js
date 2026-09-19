@@ -1,8 +1,9 @@
 // =========================================================================
 //  LE MOBILIER
 //
-//  Tout ce qui n'est pas la carte : le bandeau de lecture, et la main
-//  posée dessus.
+//  Tout ce qui n'est pas la carte : la lecture contre le réticule, le
+//  partage de la croyance, l'échelle, l'explication, et la main posée
+//  dessus.
 //
 //  La navigation est une ROTATION LIBRE DE LA SPHÈRE, façon boule de
 //  commande : le point saisi reste sous le doigt, partout, y compris aux
@@ -16,10 +17,10 @@
 
 import { between } from './projection.js';
 import {
-  view, ZMAX, geoAt, relDir, anchorTo, nudge, recentre,
-  setZoomTarget, turnFrom, simDate, drift
+  view, ZMAX, geoAt, relDir, anchorTo, nudge, recentre, setZoomTarget,
+  turnFrom, simDate, drift, driftChance, beliefWeights
 } from './view.js';
-import { sunElev, rainbowIndex } from './sky.js';
+import { sunElev, rainbowIndex, SUN_MAX } from './sky.js';
 
 const el = id => document.getElementById(id);
 
@@ -31,12 +32,25 @@ export function readout(sun, centre) {
 
   el('r-lat').textContent = `${Math.abs(lat).toFixed(1)}° ${lat >= 0 ? 'N' : 'S'}`;
   el('r-lon').textContent = `${Math.abs(lon).toFixed(1)}° ${lon >= 0 ? 'E' : 'O'}`;
-  el('r-sun').textContent = `${sunElev(lon, lat, sun).toFixed(1)}°`;
 
-  const v = rainbowIndex(lon, lat, sun, drift());
+  const h = sunElev(lon, lat, sun);
+  el('r-sun').textContent = `${h.toFixed(1)}°`;
+
+  // L'indice était vide presque tout le temps sans jamais dire pourquoi.
+  // Il dit maintenant ce qui ferme la porte.
   const idx = el('r-idx');
-  idx.textContent = v <= 0.02 ? '—' : v.toFixed(2);
-  idx.classList.toggle('hot', v > 0.6);
+  idx.classList.remove('hot', 'mute');
+  if (h <= 0.4) {
+    idx.textContent = 'nuit';
+    idx.classList.add('mute');
+  } else if (h >= SUN_MAX) {
+    idx.textContent = 'trop haut';
+    idx.classList.add('mute');
+  } else {
+    const v = rainbowIndex(lon, lat, sun, drift(), driftChance(), beliefWeights());
+    idx.textContent = v.toFixed(2);
+    if (v > 0.6) idx.classList.add('hot');
+  }
 
   el('r-time').textContent =
     `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')} UTC`;
@@ -49,6 +63,48 @@ export function readout(sun, centre) {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
     timeZone: 'UTC'
   });
+}
+
+// ------------------------------------------------------------- l'échelle
+// Peinte avec la formule même du shader. Une légende écrite à la main
+// finit toujours par mentir : l'ancienne montrait un dégradé monotone
+// violet→rouge, alors que la teinte de la carte est CYCLIQUE — une
+// palette d'interférence — et que ce qui code la force est l'intensité.
+
+function paintRamp() {
+  const cv = el('ramp');
+  const g = cv.getContext('2d');
+  const w = cv.width, h = cv.height;
+  const img = g.createImageData(w, h);
+
+  for (let x = 0; x < w; x++) {
+    const t = x / (w - 1);
+    const field = Math.pow(t, 1.15) * 0.98;
+    const k = t * 1.35;                        // le même parcours que le shader
+    const c = [0, 2.0944, 4.1888].map(p => 0.5 + 0.5 * Math.cos(6.28318 * k + p));
+    const grey = (c[0] + c[1] + c[2]) / 3;
+    for (let i = 0; i < 3; i++) {
+      const sat = grey + (c[i] - grey) * 1.50;
+      const hue = Math.max(0, Math.min(1, 0.10 + 0.90 * sat));
+      // sur le papier, la tache teinte au lieu d'éclairer : multiplication
+      c[i] = Math.round(255 * (1 - field + field * hue));
+    }
+    for (let y = 0; y < h; y++) {
+      const o = (y * w + x) * 4;
+      img.data[o] = c[0]; img.data[o+1] = c[1]; img.data[o+2] = c[2];
+      img.data[o+3] = 255;
+    }
+  }
+  g.putImageData(img, 0, 0);
+}
+
+// ------------------------------------------------- le partage de la croyance
+
+function showShares() {
+  const w = beliefWeights();
+  el('p-m').textContent = Math.round(w.m * 100) + ' %';
+  el('p-l').textContent = Math.round(w.l * 100) + ' %';
+  el('p-c').textContent = Math.round(w.c * 100) + ' %';
 }
 
 // ------------------------------------------------------------ la main
@@ -161,7 +217,18 @@ export function bind(canvas, invalidate) {
     invalidate();
   });
 
+  // ---- l'explication
+  const sheet = el('help');
+  const openHelp = () => { sheet.hidden = false; el('help-close').focus(); };
+  const closeHelp = () => { sheet.hidden = true; el('help-open').focus(); };
+  el('help-open').addEventListener('click', () => { wake(); openHelp(); });
+  el('help-close').addEventListener('click', closeHelp);
+  sheet.addEventListener('click', e => { if (e.target === sheet) closeHelp(); });
+
   window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !sheet.hidden) { closeHelp(); return; }
+    if (!sheet.hidden) return;                 // la feuille ouverte, le globe dort
+
     const s = 90;
     let hit = true;
     switch (e.key) {
@@ -173,6 +240,7 @@ export function bind(canvas, invalidate) {
       case '-': case '_': view.anchor = null; setZoomTarget(view.zoomTarget / 1.3); break;
       case '0': recentre(); break;
       case 'r': case 'R': view.modeTarget = view.modeTarget > 0.5 ? 0 : 1; break;
+      case '?': openHelp(); break;
       case 'f': case 'F':
         if (document.fullscreenElement) document.exitFullscreen();
         else document.documentElement.requestFullscreen?.();
@@ -185,7 +253,23 @@ export function bind(canvas, invalidate) {
     invalidate();
   });
 
-  // Le curseur de vitesse : seul élément qui ne s'estompe pas, il sert.
+  // ---- le partage de la croyance
+  // Les poignées ne bougent pas toutes seules : chacune dit combien on
+  // tient à sa raison. C'est le POURCENTAGE affiché qui se redistribue,
+  // et c'est là que l'arbitrage se voit.
+  for (const [id, key] of [['w-m', 'm'], ['w-l', 'l'], ['w-c', 'c']]) {
+    const input = el(id);
+    input.value = view.belief[key];
+    input.addEventListener('input', () => {
+      wake();
+      view.belief[key] = +input.value;
+      showShares();
+      invalidate();
+    });
+  }
+  showShares();
+
+  // ---- le curseur de vitesse
   // Échelle logarithmique sur cinq décades — de la seconde à l'année.
   const spd = el('spd');
   const applySpeed = () => {
@@ -196,5 +280,6 @@ export function bind(canvas, invalidate) {
   spd.addEventListener('input', () => { wake(); applySpeed(); });
   applySpeed();
 
+  paintRamp();
   wake();
 }

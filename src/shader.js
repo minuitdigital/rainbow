@@ -13,7 +13,14 @@
 //  Rien n'est déplacé, tout est recalculé. D'où : le zoom précise au lieu
 //  de flouter, et les aplats ont des bords calculés donc nets à toute
 //  échelle.
+//
+//  La deuxième moitié du fragment est le MIROIR de src/sky.js. Les deux
+//  doivent dire la même chose, sinon le chiffre lu sous le réticule cesse
+//  de décrire la couleur qu'on a sous les yeux.
 // =========================================================================
+
+/** Places réservées pour les hauts lieux de la croyance. */
+export const MAX_LEGENDS = 48;
 
 export const VERTEX = `#version 300 es
 in vec2 aPos;
@@ -25,7 +32,11 @@ precision highp float;
 uniform vec2  uRes;
 uniform float uScale, uMode;
 uniform mat3  uRot;
-uniform float uDecl, uSublon, uDrift, uDetail;
+uniform float uDecl, uSublon, uDrift, uDriftC, uDetail;
+uniform vec3  uBelief;                 // météo, légende, chance — somme = 1
+uniform int   uLegN;
+uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
+uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
 uniform sampler2D uEarth, uField, uMask;
 out vec4 fragColor;
 
@@ -34,6 +45,12 @@ const float M   = 0.86602540378;
 const float PI  = 3.14159265359;
 const float YMAX = 1.31736275916;
 const float NSEA = 7.0, NLAND = 8.0;
+
+const float SUN_MAX = 42.0;
+const float GAIN = 1.8;
+const float LEGEND_FLOOR = 0.09;
+const float FIELD_FREQ = 3.6;
+const float CHANCE_FREQ = 0.62;
 
 float fyf (float t){ float a=t*t, b=a*a*a; return t*(A1 + A2*a + b*(A3 + A4*a)); }
 float fypf(float t){ float a=t*t, b=a*a*a; return A1 + 3.0*A2*a + b*(7.0*A3 + 9.0*A4*a); }
@@ -53,6 +70,21 @@ float vnoise(vec3 x){
 }
 float fbm(vec3 p){
   return 0.56 * vnoise(p) + 0.29 * vnoise(p * 2.13) + 0.15 * vnoise(p * 4.37);
+}
+
+// LA LÉGENDE. Le plancher, relevé par le haut lieu le plus proche. Un
+// maximum et non une somme : deux traditions voisines ne s'additionnent
+// pas, on croit à la plus forte des deux. On compare des cordes plutôt
+// que des angles — à ces distances l'écart est sous le pixel, et ça
+// épargne un arc-cosinus par point et par pixel.
+float legendAt(vec3 g){
+  float v = LEGEND_FLOOR;
+  for(int i = 0; i < ${MAX_LEGENDS}; i++){
+    if(i >= uLegN) break;
+    vec3 d = g - uLegP[i].xyz;
+    v = max(v, uLegP[i].w * exp(-dot(d, d) / uLegQ[i]));
+  }
+  return min(v, 1.0);
 }
 
 void main(){
@@ -116,22 +148,38 @@ void main(){
   ground = mix(ground, alt, uMode);
   float m = texture(uMask, uv).r;
 
-  // --- champ spectral
+  // ====================================================== LA PORTE
   float field = 0.0;
   vec3  hue   = vec3(1.0);
 
   float d = radians(uDecl), pl = radians(lat), Hh = radians(lon - uSublon);
   float h = degrees(asin(clamp(sin(pl) * sin(d) + cos(pl) * cos(d) * cos(Hh), -1.0, 1.0)));
 
-  if(h > 0.4 && h < 42.0){
-    float geom = pow(1.0 - h / 42.0, 1.3) * smoothstep(0.0, 6.5, h);
+  if(h > 0.4 && h < SUN_MAX){
+    // Le soleil ouvre la fenêtre, et rien d'autre ne peut l'ouvrir.
+    float S = pow(1.0 - h / SUN_MAX, 1.3) * smoothstep(0.0, 6.5, h);
+
     float ccl = cos(pl);
-    vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * 3.6;
+    vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * FIELD_FREQ;
+
+    // ---- MÉTÉO : la pluie et la trouée
     float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
     float a = (lat - uDecl * 0.45) / 9.5;
     float b = (abs(lat) - 48.0) / 15.0;
-    float wet = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
-    float t = 1.0 - exp(-geom * rain * (wet / 1.2) * 6.0);
+    float gap = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
+    float MET = 1.0 - exp(-rain * (gap / 1.2) * 6.0);
+
+    // ---- LÉGENDE : le plancher, et les hauts lieux
+    float LEG = legendAt(g);
+
+    // ---- CHANCE : plus lente, plus large, et sans rapport avec la météo.
+    // Seuillée serré : ce ne sont pas des voiles mais des poches.
+    float CHA = smoothstep(0.46, 0.76,
+                  fbm(sp * CHANCE_FREQ + vec3(uDriftC + 41.0, 17.0, 7.0)));
+
+    // ---- le partage de la croyance
+    float belief = uBelief.x * MET + uBelief.y * LEG + uBelief.z * CHA;
+    float t = clamp(S * belief * GAIN, 0.0, 1.0);
 
     // LE GRAIN. Le bruit de base n'a rien de plus fin que ~400 km : passé
     // ×10 on regardait un aplat uniforme, et s'approcher ne montrait rien.
@@ -148,7 +196,7 @@ void main(){
     // signal qu'on lit d'un continent à l'autre ; de près, on est DANS le
     // paysage et l'arc n'est plus qu'un indice — sinon la couleur noie le
     // relief et zoomer revient à se coller à un vitrail.
-    field = pow(t, 0.90) * 0.95 * mix(1.0, 0.40, uDetail);
+    field = pow(t, 1.15) * 0.98 * mix(1.0, 0.40, uDetail);
 
     // Irisation : palette cosinus parcourue plusieurs fois, décalée par un
     // bruit lent. On obtient des bandes imbriquées, comme de l'huile sur
