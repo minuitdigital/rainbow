@@ -7,6 +7,9 @@ shadedrelief.jpg
 data/
 sources/
 
+# Le recollage en un seul fichier : régénérable par build/bundle.py.
+dist/
+
 # Divers
 .DS_Store
 Thumbs.db

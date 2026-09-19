@@ -14,7 +14,7 @@ les quelques points du globe où le ciel s'apprête à se plier.
 |---|---|
 | glisser | tourner le globe, librement, sans butée |
 | molette / pincement | zoom vers le curseur |
-| double-clic | zoom ×2 (maj : ×0,5) |
+| double-clic | zoom ×2 (maj : ×0,5), jusqu'à ×32 |
 | flèches | déplacement par pas |
 | curseur du bas | vitesse du temps simulé — 0 fige tout |
 | `r` | aplats ↔ relief ombré |
@@ -47,6 +47,16 @@ Un détail qui compte : un arc-en-ciel n'existe pas *à un endroit*, il existe
 *pour un observateur*. Deux personnes côte à côte n'en voient pas le même. Les
 taches ne marquent donc pas un phénomène, mais un point de vue possible.
 
+## Les lieux
+
+La carte ne montre aucune frontière. Une frontière est une convention, et elle
+ne dit pas où se tient quelqu'un ; une ville si. Les lieux habités apparaissent
+donc par paliers — les capitales dès le monde entier, les autres à mesure qu'on
+s'approche — en gris clair, sous les étiquettes d'arc : une ville qui gênerait
+un arc disparaît, jamais l'inverse.
+
+C'est ce qui permet la phrase que la carte cherchait : *à 185 km d'Oulan-Oudé*.
+
 ## Les annotations
 
 Une zone porte de une à cinq étiquettes selon sa taille à l'écran : une seule
@@ -54,7 +64,7 @@ vue de loin, jusqu'à cinq quand on a zoomé dedans. Ce ne sont pas cinq mesures
 du même endroit mais cinq observateurs différents, et ils n'ont pas la même
 chance — celui qui est sur la crête voit l'arc, celui du fond de la vallée non.
 
-Chaque étiquette porte un pourcentage, une durée et une phrase.
+Chaque étiquette porte un pourcentage, une durée, une phrase et un lieu.
 
 Le **pourcentage** mêle ce que la carte affiche, le dégagement de l'horizon,
 l'accessibilité du lieu — peut-on seulement être là ? — et une part de chance
@@ -68,3 +78,7 @@ heures sous les tropiques, bien davantage près des pôles où il rase le sol.
 La **phrase** dit ce qui porte le chiffre — *le soleil perce*, *l'averse
 s'éloigne*, *depuis la crête*, *au hasard*. Et quand la zone est forte mais
 déserte : *personne pour voir*.
+
+Le **lieu** est la ville la plus proche, dans un rayon de 300 km. Au-delà il
+n'y a rien d'écrit : au milieu du Pacifique, il n'y a personne, et c'est une
+information.

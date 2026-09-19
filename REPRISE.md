@@ -31,16 +31,38 @@ scientifique**. Mais l'algorithme doit reposer sur de vraies conditions météo.
 ## 2. Architecture technique
 
 ```
-                    field.png ─┐
-                    earth.jpg ─┤
-                     mask.png ─┼──► shader WebGL 2 ──► <canvas id="gl">
-                   terrain.js ─┘     (reprojection            │
-                                      par pixel)              │
-                     coast.js ──────► canvas 2D ──────► <canvas id="ink">
-                                      (côtes,                 │
-                                       étiquettes)            ▼
-                                                        la page
+               data/field.png ─┐
+               data/earth.jpg ─┼──► src/shader ──► src/map ──► <canvas id="gl">
+                data/mask.png ─┘                                      │
+                                                                      │
+                data/coast.js ─┐                                      │
+              data/terrain.js ─┼──► src/ink ────────────────► <canvas id="ink">
+               data/cities.js ─┘                                      ▼
+                                                                  la page
 ```
+
+**L'ordre de dépendance, à sens unique.** Aucun cycle : on lit de haut en
+bas sans jamais revenir en arrière. C'est ce qui rend le code lisible à
+quelqu'un d'autre, bien plus que le nombre de lignes.
+
+```
+src/projection.js  ← rien                     maths pures, sans état
+src/sky.js         ← projection               soleil, bruit, indice, durée
+src/ground.js      ← projection, données      terrain, villes, plus proche lieu
+src/view.js        ← projection               LE seul module qui se souvienne
+src/zones.js       ← sky, ground, view        ce qui vit d'une image à l'autre
+src/shader.js      ← rien                     le GLSL, rien d'autre
+src/map.js         ← view, shader             contexte WebGL, textures, une image
+src/ink.js         ← projection, view, zones, ground   le calque 2D
+src/chrome.js      ← view, sky                lecture, navigation, curseur
+src/main.js        ← tous                     l'assemblage et la boucle
+```
+
+**Deux règles tiennent l'ensemble**, et le recolleur en dépend :
+tous les exports sont **nommés** (pas d'`export default`, pas
+d'`import * as`), et **les noms sont uniques dans tout le projet**. C'est
+pourquoi `map.js` exporte `initMap` et `paint` plutôt que `init` et
+`draw`.
 
 **Le principe fondamental : rien n'est déplacé, tout est recalculé.** À chaque
 image, pour chaque pixel de l'écran, le processeur graphique remonte aux
@@ -61,15 +83,35 @@ mur.
 
 ### Le site (à déployer)
 
+Écrit à la main :
+
+| Fichier | Rôle |
+|---|---|
+| `index.html` | la structure de la page, et rien d'autre — 2 Ko |
+| `style.css` | le registre : papier, encre, spectre |
+| `src/projection.js` | Equal Earth, aller et retour, et l'algèbre de la sphère |
+| `src/sky.js` | soleil, bruit, indice, durée d'ouverture |
+| `src/ground.js` | relief accessible, villes, plus proche lieu |
+| `src/view.js` | où l'on regarde, de quelle distance, et quand |
+| `src/zones.js` | détection des taches, suivi, les cinq observateurs |
+| `src/shader.js` | le GLSL, rien d'autre |
+| `src/map.js` | contexte WebGL, textures, une image |
+| `src/ink.js` | le calque 2D et sa liste d'encombrement |
+| `src/chrome.js` | bandeau de lecture, navigation, curseur de vitesse |
+| `src/main.js` | l'assemblage et la boucle d'images |
+
+Généré, dans `data/` :
+
 | Fichier | Taille | Rôle |
 |---|---|---|
-| `index.html` | ~47 Ko | tout : shader, projection, navigation, estimation, étiquettes |
 | `field.png` | 8 Mo | champ hypsométrique 8192×4096 — 0 fosses, 0,5 côte, 1 sommets |
 | `earth.jpg` | 3,9 Mo | carte d'**ombres** 8192×4096 (voir piège n°5) |
 | `mask.png` | 48 Ko | coefficient de surface mer / littoral / intérieur, 720×360 |
 | `coast.js` | 888 Ko | traits de côte et lacs, Natural Earth 1:50 m, ~55 000 points |
+| `cities.js` | 118 Ko | 4 235 lieux habités gradués par palier de zoom, Natural Earth 1:10 m |
 | `terrain.js` | 86 Ko | accessibilité + dégagement de l'horizon, 1 octet par degré carré |
-| `README.md` | — | présentation publique : résumé, navigation, algorithme |
+
+`README.md` — présentation publique : résumé, navigation, algorithme.
 
 ### Les scripts de génération (`build/`, inutiles en ligne)
 
@@ -79,16 +121,23 @@ mur.
 | `make_texture.py` | `earth.jpg` + `mask.png` depuis le relief ombré Natural Earth |
 | `make_terrain.py` | `terrain.js` depuis ETOPO + masque terre/mer |
 | `make_coast.py` | `coast.js` depuis les vecteurs Natural Earth |
+| `make_cities.py` | `cities.js` depuis les lieux habités Natural Earth |
+| `bundle.py` | `dist/index.html` — tout recollé en un seul fichier |
 | `eqearth.py` | formules de la projection, utilisé par les autres |
 
-`index.html` est **le fichier de référence**. Quand la page est publiée en
-Artifact Claude, une version sans `<html>`/`<head>` en est dérivée — c'est un
-intermédiaire, jamais une source à éditer.
+**Modules ES natifs**, aucune bibliothèque, aucune étape de construction pour
+faire tourner la page. Il faut la servir par HTTP — mais il le fallait déjà
+(piège n°3).
+
+`python build/bundle.py` recolle tout en un `dist/index.html` autonome : pour
+l'Artifact Claude, et plus tard pour le rendu serveur vers l'e-ink, où il n'y
+aura ni serveur HTTP ni résolution d'imports. Ce fichier est **un produit,
+jamais une source à éditer** — il est dans `.gitignore`.
 
 ### Les sources (non incluses, à retélécharger si besoin)
 
 - **ETOPO 2022, 60 arc-secondes, surface de la glace** — `ETOPO_2022_v1_60s_N90W180_surface.tif`, 444 Mo, sur le site du NCEI (NOAA). Prendre `surface`, pas `bed`.
-- **Natural Earth** — `ne_50m_land`, `ne_50m_lakes` en GeoJSON, depuis `raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/`
+- **Natural Earth** — `ne_50m_land`, `ne_50m_lakes`, `ne_10m_populated_places`, `ne_50m_admin_0_countries` en GeoJSON, depuis `raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/`. Les scripts les attendent dans `build/`, sous leur nom d'origine.
 - **Relief ombré** — extrait du paquet PyPI `basemap-data` (`shadedrelief.jpg`)
 
 Dépendances Python : `numpy`, `pillow`, `tifffile`, `imagecodecs`, `pyproj`.
@@ -129,6 +178,31 @@ pâté au tramage de l'e-ink, et le contraste était insuffisant.
 
 **Le pourcentage est poétique**, la durée est exacte. Voir §6.
 
+**Pas de frontières, des villes.** Une frontière est une convention et elle ne
+dit pas où se tient quelqu'un ; une ville si. La carte n'affiche donc aucune
+limite politique — elle nomme des lieux, gradués par palier de zoom (capitales
+dès le monde entier, le reste en s'approchant), et chaque étiquette d'arc porte
+une troisième ligne : *à 185 km d'Oulan-Oudé, Russie*. Les villes se placent
+dans ce que les étiquettes d'arc ont laissé libre : une ville qui gêne un arc
+disparaît, jamais l'inverse.
+
+**Plafond de zoom : ×32.** Le zoom ne coûte aucun octet — rien n'est chargé,
+tout est recalculé. Le plafond est celui de la *donnée*, pas du moteur : au-delà
+de ×32 les sommets de `coast.js` (1:50 m, un point tous les 1 à 4 km)
+deviennent des polygones visibles. Monter plus haut demande Natural Earth
+1:10 m, +2,5 Mo.
+
+**Dix modules, dépendances à sens unique.** `index.html` avait atteint
+1 300 lignes où quatre natures de code partageaient une même portée : des
+maths pures, un état mutable, de la plomberie GPU et le mobilier de la
+page. Ce n'était pas la longueur le problème, c'était qu'aucune ligne ne
+disait ce qui dépendait de quoi. Voir le graphe en §2 — et la règle des
+noms uniques, dont dépend `build/bundle.py`.
+
+**La tache s'efface quand on s'approche** (facteur 0,40 à plein zoom). Vue du
+monde, elle est un signal qu'on lit d'un continent à l'autre ; de près, on est
+*dans* le paysage et l'arc n'est plus qu'un indice. Voir piège n°10.
+
 ---
 
 ## 5. Pièges rencontrés — à ne pas refaire
@@ -168,6 +242,20 @@ pâté au tramage de l'e-ink, et le contraste était insuffisant.
 9. **Le glyphe de l'arc se referme en pâté** si l'écart entre les bandes n'est
    pas nettement supérieur à leur épaisseur. Quatre bandes espacées de 2,5 px
    pour 1,25 px de trait — pas cinq bandes serrées.
+
+10. **En zoomant, la tache noie le relief.** À ×4 on est déjà *dans* une seule
+    tache : l'écran devient un vitrail saturé et la carte disparaît. Deux
+    correctifs, pilotés par `uDetail` (nul au monde entier, plein à partir de
+    ×10) : l'intensité tombe à 0,40, et deux octaves de bruit fines entrent
+    pour donner du grain. Le grain **ne déplace pas** la tache, il la dépolit —
+    la structure, donc l'indice lu, reste celle du champ.
+
+11. **Le bruit de base n'a rien de plus fin que ~400 km.** Les trois octaves
+    sont à 1 770, 830 et 405 km. Sans octaves fines, s'approcher ne montre rien
+    de nouveau : c'est un aplat de couleur qui grandit.
+
+12. **« de Oulan-Oudé ».** Une carte française qui n'élide pas n'est plus une
+    œuvre, c'est un export. Voir `de()` dans `index.html`.
 
 ---
 
@@ -277,10 +365,20 @@ remonter la météo de ce moment, vérifier que la carte l'avait vu.
 ## 8. Ce qui reste, par ordre
 
 **A — Esthétique web** (en cours)
-Densité et intensité des taches · nombre de cycles dans l'irisation · détail
-des côtes au-delà de ×6 (Natural Earth 1:10 m, ×3 plus lourd) · format cible
-4:3 pour coller au 10,3" · retirer `earth.jpg` et la touche `r` une fois le
-choix arrêté (−3,9 Mo).
+Densité et intensité des taches · nombre de cycles dans l'irisation · format
+cible 4:3 pour coller au 10,3" · retirer `earth.jpg` et la touche `r` une fois
+le choix arrêté (−3,9 Mo).
+
+*Ouvert depuis le test des villes :*
+- À ×32, les cinq observateurs d'une même zone disent presque la même chose
+  (« 89 % · Tchita », « 88 % · Tchita »…). Le grain n'est appliqué que dans le
+  shader, pas dans `index()`. S'il l'était aussi côté JS, les cinq chiffres
+  divergeraient et les étiquettes cesseraient de se répéter. À trancher : le
+  grain est-il de la matière (shader seul) ou de la donnée (les deux) ?
+- `coast.js` tient mieux que prévu à ×32. Le 1:10 m n'est pas urgent.
+- Palier 5 des villes (> 50 000 hab.) = 1 723 entrées, 40 % du fichier.
+  `MAX_TIER = 4` dans `make_cities.py` ramène `cities.js` à ~65 Ko.
+- Faut-il nommer le pays sur la troisième ligne, ou la ville seule suffit-elle ?
 
 **B — Données réelles** — voir §7.
 
@@ -306,10 +404,11 @@ rythme contemplatif qui convient à un tableau.
 
 ## 9. Manipulations
 
-**Tester en local** — le double-clic ne marche pas (voir piège n°3) :
+**Tester en local** — le double-clic ne marche pas (voir piège n°3), et les
+modules ES exigent eux aussi un serveur :
 
 ```bash
-cd "C:\00 - CREATIONS\RAINBOW ESTIMATEUR\WEB"
+cd "C:\00 - CREATIONS\RAINBOW ESTIMATEUR\GIT\rainbow"
 python -m http.server 8000
 ```
 
@@ -327,6 +426,8 @@ python build/make_field.py     # field.png     (~1 min, demande etopo.tif)
 python build/make_terrain.py   # terrain.js    (demande etopo.tif)
 python build/make_texture.py   # earth.jpg + mask.png
 python build/make_coast.py     # coast.js
+python build/make_cities.py    # data/cities.js
+python build/bundle.py         # dist/index.html, le recollage
 ```
 
 **Navigation dans la page** : glisser (rotation libre) · molette ou pincement

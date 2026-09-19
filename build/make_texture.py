@@ -9,8 +9,12 @@ import json
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-DATA = '/home/claude/rainbow/data'
-OUT = '/home/claude/rainbow/site'
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = HERE                     # les sources téléchargées, à côté du script
+OUT = os.path.join(os.path.dirname(HERE), 'data')   # ce que sert la page
+os.makedirs(OUT, exist_ok=True)
 
 SRC_W, SRC_H = 10800, 5400
 TEX_W, TEX_H = 8192, 4096

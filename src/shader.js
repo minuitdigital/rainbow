@@ -1,0 +1,167 @@
+// =========================================================================
+//  LE SHADER
+//
+//  Deux chaînes de GLSL, rien d'autre. Aucune logique JavaScript ici : le
+//  fichier se lit comme le programme qu'il contient.
+//
+//  Le principe fondamental de toute la carte tient dans le fragment : pour
+//  CHAQUE PIXEL de l'écran, le processeur graphique remonte aux coordonnées
+//  Equal Earth, inverse la projection par Newton, applique la rotation de
+//  la sphère, obtient une latitude et une longitude, et va chercher les
+//  valeurs dans des textures en plate carrée.
+//
+//  Rien n'est déplacé, tout est recalculé. D'où : le zoom précise au lieu
+//  de flouter, et les aplats ont des bords calculés donc nets à toute
+//  échelle.
+// =========================================================================
+
+export const VERTEX = `#version 300 es
+in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+export const FRAGMENT = `#version 300 es
+precision highp float;
+
+uniform vec2  uRes;
+uniform float uScale, uMode;
+uniform mat3  uRot;
+uniform float uDecl, uSublon, uDrift, uDetail;
+uniform sampler2D uEarth, uField, uMask;
+out vec4 fragColor;
+
+const float A1 = 1.340264, A2 = -0.081106, A3 = 0.000893, A4 = 0.003796;
+const float M   = 0.86602540378;
+const float PI  = 3.14159265359;
+const float YMAX = 1.31736275916;
+const float NSEA = 7.0, NLAND = 8.0;
+
+float fyf (float t){ float a=t*t, b=a*a*a; return t*(A1 + A2*a + b*(A3 + A4*a)); }
+float fypf(float t){ float a=t*t, b=a*a*a; return A1 + 3.0*A2*a + b*(7.0*A3 + 9.0*A4*a); }
+
+float hash31(vec3 p){
+  p = fract(p * 0.3183099 + vec3(0.1, 0.2, 0.3));
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float vnoise(vec3 x){
+  vec3 i = floor(x), f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash31(i + vec3(0,0,0)), hash31(i + vec3(1,0,0)), f.x),
+                 mix(hash31(i + vec3(0,1,0)), hash31(i + vec3(1,1,0)), f.x), f.y),
+             mix(mix(hash31(i + vec3(0,0,1)), hash31(i + vec3(1,0,1)), f.x),
+                 mix(hash31(i + vec3(0,1,1)), hash31(i + vec3(1,1,1)), f.x), f.y), f.z);
+}
+float fbm(vec3 p){
+  return 0.56 * vnoise(p) + 0.29 * vnoise(p * 2.13) + 0.15 * vnoise(p * 4.37);
+}
+
+void main(){
+  float x = (gl_FragCoord.x - uRes.x * 0.5) / uScale;
+  float y = (gl_FragCoord.y - uRes.y * 0.5) / uScale;
+
+  // --- inverse de la projection (Newton sur theta)
+  float th = asin(clamp(y / YMAX, -1.0, 1.0) * M);
+  for(int i = 0; i < 6; i++) th -= (fyf(th) - y) / fypf(th);
+
+  float sn  = sin(th) / M;
+  float lam = M * x * fypf(th) / cos(th);
+
+  // couverture du contour : lam et sn vivent avant la rotation, donc continus
+  float cov = min(clamp((PI  - abs(lam)) / max(fwidth(lam), 1e-6) + 0.5, 0.0, 1.0),
+                  clamp((1.0 - abs(sn))  / max(fwidth(sn),  1e-6) + 0.5, 0.0, 1.0));
+
+  // --- rotation libre de la sphère
+  float phiR = asin(clamp(sn, -1.0, 1.0));
+  float cp = cos(phiR);
+  vec3 g = uRot * vec3(cp * cos(lam), cp * sin(lam), sin(phiR));
+
+  float lat = degrees(asin(clamp(g.z, -1.0, 1.0)));
+  float lon = degrees(atan(g.y, g.x));
+
+  // --- échantillonnage sans couture : u saute au méridien opposé, donc on
+  // calcule le gradient sur deux versions décalées d'un demi-tour et on
+  // garde le plus petit, sinon le mipmap s'effondre le long de la couture.
+  float v  = (lat + 90.0) / 180.0;
+  float u1 = lon / 360.0 + 0.5;
+  float u2 = fract(u1 + 0.5);
+  vec2 d1 = vec2(dFdx(u1), dFdy(u1));
+  vec2 d2 = vec2(dFdx(u2), dFdy(u2));
+  vec2 du = dot(d1, d1) < dot(d2, d2) ? d1 : d2;
+  vec2 dv = vec2(dFdx(v), dFdy(v));
+  vec2 uv = vec2(u1, v);
+  vec2 gx = vec2(du.x, dv.x), gy = vec2(du.y, dv.y);
+
+  // --- APLATS : paliers découpés dans le champ (0 = fosses, .5 = côte, 1 = sommets)
+  float f = textureGrad(uField, uv, gx, gy).r;
+  float bS = clamp((0.5 - f) * 2.0, 0.0, 1.0) * NSEA;
+  float bL = clamp((f - 0.5) * 2.0, 0.0, 1.0) * NLAND;
+  float wS = max(fwidth(bS), 1e-4), wL = max(fwidth(bL), 1e-4);
+  float qS = (floor(bS) + smoothstep(1.0 - wS, 1.0, fract(bS))) / NSEA;
+  float qL = (floor(bL) + smoothstep(1.0 - wL, 1.0, fract(bL))) / NLAND;
+  float wC = max(fwidth(f), 1e-5);
+  float isLand = smoothstep(0.5 - wC, 0.5 + wC, f);
+
+  // --- LE LUSTRE. earth.jpg n'est pas une carte de reflets, c'est une carte
+  // d'OMBRES : à pleine amplitude elle réimprime tout le relief par-dessus
+  // les aplats. Elle ne sert donc qu'à creuser légèrement les versants.
+  float shaded = textureGrad(uEarth, uv, gx, gy).r;
+  float shade = 1.0 - clamp((shaded - 0.54) / 0.46, 0.0, 1.0);
+
+  vec3 sea  = mix(vec3(0.948, 0.954, 0.964), vec3(0.792, 0.806, 0.830), qS);
+  vec3 land = mix(vec3(0.995, 0.996, 1.000), vec3(0.655, 0.667, 0.688), qL);
+  land *= 1.0 - shade * 0.14;
+
+  vec3 ground = mix(sea, land, isLand);
+  vec3 alt = mix(vec3(0.90, 0.912, 0.928), vec3(shaded), isLand);
+  ground = mix(ground, alt, uMode);
+  float m = texture(uMask, uv).r;
+
+  // --- champ spectral
+  float field = 0.0;
+  vec3  hue   = vec3(1.0);
+
+  float d = radians(uDecl), pl = radians(lat), Hh = radians(lon - uSublon);
+  float h = degrees(asin(clamp(sin(pl) * sin(d) + cos(pl) * cos(d) * cos(Hh), -1.0, 1.0)));
+
+  if(h > 0.4 && h < 42.0){
+    float geom = pow(1.0 - h / 42.0, 1.3) * smoothstep(0.0, 6.5, h);
+    float ccl = cos(pl);
+    vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * 3.6;
+    float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
+    float a = (lat - uDecl * 0.45) / 9.5;
+    float b = (abs(lat) - 48.0) / 15.0;
+    float wet = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
+    float t = 1.0 - exp(-geom * rain * (wet / 1.2) * 6.0);
+
+    // LE GRAIN. Le bruit de base n'a rien de plus fin que ~400 km : passé
+    // ×10 on regardait un aplat uniforme, et s'approcher ne montrait rien.
+    // Deux octaves fines entrent progressivement. Elles ne DÉPLACENT pas la
+    // tache — elles la dépolissent : la structure, donc l'indice lu, reste
+    // celle du champ. C'est de la matière, pas de la donnée.
+    if(uDetail > 0.002){
+      float grain = (vnoise(sp *  6.1) - 0.5) * 1.10
+                  + (vnoise(sp * 15.7) - 0.5) * 0.60;
+      t = clamp(t * (1.0 + uDetail * 0.55 * grain), 0.0, 1.0);
+    }
+
+    // Et elle s'efface en s'approchant. Vue du monde, la tache est un
+    // signal qu'on lit d'un continent à l'autre ; de près, on est DANS le
+    // paysage et l'arc n'est plus qu'un indice — sinon la couleur noie le
+    // relief et zoomer revient à se coller à un vitrail.
+    field = pow(t, 0.90) * 0.95 * mix(1.0, 0.40, uDetail);
+
+    // Irisation : palette cosinus parcourue plusieurs fois, décalée par un
+    // bruit lent. On obtient des bandes imbriquées, comme de l'huile sur
+    // l'eau, plutôt qu'un simple dégradé chaud-froid.
+    float k = t * 1.35 + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
+    vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
+    c = mix(vec3(dot(c, vec3(0.3333))), c, 1.50);        // saturation
+    // plancher relevé : sur papier blanc, une teinte trop basse vire à la boue
+    hue = clamp(0.10 + 0.90 * c, 0.0, 1.0);
+  }
+
+  // Multiplication : sur le papier, les taches teintent au lieu d'éclairer.
+  // Si le fond redevenait sombre, il faudrait repasser en additif.
+  vec3 col = ground * mix(vec3(1.0), hue, field);
+  fragColor = vec4(mix(vec3(1.0), col, cov), 1.0);
+}`;

@@ -1,8 +1,12 @@
 """Coastlines: finer simplification + per-ring bbox for culling, flat arrays."""
 import json
 
-DATA = '/home/claude/rainbow/data'
-OUT = '/home/claude/rainbow/site'
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = HERE                     # les sources téléchargées, à côté du script
+OUT = os.path.join(os.path.dirname(HERE), 'data')   # ce que sert la page
+os.makedirs(OUT, exist_ok=True)
 TOL = 0.012          # degrees — fine enough to stay crisp when zoomed in
 MIN_AREA = 0.0012
 Q = 3
@@ -78,8 +82,12 @@ def collect(path, tol, min_area):
 coast = collect(f'{DATA}/ne_50m_land.geojson', TOL, MIN_AREA)
 lakes = collect(f'{DATA}/ne_50m_lakes.geojson', TOL, 0.02)
 
-with open(f'{OUT}/coast.js', 'w') as f:
-    f.write('window.COAST=' +
+HEAD = ("// Traits de côte et lacs — Natural Earth 1:50 m (domaine public).\n"
+        "// Généré par build/make_coast.py, ne pas éditer à la main.\n"
+        "// p : longitudes et latitudes en alternance. b : boîte englobante.\n")
+
+with open(f'{OUT}/coast.js', 'w', encoding='utf-8', newline='\n') as f:
+    f.write(HEAD + 'export const COAST = ' +
             json.dumps({'coast': coast, 'lakes': lakes}, separators=(',', ':')) + ';\n')
 
 print('coast rings', len(coast), 'pts', sum(len(r['p']) // 2 for r in coast))

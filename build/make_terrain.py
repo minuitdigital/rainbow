@@ -17,8 +17,12 @@ import numpy as np
 import tifffile
 from PIL import Image, ImageDraw
 
-DATA = '/home/claude/rainbow/data'
-OUT = '/home/claude/rainbow/site'
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = HERE                     # les sources téléchargées, à côté du script
+OUT = os.path.join(os.path.dirname(HERE), 'data')   # ce que sert la page
+os.makedirs(OUT, exist_ok=True)
 
 MW, MH = 360, 180          # grille de sortie, un degré
 RW, RH = 2160, 1080        # grille de travail pour le relief local
@@ -93,6 +97,10 @@ lo4 = np.clip(np.round(openness * 15), 0, 15).astype(np.uint8)
 packed = ((hi4 << 4) | lo4).astype(np.uint8)
 
 b64 = base64.b64encode(packed.tobytes()).decode()
-with open(f'{OUT}/terrain.js', 'w') as fh:
-    fh.write('window.TERRAIN={w:%d,h:%d,d:"%s"};\n' % (MW, MH, b64))
+HEAD = ("// Accessibilité et dégagement de l'horizon — ETOPO 2022 + Natural Earth.\n"
+        "// Généré par build/make_terrain.py, ne pas éditer à la main.\n"
+        "// Un octet par degré carré : quartet haut = accès, quartet bas = dégagement.\n")
+
+with open(f'{OUT}/terrain.js', 'w', encoding='utf-8', newline='\n') as fh:
+    fh.write(HEAD + 'export const TERRAIN = {w:%d,h:%d,d:"%s"};\n' % (MW, MH, b64))
 print('terrain.js', len(b64), 'caractères')

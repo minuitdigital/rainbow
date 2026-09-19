@@ -17,8 +17,12 @@ import numpy as np
 import tifffile
 from PIL import Image, ImageDraw, ImageFilter
 
-DATA = '/home/claude/rainbow/data'
-OUT = '/home/claude/rainbow/site'
+import os
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DATA = HERE                     # les sources téléchargées, à côté du script
+OUT = os.path.join(os.path.dirname(HERE), 'data')   # ce que sert la page
+os.makedirs(OUT, exist_ok=True)
 
 SRC = f'{DATA}/etopo.tif'          # 21600 x 10800, float32, mètres
 GW, GH = 10800, 5400               # grille de travail (source / 2)
