@@ -255,7 +255,26 @@ monde, elle est un signal qu'on lit d'un continent à l'autre ; de près, on est
     de nouveau : c'est un aplat de couleur qui grandit.
 
 12. **« de Oulan-Oudé ».** Une carte française qui n'élide pas n'est plus une
-    œuvre, c'est un export. Voir `de()` dans `index.html`.
+    œuvre, c'est un export. Voir `de()` dans `src/ground.js`. Et pas
+    d'élision devant « y » : on dit « de York », « de Yinchuan ».
+
+13. **`data/` était dans le `.gitignore`.** Hérité de l'époque où ce dossier
+    contenait les sources lourdes. Le jour où le site y a emménagé, plus
+    rien n'est parti sur GitHub Pages : page blanche, aucun message. Le
+    `.gitignore` porte maintenant un avertissement en tête.
+
+14. **Un module ES qui ne se charge pas échoue EN SILENCE.** Pas d'erreur
+    à l'écran, pas de repli, rien : du blanc. C'est un net recul par
+    rapport aux balises `<script>` classiques, où seule la partie
+    manquante disparaissait. Sur un tableau accroché à un mur, c'est la
+    pire des pannes. D'où la VEILLE en bas d'`index.html` : un script
+    classique, huit secondes, et si `window.__rainbow` n'est pas levé
+    elle écrit les trois causes probables. Ne pas la retirer.
+
+15. **Le double-clic est passé de « dégradé » à « mort ».** Avant les
+    modules, ouvrir la page en `file://` donnait une carte sans textures.
+    Maintenant `file://` bloque les modules eux-mêmes : écran blanc. La
+    veille le dit, mais autant le savoir.
 
 ---
 
