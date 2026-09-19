@@ -45,10 +45,12 @@ ORDER = [
     'src/sky.js',
     'src/ground.js',
     'src/view.js',
+    'src/history.js',
     'src/zones.js',
     'src/shader.js',
     'src/map.js',
     'src/ink.js',
+    'src/panel.js',
     'src/chrome.js',
     'src/main.js',
 ]

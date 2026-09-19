@@ -7,14 +7,28 @@
    abandonné : spectaculaire, mais il ne servait pas la lecture de la
    carte. La page assume donc un seul thème, clair, et le peint
    explicitement plutôt que de suivre les préférences du système.
+
+   Les variables marquées « pilotée » sont réécrites en direct par la
+   boîte RÉGLAGES, et mémorisées d'une visite à l'autre.
    ========================================================================= */
 
 :root {
   --paper:     #ffffff;
-  --ink:       #14161a;
-  --ink-soft:  #7c848d;
-  --ink-faint: #b6bcc4;
-  --rule:      #e2e5ea;
+
+  --ink:       #14161a;      /* pilotée — contraste */
+  --ink-soft:  #6f767f;      /* pilotée */
+  --ink-faint: #aeb5bd;      /* pilotée */
+  --rule:      #dde1e7;      /* pilotée */
+
+  --alpha:     0.5;          /* pilotée — transparence des boîtes */
+  --ui-pt:     10px;         /* pilotée — taille du texte */
+  --body-bg:   235, 237, 240;
+
+  /* Les trois parts de la croyance sont des DENSITÉS D'ENCRE et non des
+     couleurs : elles doivent survivre au tramage de l'e-ink. */
+  --meteo:     #3b424b;      /* pilotée */
+  --legende:   #828a94;      /* pilotée */
+  --chance:    #c3c9d1;      /* pilotée */
 
   --mono: "Fragment Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
@@ -25,6 +39,9 @@
 html, body { height: 100%; margin: 0; background: var(--paper); color: var(--ink); }
 body {
   font-family: var(--mono);
+  font-size: var(--ui-pt);
+  line-height: 1.5;
+  letter-spacing: .06em;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -42,167 +59,246 @@ body {
 #ink { z-index: 1; touch-action: none; cursor: grab; }
 #ink.dragging { cursor: grabbing; }
 
-/* ------------------------------------------------------- le mobilier */
+/* ========================================================== LE PANNEAU */
 
-.chrome {
+.rail {
   position: fixed;
   z-index: 2;
-  pointer-events: none;
-  font-size: 10px;
-  line-height: 1.5;
-  letter-spacing: .08em;
-  color: var(--ink-soft);
-  transition: opacity .9s ease;
-  /* Le mobilier ne vit plus dans les marges mais SUR la carte : il lui
-     faut le même halo blanc qu'aux étiquettes, sinon il disparaît dans
-     une tache irisée. */
-  text-shadow:
-     0  1px 0 rgba(255,255,255,.92), 0 -1px 0 rgba(255,255,255,.92),
-     1px 0   0 rgba(255,255,255,.92), -1px 0  0 rgba(255,255,255,.92),
-     1px 1px 0 rgba(255,255,255,.92), -1px 1px 0 rgba(255,255,255,.92),
-     1px -1px 0 rgba(255,255,255,.92), -1px -1px 0 rgba(255,255,255,.92);
-}
-body.idle .chrome { opacity: .28; }
-/* La lecture est l'instrument : elle s'estompe moins que le reste. */
-body.idle .readout { opacity: .62; }
-@media (prefers-reduced-motion: reduce) {
-  .chrome { transition: none; }
-  body.idle .chrome { opacity: 1; }
-}
-
-/* La lecture se tient contre le réticule, au centre exact de l'écran, et
-   se pose en bas à droite de lui. Elle décrit ce point-là. */
-.readout {
-  top: 50%; left: 50%;
-  transform: translate(28px, 12px);
-  margin: 0;
-  display: grid;
-  grid-template-columns: auto auto;
-  column-gap: 10px;
-  row-gap: 1px;
-  font-variant-numeric: tabular-nums;
-}
-.readout dt { color: var(--ink-soft); }
-.readout dd { margin: 0; color: var(--ink); text-align: right; }
-.readout dd.hot { color: #c62f26; }
-.readout dd.mute { color: var(--ink-faint); font-style: italic; }
-
-/* ---------------------------------------------- le partage de la croyance */
-
-.dials {
-  bottom: 62px; left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 26px;
-}
-body.idle .dials { opacity: .55; }
-.dial {
+  top: 0; right: 0;
+  width: 344px;
+  max-width: 100%;
+  height: 100%;
+  padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 3px;
+  gap: 10px;
+  overflow-y: auto;
+  pointer-events: none;               /* la carte reste saisissable */
+  transition: opacity .9s ease;
 }
-.dial label {
-  color: var(--ink-soft);
+/* Au repos, il ne reste que la carte. L'instrument est là pour qui
+   s'approche, pas pour qui passe. */
+body.idle .rail { opacity: .62; }
+@media (prefers-reduced-motion: reduce) {
+  .rail { transition: none; }
+  body.idle .rail { opacity: 1; }
+}
+
+/* Un registre : bandeau blanc, corps gris. Pas de flou — un flou rend
+   laiteux et simule une opacité qu'on n'a pas demandée. */
+.box {
+  pointer-events: auto;
+  border: 1px solid var(--rule);
+  background: rgba(var(--body-bg), var(--alpha));
+}
+.body {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Un tiers de l'écran, ferme. Les deux graphes se partagent ce qui reste
+   une fois les bandeaux et la lecture posés — ils grandissent avec
+   l'écran au lieu de se faire rogner. */
+#box-est { height: 33vh; display: flex; flex-direction: column; }
+#box-est .body { flex: 1; min-height: 0; }
+
+/* Replié, un registre n'est plus que son bandeau : il ne garde ni sa
+   hauteur imposée, ni le filet qui séparait le titre d'un corps absent. */
+.box.folded { flex: none; }
+#box-est.folded { height: auto; }
+.box.folded .head { border-bottom: 0; }
+.sub { display: flex; flex-direction: column; min-height: 0; }
+.sub.tall  { flex: 1.15; }
+.sub.short { flex: 1; }
+
+/* --- le bandeau de titre, sur papier, d'un bord à l'autre */
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, calc(var(--alpha) + 0.32));
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink);
+  text-transform: uppercase;
   letter-spacing: .16em;
 }
-.dial b {
+/* Fragment Mono n'a qu'une graisse : on épaissit au trait plutôt que de
+   laisser le navigateur fabriquer un faux gras baveux à 10 px. */
+.head > span:first-child {
+  -webkit-text-stroke: .4px currentColor;
+  font-size: calc(var(--ui-pt) + 1px);
+}
+.head em {
+  font-style: normal;
+  letter-spacing: .05em;
+  text-transform: none;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  -webkit-text-stroke: 0;
+}
+/* Les réglages ne sont pas du contenu : leur titre reste discret. */
+.head.quiet > span:first-child {
+  -webkit-text-stroke: 0;
+  font-size: var(--ui-pt);
+  color: var(--ink-soft);
+}
+.head button {
+  font: inherit;
+  letter-spacing: inherit;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 0 3px;
+  cursor: pointer;
+}
+/* Le « ? » et le pli se tiennent ensemble, à droite du titre. */
+.head-btns {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.head button:hover { color: var(--ink); }
+.head button:focus-visible { outline: 0; }
+.kbd .head button:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
+
+/* --- un sous-registre dans le corps : même bandeau, bords à bords */
+.sub .head {
+  margin: 0 -10px;
+  border-top: 1px solid var(--rule);
+}
+.sub:first-child .head { margin-top: -8px; border-top: 0; }
+
+canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height: 42px; }
+
+/* --- la lecture du lieu et de l'heure : une ligne à elle */
+.reading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.reading b {
   font-weight: normal;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+/* Le piéton dit « c'est nous ». Au trait et non en emoji : un emoji
+   couleur devient un pâté au tramage de l'e-ink. */
+.walker {
+  width: 9px; height: 13px;
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+  overflow: visible;
+}
+
+/* --- les curseurs, épais */
+.dials { display: flex; flex-direction: column; gap: 7px; }
+.dial {
+  display: grid;
+  grid-template-columns: 88px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+}
+.dial label { color: var(--ink-soft); letter-spacing: .05em; }
+.dial label.off { opacity: .35; }
+.dial output {
+  text-align: right;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
+.dial input:disabled { opacity: .35; cursor: default; }
 
-/* Le curseur de vitesse : seul élément qui ne s'estompe pas, il sert. */
-.speed {
-  bottom: 16px; left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
+/* La case à cocher : un carré plein, du même dessin que les poignées. */
+.dial input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px; height: 13px;
+  margin: 0;
+  justify-self: start;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  cursor: pointer;
 }
-body.idle .speed { opacity: .55; }
-.speed-read {
-  display: flex; gap: 16px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
-}
-.speed-read b { font-weight: normal; color: var(--ink); }
+.dial input[type="checkbox"]:checked { background: var(--ink); }
+.kbd .dial input[type="checkbox"]:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
 
 /* un seul dessin de curseur pour toute la page */
 input[type="range"] {
-  pointer-events: auto;
   -webkit-appearance: none;
   appearance: none;
-  height: 14px;
+  width: 100%;
+  height: 15px;
+  margin: 0;
   background: transparent;
-  cursor: pointer;
+  cursor: ew-resize;
 }
-.speed input { width: 210px; }
-.dial  input { width: 104px; }
-input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--ink-faint); }
-input[type="range"]::-moz-range-track            { height: 1px; background: var(--ink-faint); }
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 7px;
+  background: linear-gradient(90deg,
+    var(--fill, var(--ink)) 0 var(--p, 50%), rgba(255,255,255,.45) var(--p, 50%) 100%);
+  border: 1px solid var(--ink-faint);
+}
+input[type="range"]::-moz-range-track {
+  height: 7px; background: rgba(255,255,255,.45); border: 1px solid var(--ink-faint);
+}
+input[type="range"]::-moz-range-progress { height: 7px; background: var(--fill, var(--ink)); }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 9px; height: 9px;
-  margin-top: -4px;
-  background: var(--ink);
-  border: 0; border-radius: 0;
+  width: 9px; height: 17px;
+  margin-top: -6px;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
 }
 input[type="range"]::-moz-range-thumb {
-  width: 9px; height: 9px;
+  width: 9px; height: 17px;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+}
+.kbd input[type="range"]:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
+
+/* --- les hauts lieux */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chips button {
+  font: inherit;
+  letter-spacing: .05em;
+  padding: 2px 7px;
+  color: var(--ink-soft);
+  background: rgba(255,255,255,.4);
+  border: 1px solid var(--ink-faint);
+  cursor: pointer;
+}
+.chips button[aria-pressed="true"] {
+  color: var(--paper);
   background: var(--ink);
-  border: 0; border-radius: 0;
+  border-color: var(--ink);
 }
-input[type="range"]:focus-visible { outline: 1px solid var(--ink); outline-offset: 4px; }
+.kbd .chips button:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
 
-/* ------------------------------------------------------------ la légende */
-
-.legend {
-  bottom: 18px; right: 52px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 5px;
-}
-.ramp { display: block; width: 168px; height: 6px; }
-.ramp-ends {
-  width: 168px;
-  display: flex;
-  justify-content: space-between;
-  color: var(--ink-faint);
-}
-.clock {
+.said {
+  margin: 0;
   color: var(--ink);
-  font-variant-numeric: tabular-nums;
-  padding-top: 2px;
-  border-top: 1px solid var(--rule);
-  width: 168px;
-  display: flex;
-  justify-content: space-between;
+  font-style: italic;
+  letter-spacing: .03em;
+  line-height: 1.6;
 }
 
 /* --------------------------------------------------------- l'explication */
-
-.help-btn {
-  position: fixed;
-  z-index: 3;
-  bottom: 18px; right: 18px;
-  width: 22px; height: 22px;
-  padding: 0;
-  font: inherit;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--ink-soft);
-  background: var(--paper);
-  border: 1px solid var(--ink-faint);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: opacity .9s ease, color .2s, border-color .2s;
-}
-body.idle .help-btn { opacity: .28; }
-.help-btn:hover { color: var(--ink); border-color: var(--ink); }
-.help-btn:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
 
 .sheet {
   position: fixed;
@@ -302,10 +398,8 @@ body.idle .help-btn { opacity: .28; }
 .fallback code { color: var(--ink); }
 
 @media (max-width: 620px) {
-  .legend  { bottom: 14px; right: 46px; }
-  .ramp, .ramp-ends, .clock { width: 128px; }
-  .dials { gap: 14px; bottom: 58px; }
-  .dial input { width: 74px; }
-  .speed input { width: 160px; }
+  .rail { width: 100%; }
+  #box-est { height: 44vh; }
+  .dial { grid-template-columns: 78px 1fr 42px; }
   .sheet-inner { padding: 26px 20px 28px; }
 }

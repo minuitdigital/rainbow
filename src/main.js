@@ -13,21 +13,24 @@
 //      sky          la porte du soleil, et le partage de la croyance
 //      ground       le relief et les lieux
 //      view         le seul état mutable : où, de quelle distance, quand
+//      history      les 24 dernières heures, recalculées et non mémorisées
 //      zones        ce qui vit d'une image à l'autre
 //      shader       le GLSL
 //      map          la carte peinte
 //      ink          le calque 2D
-//      chrome       la lecture et la main
+//      panel        les quatre registres de droite
+//      chrome       la main
 //      main         ici
 // =========================================================================
 
 import { view, measure, centre, coast, anchorTo, simDate, elapsedHours,
-         drift, driftChance, beliefWeights } from './view.js';
+         advanceClock, drift, driftChance, beliefWeights } from './view.js';
 import { solar } from './sky.js';
 import { scan } from './zones.js';
 import { initMap, paint } from './map.js';
 import { initInk, rescale, trace } from './ink.js';
-import { bind, readout } from './chrome.js';
+import { initPanel, refreshPanel } from './panel.js';
+import { bind } from './chrome.js';
 
 const glCv = document.getElementById('gl');
 const inkCv = document.getElementById('ink');
@@ -72,6 +75,9 @@ function frame(now) {
   last = now;
   let animating = false;
 
+  // L'horloge simulée s'accumule ici, et nulle part ailleurs.
+  advanceClock(dt);
+
   // Le zoom glisse vers sa cible, en gardant le point visé sous le curseur.
   const zooming = ease('zoom', view.zoomTarget, 16, dt, 1e-4);
   if (zooming) {
@@ -86,7 +92,8 @@ function frame(now) {
 
   if (dirty || animating) {
     dirty = false;
-    const sun = solar(simDate());
+    const when = simDate();
+    const sun = solar(when);
 
     // Les zones ne sont ré-examinées que cinq fois par seconde. Le tracé,
     // lui, suit chaque image : les points sont rangés en coordonnées
@@ -99,7 +106,7 @@ function frame(now) {
     const c = centre();
     paint(glCv, sun);
     trace(c);
-    readout(sun, c);
+    refreshPanel(sun, c, when);
   }
 
   if (animating) rafId = requestAnimationFrame(frame);
@@ -123,6 +130,9 @@ if (!initMap(glCv, invalidate)) {
   fallback.hidden = false;
 } else {
   initInk(inkCv);
+  // Le panneau avant la main : les réglages mémorisés doivent être posés
+  // (vitesse, allure, croyance) avant la première image.
+  initPanel(invalidate);
   bind(inkCv, invalidate);
   window.addEventListener('resize', resize);
   resize();

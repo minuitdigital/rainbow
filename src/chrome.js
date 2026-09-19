@@ -1,9 +1,10 @@
 // =========================================================================
-//  LE MOBILIER
+//  LA MAIN
 //
-//  Tout ce qui n'est pas la carte : la lecture contre le réticule, le
-//  partage de la croyance, l'échelle, l'explication, et la main posée
-//  dessus.
+//  Le geste, et rien d'autre : le glissé, la molette, les touches, la
+//  feuille d'explication, et la mise en veille. Tout ce qui s'AFFICHE vit
+//  maintenant dans panel.js — ce fichier ne lit aucune donnée du ciel et
+//  n'écrit dans aucun champ.
 //
 //  La navigation est une ROTATION LIBRE DE LA SPHÈRE, façon boule de
 //  commande : le point saisi reste sous le doigt, partout, y compris aux
@@ -17,108 +18,31 @@
 
 import { between } from './projection.js';
 import {
-  view, ZMAX, geoAt, relDir, anchorTo, nudge, recentre, setZoomTarget,
-  turnFrom, simDate, drift, driftChance, beliefWeights
+  view, ZMAX, geoAt, relDir, anchorTo, nudge, recentre, setZoomTarget, turnFrom
 } from './view.js';
-import { sunElev, rainbowIndex, SUN_MAX } from './sky.js';
 
 const el = id => document.getElementById(id);
 
-// ------------------------------------------------------------- la lecture
-
-export function readout(sun, centre) {
-  const now = simDate();
-  const [lon, lat] = centre;
-
-  el('r-lat').textContent = `${Math.abs(lat).toFixed(1)}° ${lat >= 0 ? 'N' : 'S'}`;
-  el('r-lon').textContent = `${Math.abs(lon).toFixed(1)}° ${lon >= 0 ? 'E' : 'O'}`;
-
-  const h = sunElev(lon, lat, sun);
-  el('r-sun').textContent = `${h.toFixed(1)}°`;
-
-  // L'indice était vide presque tout le temps sans jamais dire pourquoi.
-  // Il dit maintenant ce qui ferme la porte.
-  const idx = el('r-idx');
-  idx.classList.remove('hot', 'mute');
-  if (h <= 0.4) {
-    idx.textContent = 'nuit';
-    idx.classList.add('mute');
-  } else if (h >= SUN_MAX) {
-    idx.textContent = 'trop haut';
-    idx.classList.add('mute');
-  } else {
-    const v = rainbowIndex(lon, lat, sun, drift(), driftChance(), beliefWeights());
-    idx.textContent = v.toFixed(2);
-    if (v > 0.6) idx.classList.add('hot');
-  }
-
-  el('r-time').textContent =
-    `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')} UTC`;
-  el('r-date').textContent =
-    now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-  el('r-speed').textContent = view.speed < 1
-    ? 'figé'
-    : '×' + Math.round(view.speed).toLocaleString('fr-FR');
-  el('r-simtime').textContent = now.toLocaleString('fr-FR', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-    timeZone: 'UTC'
-  });
-}
-
-// ------------------------------------------------------------- l'échelle
-// Peinte avec la formule même du shader. Une légende écrite à la main
-// finit toujours par mentir : l'ancienne montrait un dégradé monotone
-// violet→rouge, alors que la teinte de la carte est CYCLIQUE — une
-// palette d'interférence — et que ce qui code la force est l'intensité.
-
-function paintRamp() {
-  const cv = el('ramp');
-  const g = cv.getContext('2d');
-  const w = cv.width, h = cv.height;
-  const img = g.createImageData(w, h);
-
-  for (let x = 0; x < w; x++) {
-    const t = x / (w - 1);
-    const field = Math.pow(t, 1.15) * 0.98;
-    const k = t * 1.35;                        // le même parcours que le shader
-    const c = [0, 2.0944, 4.1888].map(p => 0.5 + 0.5 * Math.cos(6.28318 * k + p));
-    const grey = (c[0] + c[1] + c[2]) / 3;
-    for (let i = 0; i < 3; i++) {
-      const sat = grey + (c[i] - grey) * 1.50;
-      const hue = Math.max(0, Math.min(1, 0.10 + 0.90 * sat));
-      // sur le papier, la tache teinte au lieu d'éclairer : multiplication
-      c[i] = Math.round(255 * (1 - field + field * hue));
-    }
-    for (let y = 0; y < h; y++) {
-      const o = (y * w + x) * 4;
-      img.data[o] = c[0]; img.data[o+1] = c[1]; img.data[o+2] = c[2];
-      img.data[o+3] = 255;
-    }
-  }
-  g.putImageData(img, 0, 0);
-}
-
-// ------------------------------------------------- le partage de la croyance
-
-function showShares() {
-  const w = beliefWeights();
-  el('p-m').textContent = Math.round(w.m * 100) + ' %';
-  el('p-l').textContent = Math.round(w.l * 100) + ' %';
-  el('p-c').textContent = Math.round(w.c * 100) + ' %';
-}
-
-// ------------------------------------------------------------ la main
-// `invalidate` est passé par main.js : le mobilier ne connaît pas la
-// boucle d'images, il se contente de dire « quelque chose a bougé ».
-
+/**
+ * `invalidate` est passé par main.js : la main ne connaît pas la boucle
+ * d'images, elle se contente de dire « quelque chose a bougé ».
+ */
 export function bind(canvas, invalidate) {
   let idleTimer = 0;
-  /** Au repos, l'interface s'estompe. Il ne reste que la carte. */
+
+  /**
+   * Au repos, le mobilier s'estompe et il ne reste que la carte. Sur un
+   * mur, c'est l'état normal de la pièce : l'instrument est là pour qui
+   * s'approche, pas pour qui passe.
+   */
   const wake = () => {
     document.body.classList.remove('idle');
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => document.body.classList.add('idle'), 4200);
   };
+  // Le panneau réveille aussi : il vit hors du canvas.
+  for (const ev of ['pointerdown', 'pointermove', 'wheel', 'keydown'])
+    window.addEventListener(ev, wake, { passive: true });
 
   let drag = null;
   let pinch = null;
@@ -127,7 +51,6 @@ export function bind(canvas, invalidate) {
   canvas.addEventListener('pointerdown', e => {
     canvas.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    wake();
 
     if (pointers.size === 2) {
       const [a, b] = [...pointers.values()];
@@ -203,7 +126,6 @@ export function bind(canvas, invalidate) {
 
   canvas.addEventListener('wheel', e => {
     e.preventDefault();
-    wake();
     aimAt(e.clientX, e.clientY);
     setZoomTarget(view.zoomTarget * Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.03 : 0.0022)));
     invalidate();
@@ -211,7 +133,6 @@ export function bind(canvas, invalidate) {
 
   canvas.addEventListener('dblclick', e => {
     e.preventDefault();
-    wake();
     aimAt(e.clientX, e.clientY);
     setZoomTarget(view.zoomTarget * (e.shiftKey ? 0.5 : 2));
     invalidate();
@@ -221,13 +142,17 @@ export function bind(canvas, invalidate) {
   const sheet = el('help');
   const openHelp = () => { sheet.hidden = false; el('help-close').focus(); };
   const closeHelp = () => { sheet.hidden = true; el('help-open').focus(); };
-  el('help-open').addEventListener('click', () => { wake(); openHelp(); });
+  el('help-open').addEventListener('click', openHelp);
   el('help-close').addEventListener('click', closeHelp);
   sheet.addEventListener('click', e => { if (e.target === sheet) closeHelp(); });
 
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !sheet.hidden) { closeHelp(); return; }
     if (!sheet.hidden) return;                 // la feuille ouverte, le globe dort
+
+    // Une touche tapée dans un curseur du panneau appartient au curseur.
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'BUTTON')) return;
 
     const s = 90;
     let hit = true;
@@ -249,37 +174,8 @@ export function bind(canvas, invalidate) {
     }
     if (!hit) return;
     e.preventDefault();
-    wake();
     invalidate();
   });
 
-  // ---- le partage de la croyance
-  // Les poignées ne bougent pas toutes seules : chacune dit combien on
-  // tient à sa raison. C'est le POURCENTAGE affiché qui se redistribue,
-  // et c'est là que l'arbitrage se voit.
-  for (const [id, key] of [['w-m', 'm'], ['w-l', 'l'], ['w-c', 'c']]) {
-    const input = el(id);
-    input.value = view.belief[key];
-    input.addEventListener('input', () => {
-      wake();
-      view.belief[key] = +input.value;
-      showShares();
-      invalidate();
-    });
-  }
-  showShares();
-
-  // ---- le curseur de vitesse
-  // Échelle logarithmique sur cinq décades — de la seconde à l'année.
-  const spd = el('spd');
-  const applySpeed = () => {
-    const v = +spd.value;
-    view.speed = v <= 0 ? 0 : Math.pow(10, (v / 100) * 5);
-    invalidate();
-  };
-  spd.addEventListener('input', () => { wake(); applySpeed(); });
-  applySpeed();
-
-  paintRamp();
   wake();
 }

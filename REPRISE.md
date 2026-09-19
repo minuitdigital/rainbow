@@ -50,13 +50,36 @@ src/projection.js  ← rien                     maths pures, sans état
 src/sky.js         ← projection               soleil, bruit, indice, durée
 src/ground.js      ← projection, données      terrain, villes, plus proche lieu
 src/view.js        ← projection               LE seul module qui se souvienne
+src/history.js     ← view, sky                les 24 h passées, RECALCULÉES
 src/zones.js       ← sky, ground, view        ce qui vit d'une image à l'autre
 src/shader.js      ← rien                     le GLSL, rien d'autre
 src/map.js         ← view, shader             contexte WebGL, textures, une image
 src/ink.js         ← projection, view, zones, ground   le calque 2D
-src/chrome.js      ← view, sky                lecture, navigation, curseur
+src/panel.js       ← view, sky, history       les quatre registres de droite
+src/chrome.js      ← projection, view         la main : glissé, molette, touches
 src/main.js        ← tous                     l'assemblage et la boucle
 ```
+
+### Où agir — la table de correspondance
+
+Pour ne pas relire tout le projet à chaque modification :
+
+| Ce qu'on veut changer | Le fichier, et lui seul |
+|---|---|
+| une croyance, un lieu, une phrase de légende | `src/legends.js` |
+| la formule de la présence | `src/sky.js` **et** `src/shader.js`, puis `node build/check_mirror.mjs` |
+| les paliers d'altitude, le lustre, le grain | `src/shader.js` |
+| l'encodage en dégradé de gris (paliers, trame) | `src/shader.js`, bloc `uGrey` |
+| les phrases des étiquettes de la carte | `src/zones.js` |
+| le dessin sur la carte : villes, glyphes, réticule | `src/ink.js` |
+| la mise en page du panneau, les graphes, les réglages | `src/panel.js` + `style.css` |
+| ce que couvrent les 24 h, la finesse de l'axe du temps | `src/history.js` |
+| le glissé, le zoom, les touches | `src/chrome.js` |
+| l'état : zoom maximal, vitesse, allure par défaut | `src/view.js` |
+| la structure de la page et le texte d'explication | `index.html` |
+
+Un module touché ne demande **pas** de relire les autres, à une exception
+près : le miroir shader / JavaScript ci-dessous.
 
 **Deux règles tiennent l'ensemble**, et le recolleur en dépend :
 tous les exports sont **nommés** (pas d'`export default`, pas
@@ -93,12 +116,14 @@ mur.
 | `src/legends.js` | les hauts lieux de la croyance — écrits à la main, à tailler |
 | `src/sky.js` | la porte du soleil, et le partage de la croyance |
 | `src/ground.js` | relief accessible, villes, plus proche lieu |
-| `src/view.js` | où l'on regarde, de quelle distance, et quand |
+| `src/view.js` | où l'on regarde, de quelle distance, quand, et de quelle allure |
+| `src/history.js` | les 24 dernières heures sous le réticule, recalculées |
 | `src/zones.js` | détection des taches, suivi, les cinq observateurs |
 | `src/shader.js` | le GLSL, rien d'autre |
 | `src/map.js` | contexte WebGL, textures, une image |
 | `src/ink.js` | le calque 2D et sa liste d'encombrement |
-| `src/chrome.js` | bandeau de lecture, navigation, curseur de vitesse |
+| `src/panel.js` | les quatre registres : estimateur, croyance, légendes, réglages |
+| `src/chrome.js` | la main : glissé, molette, touches, feuille d'explication |
 | `src/main.js` | l'assemblage et la boucle d'images |
 
 Généré, dans `data/` :
@@ -293,6 +318,32 @@ monde, elle est un signal qu'on lit d'un continent à l'autre ; de près, on est
     intégré atteint `localhost` de ce poste : s'en servir avant de dire
     que c'est fait.
 
+18. **L'horloge simulée doit S'ACCUMULER.** Elle se déduisait du temps réel
+    écoulé multiplié par la vitesse. Tant que rien ne regardait en arrière
+    c'était sans conséquence ; depuis que le panneau trace les vingt-quatre
+    dernières heures, toucher au curseur du temps réécrivait tout le passé
+    d'un coup — à ×10 000, un cran en arrière ramenait la date de plusieurs
+    jours. `advanceClock(dt)` est appelé une fois par image dans `main.js`,
+    et nulle part ailleurs.
+
+19. **Le miroir shader / JavaScript est la SEULE duplication du projet.**
+    Elle ne peut pas être supprimée : on ne fait pas tourner du GLSL au
+    réticule, ni du JavaScript par pixel. Elle est surveillée :
+
+        node build/check_mirror.mjs
+
+    Le script lit les deux sources comme du texte et compare toutes les
+    constantes de la formule. À lancer après **toute** modification de
+    `src/sky.js` ou de `src/shader.js`. S'il dit « motif introuvable »,
+    c'est que la formule a été réécrite : relire les deux fichiers, puis
+    corriger le motif dans le script — jamais l'inverse.
+
+20. **Les étiquettes de la carte s'écrivaient sous le panneau.** Elles
+    étaient imprimées puis masquées : du bruit, et surtout une place
+    volée à une ville visible. L'emprise du panneau est mesurée dans
+    `rescale()` (une fois par redimensionnement, pas par image) et versée
+    dans la liste d'encombrement de `src/ink.js`.
+
 ---
 
 ## 6. L'algorithme actuel
@@ -300,8 +351,8 @@ monde, elle est un signal qu'on lit d'un continent à l'autre ; de près, on est
 **Une porte, puis une croyance.**
 
 ```
-indice = SOLEIL × ( wMétéo·M + wLégende·L + wChance·C )
-                   avec wM + wL + wC = 1
+présence = SOLEIL × ( wMétéo·M + wLégende·L + wChance·C )
+                     avec wM + wL + wC = 1
 ```
 
 **La porte, exacte et sans curseur.** Le soleil doit se tenir entre
@@ -331,13 +382,74 @@ hauts lieux, et c'est ce que la pièce a à dire.
 
 `GAIN = 1,8` ramène le plein au plein, puis `field = t^1,15 × 0,98`.
 
-**Les curseurs ne bougent pas tout seuls.** Chacun dit combien on tient à
-sa raison ; c'est le **pourcentage affiché** qui se redistribue, et c'est
-là que l'arbitrage se voit. Poignées prévisibles, arbitrage lisible.
+**Une croyance FINIE, en simplexe.** Pousser un curseur pousse
+**physiquement** les deux autres, au prorata de ce qu'ils valaient : les
+poignées bougent et la somme reste 100 %. La première version gardait les
+poignées immobiles et ne redistribuait que le pourcentage affiché —
+l'arbitrage était juste, mais invisible. Voir `pushBelief` dans
+`src/panel.js`.
 
 **Quand la légende porte le chiffre, la légende parle** : la phrase de
 l'étiquette devient la croyance du lieu — « K'uychi, on ne montre pas
 l'arc du doigt » — au lieu d'un résumé. Voir `phraseFor` dans `zones.js`.
+
+### Le panneau
+
+Quatre registres dans une colonne à droite, et **tout y décrit le
+réticule** — le centre exact de l'écran. Le panneau ne choisit pas un
+lieu, il décrit celui qu'on regarde ; les pastilles des hauts lieux ne
+sélectionnent rien, elles y **amènent** le réticule.
+
+| Registre | Ce qu'il fait |
+|---|---|
+| ESTIMATEUR | position, heure, **héliodon** (hauteur du soleil) et **présence** |
+| CROYANCE | les trois curseurs en simplexe |
+| LÉGENDES | les pastilles, la foi au réticule, et ce qu'on dit du lieu |
+| RÉGLAGES | l'allure — mémorisé dans `localStorage` |
+
+**Les quatre registres se replient sur leur bandeau**, et l'état est
+mémorisé. À l'usine, ESTIMATEUR et CROYANCE sont ouverts, LÉGENDES et
+RÉGLAGES fermés : les deux premiers se lisent, les deux autres
+s'appellent. Un bandeau replié continue de dire l'essentiel — la foi du
+lieu reste lisible sans déplier les vingt pastilles. Replier libère aussi
+de la place sur la carte : l'emprise versée dans `ink.js` est l'union des
+boîtes, pas la colonne, et `measureRail()` la reprend à chaque pli.
+
+**La clé de stockage porte un numéro** (`estimateur.reglages.2`). Changer
+une valeur par défaut dans `index.html` ne sert à rien si la page relit
+l'ancienne : quand un défaut doit s'imposer, on incrémente.
+
+**Le passé est recalculé, pas mémorisé.** `src/history.js` reconstruit à
+chaque image les vingt-quatre dernières heures simulées sous le réticule :
+le ciel est une fonction pure du lieu et de l'instant, donc son passé se
+calcule aussi bien qu'il s'observe. C'est le même principe que la carte, et
+c'est ce qui permet de déplacer le réticule sans perdre l'histoire du lieu
+— un tampon aurait montré vingt-quatre heures d'un endroit où l'on n'est
+plus. 320 points, espacés selon l'axe et non selon le temps.
+
+**L'axe du temps est logarithmique**, emprunté aux moniteurs de débit : la
+dernière minute occupe la moitié de la largeur, la dernière journée
+l'autre moitié. Sans quoi, à ×100 000, la dernière heure serait un cheveu
+contre le bord droit.
+
+**Les poids sont appliqués au dessin**, pas à l'échantillonnage : bouger un
+curseur repondère toute l'histoire d'un coup, sans rien recalculer.
+
+**L'allure vit dans `view.look`** — saturation, force de la tache,
+encodage en gris, taille des glyphes. Ce ne sont pas des données : deux
+réglages différents décrivent le même ciel. Le shader lit `uSat`,
+`uTache`, `uGrey` ; `ink.js` lit `view.look.icon`.
+
+**Le dégradé de gris est un ENCODAGE, pas une teinte en moins.** En
+couleur, la teinte suffit à séparer la tache du fond ; en gris elle entre
+en concurrence avec le relief, lui aussi gris et lui aussi lisse. La force
+passe donc par la densité : six paliers — le même langage que les aplats
+du relief, et pas de trait d'iso-valeur, la marche se voit toute seule —
+plus une **trame ordonnée de Bayer 8×8** à la résolution de l'affichage.
+Des points et non des hachures : une hachure impose une direction, et sur
+une carte toute direction finit par avoir l'air de signifier quelque
+chose. La part de cases noircies vaut exactement l'intensité. C'est
+littéralement ce que fera le tramage de l'e-ink.
 
 ### L'ancien assemblage, pour mémoire
 
@@ -458,6 +570,16 @@ le choix arrêté (−3,9 Mo).
   une autre catégorie, elle brouillerait peut-être le mot « légende ».
 - Le glyphe à la baguette n'a pas encore été jugé au tramage e-ink.
 
+*Ouvert depuis l'intégration du panneau :*
+- `#box-est` fait 33 vh : les deux graphes sont justes en hauteur sur un
+  écran court. À revoir sur le 10,3" réel, qui sera en 4:3.
+- Le noir de la trame de Bayer est à 0,20. Faut-il descendre à 0,12 ?
+- La transparence par défaut (0,77) a été relevée : à 0,56 les noms de
+  villes traversaient les boîtes. À réévaluer sur l'écran du tableau.
+- Les vingt pastilles occupent beaucoup de place. Faut-il n'afficher que
+  les plus proches, ou les laisser toutes — c'est aussi un index de
+  l'œuvre ?
+
 *Ouvert depuis le test des villes :*
 - À ×32, les cinq observateurs d'une même zone disent presque la même chose
   (« 89 % · Tchita », « 88 % · Tchita »…). Le grain n'est appliqué que dans le
@@ -508,6 +630,13 @@ version pendant que les autres sont rechargés pour que la page mélange deux
 les types MIME sous Windows.
 
 puis `http://localhost:8000`
+
+**Vérifier le miroir** — après toute retouche à `src/sky.js` ou
+`src/shader.js` :
+
+```bash
+node build/check_mirror.mjs
+```
 
 **Mettre en ligne (GitHub Pages)** : dépôt public, glisser les fichiers du site
 à la **racine** (pas le dossier), puis *Settings → Pages → Deploy from a branch

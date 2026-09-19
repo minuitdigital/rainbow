@@ -34,9 +34,36 @@ export function initInk(canvas) {
   return ink;
 }
 
+/**
+ * L'emprise du panneau, en pixels d'écran. Les étiquettes ne s'y écrivent
+ * pas : une ville imprimée derrière une boîte semi-transparente est du
+ * bruit, et elle occupe une place qu'une ville visible aurait prise.
+ * Mesurée une fois par redimensionnement — pas par image, pour ne pas
+ * forcer un calcul de mise en page à chaque tour.
+ */
+let railBox = null;
+
+/**
+ * L'union des BOÎTES et non la colonne : la colonne fait toute la hauteur
+ * de l'écran, même quand les registres sont repliés. À rappeler quand un
+ * registre se plie ou se déplie — la carte récupère alors la place.
+ */
+export function measureRail() {
+  railBox = null;
+  for (const box of document.querySelectorAll('.rail .box')) {
+    const r = box.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    railBox = railBox
+      ? [Math.min(railBox[0], r.left), Math.min(railBox[1], r.top),
+         Math.max(railBox[2], r.right), Math.max(railBox[3], r.bottom)]
+      : [r.left, r.top, r.right, r.bottom];
+  }
+}
+
 /** À appeler après chaque redimensionnement : le canvas perd sa transformée. */
 export function rescale() {
   ink.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  measureRail();
 }
 
 // ---------------------------------------------------------- les côtes
@@ -240,8 +267,15 @@ function drawCallouts(boxes, Rt) {
 const LEG_NAME_ZOOM = 2.5;
 const LEG_SAY_ZOOM  = 5;
 
+// Le glyphe est dessiné à sa taille de référence, quinze pixels, puis
+// mis à l'échelle par `view.look.icon`. Tout est proportionnel, épaisseurs
+// de trait comprises : sur un mur, la même page se regarde d'un mètre ou
+// de dix, et un glyphe de quinze pixels ne survit pas aux deux.
+const GLYPH_PX = 15;
+
 function wandGlyph(cx, cy) {
-  const arcX = cx - 3, arcY = cy + 5;
+  const k = view.look.icon / GLYPH_PX;
+  const arcX = cx - 3 * k, arcY = cy + 5 * k;
 
   // deux passes : le halo blanc d'abord, l'encre ensuite. Le trait doit
   // tenir par-dessus une tache irisée.
@@ -251,29 +285,29 @@ function wandGlyph(cx, cy) {
 
     if (pass === 0) {
       ink.strokeStyle = 'rgba(255,255,255,0.95)';
-      ink.lineWidth = 3.4;
+      ink.lineWidth = 3.4 * k;
     }
 
     // l'arc, trois bandes espacées de 2 px pour 1,1 px de trait
     for (let i = 0; i < 3; i++) {
       if (pass === 1) {
         ink.strokeStyle = ARC[i];
-        ink.lineWidth = 1.1;
+        ink.lineWidth = 1.1 * k;
       }
       ink.beginPath();
-      ink.arc(arcX, arcY, 7 - i * 2, Math.PI, 0);
+      ink.arc(arcX, arcY, (7 - i * 2) * k, Math.PI, 0);
       ink.stroke();
     }
 
     // la baguette, penchée, et son étincelle à quatre branches
-    if (pass === 1) { ink.strokeStyle = ARC[1]; ink.lineWidth = 1.1; }
+    if (pass === 1) { ink.strokeStyle = ARC[1]; ink.lineWidth = 1.1 * k; }
     ink.beginPath();
-    ink.moveTo(cx + 4, cy + 7);
-    ink.lineTo(cx + 10, cy - 4);
+    ink.moveTo(cx + 4 * k, cy + 7 * k);
+    ink.lineTo(cx + 10 * k, cy - 4 * k);
     ink.stroke();
 
-    if (pass === 1) { ink.strokeStyle = ARC[0]; ink.lineWidth = 1; }
-    const sx0 = cx + 11, sy0 = cy - 6, b = 3;
+    if (pass === 1) { ink.strokeStyle = ARC[0]; ink.lineWidth = k; }
+    const sx0 = cx + 11 * k, sy0 = cy - 6 * k, b = 3 * k;
     ink.beginPath();
     ink.moveTo(sx0 - b, sy0); ink.lineTo(sx0 + b, sy0);
     ink.moveTo(sx0, sy0 - b); ink.lineTo(sx0, sy0 + b);
@@ -284,6 +318,7 @@ function wandGlyph(cx, cy) {
 function drawLegends(boxes, Rt) {
   const say = view.zoom >= LEG_SAY_ZOOM;
   const named = view.zoom >= LEG_NAME_ZOOM;
+  const gk = view.look.icon / GLYPH_PX;       // l'encombrement suit le glyphe
 
   ink.textAlign = 'left';
   ink.textBaseline = 'alphabetic';
@@ -292,7 +327,7 @@ function drawLegends(boxes, Rt) {
     const f = flatten(Rt, l.v);
     if (Math.abs(f[2]) > 179.1) continue;
     const X = sx(f[0]), Y = sy(f[1]);
-    if (X < 14 || X > view.W - 14 || Y < 16 || Y > view.H - 10) continue;
+    if (X < 14 * gk || X > view.W - 14 * gk || Y < 16 * gk || Y > view.H - 10 * gk) continue;
 
     ink.font = `10px ${FACE}`;
     const wn = named ? ink.measureText(l.nom).width : 0;
@@ -305,9 +340,9 @@ function drawLegends(boxes, Rt) {
     const aimed = Math.hypot(X - view.W / 2, Y - view.H / 2) < 26;
 
     const tw = Math.max(wn, wd);
-    const box = [X - 13, Y - 12,
-                 X + 13 + (tw ? tw + 6 : 0),
-                 Y + 12 + (say ? 10 : 0)];
+    const box = [X - 13 * gk, Y - 12 * gk,
+                 X + 13 * gk + (tw ? tw + 6 : 0),
+                 Y + 12 * gk + (say ? 10 : 0)];
     if (!aimed && overlaps(box, boxes)) continue;
     if (!aimed) boxes.push(box);
 
@@ -315,7 +350,7 @@ function drawLegends(boxes, Rt) {
 
     if (!named || (aimed && overlaps(box, boxes))) continue;
     if (aimed) boxes.push(box);
-    const tx = X + 17;
+    const tx = X + 17 * gk;
     ink.strokeStyle = 'rgba(255,255,255,0.95)';
 
     ink.font = `10px ${FACE}`;
@@ -407,11 +442,9 @@ export function trace(centre) {
   drawReticle(cx, cy);
 
   const boxes = [
-    [cx - 26, cy - 26, cx + 26, cy + 26],         // le réticule
-    [cx + 22, cy + 2, cx + 134, cy + 58],         // la lecture, contre lui
-    [W / 2 - 218, H - 102, W / 2 + 218, H],       // croyance et vitesse
-    [W - 240, H - 72, W, H]                       // échelle et « ? »
+    [cx - 26, cy - 26, cx + 26, cy + 26]          // le réticule
   ];
+  if (railBox) boxes.push(railBox);               // le panneau
   drawCallouts(boxes, Rt);
   drawLegends(boxes, Rt);
   drawPlaces(boxes, Rt);

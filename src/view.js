@@ -55,7 +55,19 @@ export const view = {
    * leurs poignées — c'est le pourcentage affiché qui bouge, et c'est là
    * que l'arbitrage se voit.
    */
-  belief: { m: 55, l: 20, c: 25 }
+  belief: { m: 55, l: 20, c: 25 },
+
+  /**
+   * L'ALLURE. Ce que le panneau « réglages » pilote et que les trois
+   * dessinateurs lisent — la carte, l'encre, rien d'autre. Ce ne sont pas
+   * des données : deux réglages différents décrivent le même ciel.
+   *
+   *    sat    saturation de l'irisation, 0 = gris de luminance
+   *    tache  gain sur la force de la tache
+   *    grey   0 = irisé, 1 = densité tramée (ce que fera l'e-ink)
+   *    icon   taille du glyphe des hauts lieux, en pixels
+   */
+  look: { sat: 1.5, tache: 1, grey: 0, icon: 15 }
 };
 
 /** Les trois parts ramenées à une somme de 1. */
@@ -166,13 +178,29 @@ export function coast(dt) {
 // mouvement. Le jour où la vraie météo arrivera, ce curseur fera défiler la
 // prévision plutôt qu'un temps inventé.
 
-const T0_MS = Date.now(), T0_PERF = performance.now();
+const T0_MS = Date.now();
 
-const elapsed = () => (performance.now() - T0_PERF) * view.speed;
+/**
+ * Les heures simulées S'ACCUMULENT, elles ne se déduisent pas de l'horloge
+ * réelle multipliée par la vitesse. La formule d'avant réécrivait tout le
+ * passé dès qu'on touchait au curseur du temps : à ×10 000, reculer d'un
+ * cran ramenait la date de plusieurs jours d'un coup. Inoffensif tant que
+ * rien ne regardait en arrière ; inacceptable depuis que le panneau trace
+ * les vingt-quatre dernières heures.
+ */
+let simH = 0;
 
-export const simDate = () => new Date(T0_MS + elapsed());
+/** Appelé une fois par image, avec le temps réel écoulé en secondes. */
+export function advanceClock(dt) {
+  if (view.speed > 0) simH += dt / 3600 * view.speed;
+}
 
-export const elapsedHours = () => elapsed() / 3600000;
+export const elapsedHours = () => simH;
+
+/** La date simulée à une heure quelconque — le passé se visite. */
+export const dateAt = h => new Date(T0_MS + h * 3600000);
+
+export const simDate = () => dateAt(simH);
 
 /**
  * Le décalage du bruit DOIT rester petit. En float32, ajouter ~45 000 aux
@@ -180,13 +208,16 @@ export const elapsedHours = () => elapsed() / 3600000;
  * laissait plus que deux décimales : le champ se cassait en blocs à bords
  * droits, et une longue coupure nette traversait l'Atlantique.
  */
-export const drift = () => (elapsedHours() * 0.03) % 512;
+export const driftAt = h => (h * 0.03) % 512;
 
 /**
  * La chance a sa propre horloge, plus lente que la météo. Sans quoi les
  * deux champs dériveraient de concert et l'on croirait à une cause.
  */
-export const driftChance = () => (elapsedHours() * 0.011) % 512;
+export const driftChanceAt = h => (h * 0.011) % 512;
+
+export const drift = () => driftAt(simH);
+export const driftChance = () => driftChanceAt(simH);
 
 /**
  * Combien de grain, et combien la tache s'efface. Nul au monde entier —

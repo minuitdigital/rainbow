@@ -18,6 +18,7 @@ const U = {};
 
 const UNIFORMS = ['uRes', 'uScale', 'uMode', 'uRot', 'uDecl', 'uSublon',
                   'uDrift', 'uDriftC', 'uDetail', 'uBelief',
+                  'uSat', 'uTache', 'uGrey',
                   'uLegN', 'uLegP', 'uLegQ', 'uEarth', 'uField', 'uMask'];
 
 /**
@@ -161,5 +162,8 @@ export function paint(canvas, sun) {
   gl.uniform1f(U.uDetail, detail());
   const w = beliefWeights();
   gl.uniform3f(U.uBelief, w.m, w.l, w.c);
+  gl.uniform1f(U.uSat, view.look.sat);
+  gl.uniform1f(U.uTache, view.look.tache);
+  gl.uniform1f(U.uGrey, view.look.grey);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }

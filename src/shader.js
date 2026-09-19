@@ -33,6 +33,7 @@ uniform vec2  uRes;
 uniform float uScale, uMode;
 uniform mat3  uRot;
 uniform float uDecl, uSublon, uDrift, uDriftC, uDetail;
+uniform float uSat, uTache, uGrey;     // l'allure : teinte, force, encodage
 uniform vec3  uBelief;                 // météo, légende, chance — somme = 1
 uniform int   uLegN;
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
@@ -51,6 +52,7 @@ const float GAIN = 1.8;
 const float LEGEND_FLOOR = 0.09;
 const float FIELD_FREQ = 3.6;
 const float CHANCE_FREQ = 0.62;
+const float BANDS = 6.0;
 
 float fyf (float t){ float a=t*t, b=a*a*a; return t*(A1 + A2*a + b*(A3 + A4*a)); }
 float fypf(float t){ float a=t*t, b=a*a*a; return A1 + 3.0*A2*a + b*(7.0*A3 + 9.0*A4*a); }
@@ -70,6 +72,24 @@ float vnoise(vec3 x){
 }
 float fbm(vec3 p){
   return 0.56 * vnoise(p) + 0.29 * vnoise(p * 2.13) + 0.15 * vnoise(p * 4.37);
+}
+
+// LA TRAME ORDONNÉE. La matrice de Bayer 8×8, engendrée par la même
+// récurrence que d'habitude mais calculée bit à bit : à chaque niveau, le
+// quadrant (qx, qy) vaut 2·(qx⊕qy) + qy. Pas de tableau constant, pas
+// d'indexation dynamique, et le motif ne se lit pas comme une grille.
+//
+// Des POINTS et non des hachures : une hachure impose une direction, et
+// sur une carte toute direction finit par avoir l'air de signifier
+// quelque chose. La part de cases noircies vaut exactement l'intensité —
+// c'est littéralement ce que fera le tramage de l'e-ink.
+float bayer8(ivec2 p){
+  int v = 0;
+  for(int b = 2; b >= 0; b--){
+    int qx = (p.x >> b) & 1, qy = (p.y >> b) & 1;
+    v = (v << 2) | (2 * (qx ^ qy) + qy);
+  }
+  return (float(v) + 0.5) / 64.0;
 }
 
 // LA LÉGENDE. Le plancher, relevé par le haut lieu le plus proche. Un
@@ -196,16 +216,40 @@ void main(){
     // signal qu'on lit d'un continent à l'autre ; de près, on est DANS le
     // paysage et l'arc n'est plus qu'un indice — sinon la couleur noie le
     // relief et zoomer revient à se coller à un vitrail.
-    field = pow(t, 1.15) * 0.98 * mix(1.0, 0.40, uDetail);
+    //
+    // uTache n'entre QUE là : c'est un gain sur la force de la tache, pas
+    // sur la valeur t. La teinte, elle, continue de dire la même chose.
+    float fv = clamp(pow(t, 1.15) * 0.98 * mix(1.0, 0.40, uDetail) * uTache, 0.0, 1.0);
 
-    // Irisation : palette cosinus parcourue plusieurs fois, décalée par un
-    // bruit lent. On obtient des bandes imbriquées, comme de l'huile sur
-    // l'eau, plutôt qu'un simple dégradé chaud-froid.
-    float k = t * 1.35 + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
-    vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
-    c = mix(vec3(dot(c, vec3(0.3333))), c, 1.50);        // saturation
-    // plancher relevé : sur papier blanc, une teinte trop basse vire à la boue
-    hue = clamp(0.10 + 0.90 * c, 0.0, 1.0);
+    if(uGrey > 0.5){
+      // EN DÉGRADÉ, la force ne peut plus passer par la teinte : elle
+      // passe par la DENSITÉ, découpée en paliers — le même langage que
+      // les aplats du relief. Pas de trait d'iso-valeur : la marche entre
+      // deux paliers se voit toute seule, et un trait par-dessus faisait
+      // carte géologique.
+      float band = floor(fv * BANDS) / BANDS;
+      float v = 1.0 - pow(band, 0.85) * 0.50;
+
+      // Il faut bien quelque chose de plus : en couleur la teinte suffit
+      // à séparer la tache du fond, en gris elle entre en concurrence
+      // avec le relief, lui aussi gris et lui aussi lisse.
+      if(bayer8(ivec2(gl_FragCoord.xy)) < clamp((fv - 0.12) / 0.88, 0.0, 1.0))
+        v -= 0.20;
+
+      hue = vec3(v);
+      field = 1.0;          // la densité REMPLACE la teinte, elle ne s'y ajoute pas
+    } else {
+      field = fv;
+
+      // Irisation : palette cosinus parcourue plusieurs fois, décalée par un
+      // bruit lent. On obtient des bandes imbriquées, comme de l'huile sur
+      // l'eau, plutôt qu'un simple dégradé chaud-froid.
+      float k = t * 1.35 + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
+      vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
+      c = mix(vec3(dot(c, vec3(0.3333))), c, uSat);      // saturation
+      // plancher relevé : sur papier blanc, une teinte trop basse vire à la boue
+      hue = clamp(0.10 + 0.90 * c, 0.0, 1.0);
+    }
   }
 
   // Multiplication : sur le papier, les taches teintent au lieu d'éclairer.

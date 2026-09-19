@@ -15,49 +15,163 @@
 <canvas id="gl" class="layer"></canvas>
 <canvas id="ink" class="layer"></canvas>
 
-<!-- La lecture se tient contre le réticule : elle décrit le centre de
-     l'écran, et une lecture du centre affichée dans un coin est une faute. -->
-<dl class="chrome readout">
-  <dt>lat</dt><dd id="r-lat">—</dd>
-  <dt>lon</dt><dd id="r-lon">—</dd>
-  <dt>soleil</dt><dd id="r-sun">—</dd>
-  <dt>indice</dt><dd id="r-idx">—</dd>
-</dl>
+<!-- =====================================================================
+     LE PANNEAU. Quatre registres dans une colonne à droite ; un registre,
+     une tâche. Tout ce qu'ils affichent décrit LE RÉTICULE, c'est-à-dire
+     le centre exact de l'écran. Le remplissage est fait par src/panel.js.
+     ===================================================================== -->
+<div class="rail">
 
-<!-- LE PARTAGE DE LA CROYANCE. Le soleil n'est pas là : on ne croit pas
-     en sa hauteur, on la calcule. Ces trois-là seulement se discutent. -->
-<div class="chrome dials">
-  <div class="dial">
-    <label for="w-m">météo</label>
-    <input id="w-m" type="range" min="0" max="100" step="1" value="55">
-    <b id="p-m">—</b>
-  </div>
-  <div class="dial">
-    <label for="w-l">légende</label>
-    <input id="w-l" type="range" min="0" max="100" step="1" value="20">
-    <b id="p-l">—</b>
-  </div>
-  <div class="dial">
-    <label for="w-c">chance</label>
-    <input id="w-c" type="range" min="0" max="100" step="1" value="25">
-    <b id="p-c">—</b>
-  </div>
+  <!-- ================================================== L'ESTIMATEUR -->
+  <section class="box" id="box-est">
+    <div class="head">
+      <span>estimateur d'arcs-en-ciel</span>
+      <span class="head-btns">
+        <button type="button" id="help-open" aria-label="Comment cette carte est faite"
+                title="Comment cette carte est faite">?</button>
+        <button type="button" id="pli-est" aria-expanded="true" aria-controls="corps-est"
+                aria-label="Replier">−</button>
+      </span>
+    </div>
+    <div class="body" id="corps-est">
+
+      <!-- Le lieu et l'heure ont leur ligne à eux : le titre doit pouvoir
+           dire le nom de la pièce en entier.
+
+           Le piéton dit « c'est nous » : le point visé est un endroit où
+           quelqu'un se tiendrait. Dessiné au trait et non en emoji — même
+           règle que le glyphe de l'arc, un emoji couleur devient un pâté
+           au tramage de l'e-ink. -->
+      <div class="reading">
+        <b>
+          <svg class="walker" viewBox="0 0 10 14" aria-hidden="true">
+            <circle cx="5" cy="2.3" r="1.5"/>
+            <path d="M5 4.2 L4.3 8.2"/>
+            <path d="M4.3 8.2 L6.3 12.2"/>
+            <path d="M4.3 8.2 L2.3 11.6"/>
+            <path d="M4.7 5.4 L6.7 6.9"/>
+          </svg>
+          Position <span id="f-pos">—</span>
+        </b>
+        <span id="f-clock">—</span>
+      </div>
+
+      <!-- Le chiffre à droite du titre EST la hauteur du soleil. L'échelle
+           verticale se recadre sur ce que la courbe parcourt, en gardant
+           toujours la fenêtre 0–42° dans le champ. -->
+      <div class="sub short">
+        <div class="head"><span>héliodon</span><em id="h-sun">—</em></div>
+        <canvas class="plot" id="p-sun"></canvas>
+      </div>
+
+      <!-- « Indice » ne disait rien. « Probabilité » mentirait : le chiffre
+           est composite et volontairement poétique. -->
+      <div class="sub tall">
+        <div class="head"><span>présence</span><em id="h-idx">—</em></div>
+        <canvas class="plot" id="p-idx"></canvas>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ===================================================== LA CROYANCE -->
+  <!-- Une croyance finie qui se partage : pousser l'une pousse
+       physiquement les deux autres. Les poignées bougent, la somme reste
+       100 %. Le soleil n'est pas là : on ne croit pas en sa hauteur, on
+       la calcule. -->
+  <section class="box">
+    <div class="head">
+      <span>croyance</span>
+      <button type="button" id="pli-croy" aria-expanded="true" aria-controls="corps-croy"
+              aria-label="Replier">−</button>
+    </div>
+    <div class="body" id="corps-croy">
+      <div class="dials">
+        <div class="dial">
+          <label for="w-m">météo</label>
+          <input id="w-m" type="range" min="0" max="100" step="1" value="55" style="--fill: var(--meteo)">
+          <output id="o-m">—</output>
+        </div>
+        <div class="dial">
+          <label for="w-l">légende</label>
+          <input id="w-l" type="range" min="0" max="100" step="1" value="20" style="--fill: var(--legende)">
+          <output id="o-l">—</output>
+        </div>
+        <div class="dial">
+          <label for="w-c">chance</label>
+          <input id="w-c" type="range" min="0" max="100" step="1" value="25" style="--fill: var(--chance)">
+          <output id="o-c">—</output>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== LES LÉGENDES -->
+  <!-- Les pastilles ne sélectionnent rien : elles amènent le réticule. -->
+  <section class="box">
+    <div class="head">
+      <span>légendes</span>
+      <span class="head-btns">
+        <em id="h-leg">—</em>
+        <button type="button" id="pli-leg" aria-expanded="false" aria-controls="corps-leg"
+                aria-label="Déplier">+</button>
+      </span>
+    </div>
+    <div class="body" id="corps-leg" hidden>
+      <div class="chips" id="chips"></div>
+      <p class="said" id="said">—</p>
+    </div>
+  </section>
+
+  <!-- ===================================================== LES RÉGLAGES -->
+  <!-- Ils ne disent rien du ciel : ils disent comment on le regarde. D'où
+       la boîte à part, le titre discret, et le repli par défaut. -->
+  <section class="box">
+    <div class="head quiet">
+      <span>réglages</span>
+      <button type="button" id="pli-reg" aria-expanded="false" aria-controls="corps-reg"
+              aria-label="Déplier">+</button>
+    </div>
+    <div class="body" id="corps-reg" hidden>
+      <div class="dials">
+        <div class="dial">
+          <label for="s-alpha">transparence</label>
+          <input id="s-alpha" type="range" min="0" max="100" value="80"><output id="o-alpha">—</output>
+        </div>
+        <div class="dial">
+          <label for="s-contrast">contraste</label>
+          <input id="s-contrast" type="range" min="0" max="100" value="62"><output id="o-contrast">—</output>
+        </div>
+        <div class="dial">
+          <label for="s-grey" id="l-grey">dégradé</label>
+          <input id="s-grey" type="checkbox">
+          <output id="o-grey">—</output>
+        </div>
+        <div class="dial">
+          <label for="s-colour" id="l-colour">couleur</label>
+          <input id="s-colour" type="range" min="0" max="100" value="83"><output id="o-colour">—</output>
+        </div>
+        <div class="dial">
+          <label for="s-tache">intensité</label>
+          <input id="s-tache" type="range" min="0" max="100" value="54"><output id="o-tache">—</output>
+        </div>
+        <div class="dial">
+          <label for="s-text">texte</label>
+          <input id="s-text" type="range" min="0" max="100" value="20"><output id="o-text">—</output>
+        </div>
+        <div class="dial">
+          <label for="s-icon">icônes</label>
+          <input id="s-icon" type="range" min="0" max="100" value="32"><output id="o-icon">—</output>
+        </div>
+        <div class="dial">
+          <label for="s-time">temps</label>
+          <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">—</output>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </div>
-
-<div class="chrome speed">
-  <input id="spd" type="range" min="0" max="100" step="1" value="72" aria-label="Vitesse du temps">
-  <div class="speed-read"><b id="r-speed">—</b><span id="r-simtime">—</span></div>
-</div>
-
-<!-- L'échelle est peinte par chrome.js avec la formule même du shader :
-     une légende écrite à la main finirait par mentir. -->
-<div class="chrome legend">
-  <canvas id="ramp" class="ramp" width="336" height="12" aria-hidden="true"></canvas>
-  <div class="ramp-ends"><span>faible</span><span>forte</span></div>
-  <div class="clock"><span id="r-date">—</span><span id="r-time">— UTC</span></div>
-</div>
-
-<button class="help-btn" id="help-open" aria-label="Comment cette carte est faite" title="Comment cette carte est faite">?</button>
 
 <div class="sheet" id="help" hidden>
   <div class="sheet-inner" role="dialog" aria-modal="true" aria-labelledby="help-title">
@@ -78,21 +192,39 @@
     <h2>La croyance</h2>
     <p>La porte ouverte, trois raisons d'y croire se partagent ce qui reste.
       Les curseurs disent en laquelle vous croyez le plus — pousser l'une
-      affaiblit les deux autres.</p>
-    <pre>indice = soleil × ( météo + légende + chance )</pre>
+      pousse physiquement les deux autres, et la somme reste entière.</p>
+    <pre>présence = soleil × ( 55 % · météo + 20 % · légende + 25 % · chance )</pre>
     <dl class="terms">
       <dt>météo</dt><dd>la pluie et la trouée — ce qui est vrai</dd>
       <dt>légende</dt><dd>la foi attachée au lieu — ce qu'on raconte</dd>
       <dt>chance</dt><dd>un champ qui oscille — ce qui n'a pas de raison</dd>
     </dl>
+    <p>Une <b>somme</b> et non un produit : avec un produit, un seul zéro
+      éteindrait tout, et qui ne croirait qu'aux légendes ne verrait rien
+      nulle part.</p>
     <p>Partout on croit un peu à l'arc-en-ciel. Certains lieux beaucoup :
       ils portent un petit arc et une baguette, et disent leur croyance
       quand on s'approche.</p>
+
+    <h2>Le panneau</h2>
+    <dl class="terms">
+      <dt>position</dt><dd>le réticule, au centre exact de l'écran</dd>
+      <dt>héliodon</dt><dd>la hauteur du soleil sur les 24 dernières heures</dd>
+      <dt>présence</dt><dd>les trois croyances empilées, et leur somme</dd>
+      <dt>réglages</dt><dd>l'allure, pas la donnée — et elle se mémorise</dd>
+    </dl>
+    <p>L'axe du temps des deux graphes est <b>logarithmique</b> : la dernière
+      minute occupe la moitié de la largeur, la dernière journée l'autre
+      moitié. Rien n'est mémorisé — le passé est <i>recalculé</i>, ce qui
+      permet de déplacer le réticule sans perdre l'histoire du lieu.</p>
 
     <h2>Les couleurs</h2>
     <p>L'irisation ne code aucune valeur : c'est une palette d'interférence,
       comme un film d'huile sur l'eau, et elle boucle. Ce qui dit la force,
       c'est l'<b>intensité</b> de la tache, pas sa teinte.</p>
+    <p>La case <b>dégradé</b> change d'encodage : la force passe alors par la
+      densité, en paliers et en points. C'est ce que fera l'écran à encre
+      électronique du tableau.</p>
 
     <h2>Les étiquettes</h2>
     <p>Une zone porte de une à cinq étiquettes. Ce ne sont pas cinq mesures
