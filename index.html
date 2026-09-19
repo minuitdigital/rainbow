@@ -9,16 +9,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fragment+Mono:ital@0;1&display=swap">
 <style>
   /* ---------------------------------------------------------------
-     Papier blanc, encre froide, le spectre comme seule couleur.
-     L'objet final est un panneau e-ink blanc : la page assume un
-     seul thème, clair, et le peint explicitement.
+     Papier blanc, encre noire, le spectre comme seule couleur.
+     La page assume un seul thème, clair, et le peint explicitement.
      --------------------------------------------------------------- */
   :root {
     --paper:     #ffffff;
     --ink:       #14161a;
-    --ink-soft:  #9aa1a9;
-    --ink-faint: #c9ced4;
-    --rule:      #e6e8ec;
+    --ink-soft:  #7c848d;
+    --ink-faint: #b6bcc4;
+    --rule:      #e2e5ea;
 
     --sp-0: #5b3fa8; --sp-1: #2f62cc; --sp-2: #1e9bb0; --sp-3: #4fa83c;
     --sp-4: #e3c11c; --sp-5: #ec841c; --sp-6: #d62f26;
@@ -395,12 +394,19 @@
     float qL = (floor(bL) + smoothstep(1.0 - wL, 1.0, fract(bL))) / NLAND;
     float wC = max(fwidth(f), 1e-5);
     float isLand = smoothstep(0.5 - wC, 0.5 + wC, f);
-    float aplat = mix(0.950 - qS * 0.145, 0.995 - qL * 0.335, isLand);
-
-    // --- RELIEF OMBRÉ : l'ancienne lecture, pour comparer
+    // --- LE LUSTRE. earth.jpg n'est pas une carte de reflets, c'est une carte
+    // d'OMBRES : à pleine amplitude elle réimprime tout le relief par-dessus
+    // les aplats. Elle ne sert donc qu'à creuser légèrement les versants.
     float shaded = textureGrad(uEarth, uv, gx, gy).r;
+    float shade = 1.0 - clamp((shaded - 0.54) / 0.46, 0.0, 1.0);
 
-    float ground = mix(aplat, shaded, uMode);
+    vec3 sea  = mix(vec3(0.948, 0.954, 0.964), vec3(0.792, 0.806, 0.830), qS);
+    vec3 land = mix(vec3(0.995, 0.996, 1.000), vec3(0.655, 0.667, 0.688), qL);
+    land *= 1.0 - shade * 0.14;
+
+    vec3 ground = mix(sea, land, isLand);
+    vec3 alt = mix(vec3(0.90, 0.912, 0.928), vec3(shaded), isLand);
+    ground = mix(ground, alt, uMode);
     float m = texture(uMask, uv).r;
 
     // --- champ spectral
@@ -419,11 +425,19 @@
       float b = (abs(lat) - 48.0) / 15.0;
       float wet = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
       float t = 1.0 - exp(-geom * rain * (wet / 1.2) * 6.0);
-      field = pow(t, 0.7) * 0.92;
-      hue   = ramp(t);
+      field = pow(t, 0.90) * 0.95;
+      // Irisation : palette cosinus parcourue plusieurs fois, décalée par un
+      // bruit lent. On obtient des bandes imbriquées, comme de l'huile sur
+      // l'eau, plutôt qu'un simple dégradé chaud-froid.
+      float k = t * 1.35 + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
+      vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
+      c = mix(vec3(dot(c, vec3(0.3333))), c, 1.50);        // saturation
+      // plancher relevé : sur papier blanc, une teinte trop basse vire à la boue
+      hue = clamp(0.10 + 0.90 * c, 0.0, 1.0);
     }
 
-    vec3 col = vec3(ground) * mix(vec3(1.0), hue, field);
+    // Multiplication : sur le papier, les taches teintent au lieu d'éclairer.
+    vec3 col = ground * mix(vec3(1.0), hue, field);
     fragColor = vec4(mix(vec3(1.0), col, cov), 1.0);
   }`;
 
@@ -892,12 +906,33 @@
   }
 
   // ---- tracé d'une annotation
+  // Un arc dessiné en gris plutôt qu'un emoji : contraste franc sur le papier,
+  // et il survivra au tramage de l'e-ink là où un emoji couleur ferait un pâté.
+  // Quatre bandes largement espacées : à cette taille, cinq arcs serrés se
+  // referment en pâté noir. L'écart doit rester supérieur à l'épaisseur.
+  const ARC = ['#14171c', '#474e57', '#7a818b', '#adb4be'];
+  const GLYPH = 24;
+
+  function arcGlyph(cx, by) {
+    ink.lineCap = 'butt';
+    ink.strokeStyle = 'rgba(255,255,255,0.95)';
+    ink.lineWidth = 13;
+    ink.beginPath(); ink.arc(cx, by, 5.8, Math.PI, 0); ink.stroke();
+    ink.lineWidth = 1.25;
+    for (let i = 0; i < ARC.length; i++) {
+      ink.strokeStyle = ARC[i];
+      ink.beginPath();
+      ink.arc(cx, by, 9.4 - i * 2.5, Math.PI, 0);
+      ink.stroke();
+    }
+  }
+
   function drawCallout(x, y, l1, l2, alpha, boxes) {
     ink.font = '12px "Fragment Mono", ui-monospace, monospace';
-    const w1 = ink.measureText(l1).width;
+    const t1 = ink.measureText(l1).width;
     ink.font = 'italic 10px "Fragment Mono", ui-monospace, monospace';
     const w2 = ink.measureText(l2).width;
-    const tw = Math.max(w1, w2), LEAD = 17, BAR = Math.max(58, tw + 8);
+    const tw = Math.max(t1 + GLYPH, w2), LEAD = 17, BAR = Math.max(62, tw + 8);
 
     let sx = 1, sy = -1, ok = false;
     for (const [cx, cy] of [[1,-1],[-1,-1],[1,1],[-1,1]]) {
@@ -916,7 +951,8 @@
     const ex = x + sx * LEAD, ey = y + sy * LEAD, bx = ex + sx * BAR;
     ink.globalAlpha = alpha;
 
-    ink.strokeStyle = 'rgba(20,22,26,0.72)';
+    ink.lineCap = 'butt';
+    ink.strokeStyle = 'rgba(20,22,26,0.78)';
     ink.lineWidth = 1;
     ink.beginPath();
     ink.moveTo(x + sx * 4, y + sy * 4);
@@ -924,27 +960,32 @@
     ink.lineTo(bx, ey);
     ink.stroke();
 
-    ink.fillStyle = 'rgba(20,22,26,0.85)';
-    ink.beginPath(); ink.arc(x, y, 2, 0, 6.2832); ink.fill();
+    ink.fillStyle = 'rgba(14,17,22,0.95)';
+    ink.beginPath(); ink.arc(x, y, 2.1, 0, 6.2832); ink.fill();
 
-    ink.textAlign = sx > 0 ? 'left' : 'right';
     ink.textBaseline = 'alphabetic';
     ink.lineJoin = 'round';
-    const tx = ex + sx * 3;
+    const tx = ex + sx * 3, y1 = ey - 18, y2 = ey - 6;
 
-    ink.strokeStyle = 'rgba(255,255,255,0.92)';
-    ink.lineWidth = 3;
+    const halo = (txt, px, py) => {
+      ink.strokeStyle = 'rgba(255,255,255,0.95)';
+      ink.lineWidth = 4;
+      ink.strokeText(txt, px, py);
+    };
+
     ink.font = '12px "Fragment Mono", ui-monospace, monospace';
-    ink.strokeText(l1, tx, ey - 18);
-    ink.fillStyle = '#14161a';
-    ink.fillText(l1, tx, ey - 18);
+    ink.textAlign = sx > 0 ? 'left' : 'right';
+    const gx2 = sx > 0 ? tx + 11 : tx - t1 - 12;
+    const lx = sx > 0 ? tx + GLYPH : tx;
+    arcGlyph(gx2, y1);
+    halo(l1, lx, y1);
+    ink.fillStyle = '#0d1015';
+    ink.fillText(l1, lx, y1);
 
     ink.font = 'italic 10px "Fragment Mono", ui-monospace, monospace';
-    ink.strokeStyle = 'rgba(255,255,255,0.92)';
-    ink.lineWidth = 3;
-    ink.strokeText(l2, tx, ey - 6);
-    ink.fillStyle = '#6b7279';
-    ink.fillText(l2, tx, ey - 6);
+    halo(l2, tx, y2);
+    ink.fillStyle = '#565d66';
+    ink.fillText(l2, tx, y2);
 
     ink.globalAlpha = 1;
     return true;
@@ -989,7 +1030,7 @@
       const dur = c.e.min == null ? ''
         : c.e.min >= 90 ? '  ·  ' + Math.round(c.e.min / 60 * 10) / 10 + ' h'
         : '  ·  ' + Math.round(c.e.min) + ' min';
-      if (drawCallout(c.X, c.Y, '🌈 ' + pct + dur, c.ph, c.a, boxes)) n++;
+      if (drawCallout(c.X, c.Y, pct + dur, c.ph, c.a, boxes)) n++;
     }
   }
 
@@ -1001,7 +1042,7 @@
     drawRings(window.COAST.lakes, radius, centre, Rt, lw * 0.8, 0.5);
 
     const cx = W / 2, cy = H / 2, g = 7, a = 17;
-    ink.strokeStyle = 'rgba(20,22,26,0.42)';
+    ink.strokeStyle = 'rgba(20,22,26,0.45)';
     ink.lineWidth = 1;
     ink.beginPath();
     ink.moveTo(cx - a, cy); ink.lineTo(cx - g, cy);

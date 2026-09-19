@@ -1,0 +1,14 @@
+# Sources lourdes : elles ne servent qu'à régénérer les textures.
+# Voir REPRISE.md §3 pour où les retrouver.
+etopo.tif
+etopo1.jpg
+shadedrelief.jpg
+*.geojson
+data/
+sources/
+
+# Divers
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc

@@ -1,9 +1,9 @@
 # Estimateur d'arcs-en-ciel
 
-Une carte du monde en projection Equal Earth, en noir et blanc, sans frontières —
-seulement le relief, les côtes et les fonds marins. Des taches spectrales y
-marquent les endroits où un arc-en-ciel est sur le point d'apparaître, et un
-petit arc se dessine là où c'est le plus probable.
+Une carte du monde en projection Equal Earth, sans frontières — seulement le
+relief, les côtes et les fonds marins, en aplats de gris sur papier blanc. Des
+taches irisées y marquent les endroits où un arc-en-ciel est sur le point
+d'apparaître, et un petit arc gravé signale les plus probables.
 
 Projet plus poétique que scientifique : une carte qui cherche, en temps réel,
 les quelques points du globe où le ciel s'apprête à se plier.
