@@ -39,16 +39,33 @@
   <div class="speed-read"><b id="r-speed">—</b><span id="r-simtime">—</span></div>
 </div>
 
-<div class="fallback" id="fallback" hidden>
-  Cette carte est calculée par le processeur graphique.<br>
-  WebGL 2 n'est pas disponible dans ce navigateur.
-</div>
+<div class="fallback" id="fallback" hidden></div>
 
 <!-- Modules ES natifs : aucune bibliothèque, aucune étape de construction.
      Il faut servir la page par HTTP — mais il le fallait déjà, Chrome
      refusant de charger une image locale dans une texture WebGL.
          python -m http.server 8000                                      -->
 <script type="module" src="src/main.js"></script>
+
+<!-- LA VEILLE. Un module qui ne se charge pas échoue en silence : la page
+     reste blanche et rien, nulle part, ne dit pourquoi. Sur un tableau
+     accroché à un mur c'est la pire des pannes, alors on surveille le
+     démarrage et on écrit ce qu'on sait. -->
+<script>
+  setTimeout(function () {
+    if (window.__rainbow) return;
+    var f = document.getElementById('fallback');
+    f.innerHTML =
+      "La carte n'a pas démarré.<br><br>" +
+      "Ses modules ou ses données n'ont pas pu être chargés. Trois causes, " +
+      "dans l'ordre de fréquence :<br><br>" +
+      "la page a été ouverte par un double-clic — il lui faut un serveur, " +
+      "<code>python -m http.server 8000</code><br>" +
+      "le dossier <code>data/</code> manque à côté d'elle<br>" +
+      "le dossier <code>src/</code> manque à côté d'elle";
+    f.hidden = false;
+  }, 8000);
+</script>
 
 </body>
 </html>

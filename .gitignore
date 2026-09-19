@@ -1,17 +1,27 @@
-# Sources lourdes : elles ne servent qu'à régénérer les textures.
-# Voir REPRISE.md §3 pour où les retrouver.
+# ATTENTION — data/ N'EST PAS ignoré, et ne doit jamais le redevenir.
+#
+# Ce dossier contenait autrefois les sources lourdes, et il était ignoré
+# à ce titre. Il contient maintenant LE SITE : field.png, earth.jpg,
+# mask.png, coast.js, terrain.js, cities.js. L'oubli a coûté une page
+# blanche en ligne, sans le moindre message pour l'expliquer.
+#
+# Les sources lourdes vivent désormais dans build/, à côté des scripts
+# qui les consomment. Voir REPRISE.md §3 pour où les retrouver.
+
 etopo.tif
 etopo1.jpg
 shadedrelief.jpg
 *.geojson
-data/
 sources/
 
-# Le recollage en un seul fichier : régénérable par build/bundle.py.
+# Ce qui ne part pas sur le web
+Claude outputs/
 dist/
 
 # Divers
 .DS_Store
 Thumbs.db
+desktop.ini
 __pycache__/
 *.pyc
+*.zip

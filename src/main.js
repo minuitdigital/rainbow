@@ -109,8 +109,17 @@ function frame(now) {
 // dans leur zone morte temporelle tant que le module n'a pas fini de
 // s'évaluer. Démarrer plus haut ferait lire `dirty` avant qu'il existe.
 
+// La veille inscrite dans index.html attend ce drapeau : il dit « les
+// modules sont arrivés ». Ce qui échoue ensuite a le droit de s'expliquer ;
+// ce qui échoue avant ne le peut pas, d'où la veille.
+window.__rainbow = true;
+
+const fallback = document.getElementById('fallback');
+
 if (!initMap(glCv, invalidate)) {
-  document.getElementById('fallback').hidden = false;
+  fallback.innerHTML = 'Cette carte est calculée par le processeur graphique.'
+                     + '<br>WebGL 2 n\'est pas disponible dans ce navigateur.';
+  fallback.hidden = false;
 } else {
   initInk(inkCv);
   bind(inkCv, invalidate);
