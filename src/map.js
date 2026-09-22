@@ -9,7 +9,7 @@
 //  pas de bibliothèque. Toute la carte est un calcul par pixel.
 // =========================================================================
 
-import { view, scale, drift, driftChance, detail, fine, holes,
+import { view, scale, drift, driftChance, detail, fine, seuil,
          beliefWeights, centreVec } from './view.js';
 import { VERTEX, FRAGMENT, MAX_LEGENDS } from './shader.js';
 import { LEGEND_POINTS } from './sky.js';
@@ -67,9 +67,9 @@ function timerRead() {
 }
 
 const UNIFORMS = ['uRes', 'uScale', 'uRot', 'uDecl', 'uSublon',
-                  'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uHoles', 'uFranges',
+                  'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uSeuil', 'uFranges',
                   'uBelief', 'uHere',
-                  'uSat', 'uTache', 'uGrey', 'uSea', 'uLand',
+                  'uSat', 'uTache', 'uGrey', 'uPorte', 'uCouloir', 'uSea', 'uLand',
                   'uLegN', 'uLegP', 'uLegQ', 'uField', 'uMask',
                   'uWx', 'uWxOn', 'uSlot', 'uWxN'];
 
@@ -338,7 +338,7 @@ export function paint(canvas, sun, slot) {
   gl.uniform1f(U.uDriftC, driftChance());
   gl.uniform1f(U.uDetail, detail());
   gl.uniform1f(U.uFine, fine());
-  gl.uniform1f(U.uHoles, holes());
+  gl.uniform1f(U.uSeuil, seuil());
   gl.uniform1f(U.uFranges, view.look.franges);
   const w = beliefWeights();
   gl.uniform3f(U.uBelief, w.m, w.l, w.c);
@@ -349,6 +349,8 @@ export function paint(canvas, sun, slot) {
   gl.uniform1f(U.uSat, view.look.sat);
   gl.uniform1f(U.uTache, view.look.tache);
   gl.uniform1f(U.uGrey, view.look.grey);
+  gl.uniform1f(U.uPorte, view.look.porte);
+  gl.uniform2f(U.uCouloir, view.look.pas, view.look.trait);
   gl.uniform1f(U.uSea, view.look.sea);
   gl.uniform1f(U.uLand, view.look.land);
 

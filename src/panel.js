@@ -186,11 +186,27 @@ const KNOBS = {
   // gains sur ce que le zoom révèle. Le milieu du rail est le réglage
   // d'usine, le haut force le trait — utile pour juger au tramage de
   // l'e-ink, où le détail fin sera le premier à disparaître.
-  's-trous':    { fmt: t => (t <= 0.005 ? 'nappe' : Math.round(t * 72) + ' % coupé'),
-                  apply: t => { view.look.holes = t; repaint(); } },
+  // LE SEUIL. Sous cette présence, du papier. C'est le réglage qui
+  // décide si la carte est une nappe teintée ou un semis de taches — et
+  // il agit à TOUTE ÉCHELLE, contrairement aux « trous » qu'il remplace,
+  // qui ne faisaient rien avant ×6 de zoom.
+  's-seuil':    { fmt: t => (t <= 0.005 ? 'tout' : 'dès ' + Math.round(t * 90) + ' %'),
+                  apply: t => { view.look.seuil = t * 0.9; repaint(); } },
 
   's-fine':     { fmt: t => (t <= 0.005 ? 'aplat' : Math.round(t * 200) + ' %'),
                   apply: t => { view.look.fine = t * 2; repaint(); } },
+
+  // LE COULOIR A DEUX MESURES, et elles n'ont rien à voir l'une avec
+  // l'autre : l'écart entre les points, et l'épaisseur du trait. Un seul
+  // curseur pour les deux ferait grossir les points en les écartant, ce
+  // qui est exactement ce qu'on ne veut pas quand on cherche le juste
+  // pointillé. Les chiffres affichés sont ceux du MONDE ENTIER — de près,
+  // l'écart s'allonge tout seul, voir le bloc uPorte du shader.
+  's-ecart':    { fmt: t => Math.round(tween(0.5, 3.0, t) * 12) + ' px',
+                  apply: t => { view.look.pas = tween(0.5, 3.0, t); repaint(); } },
+
+  's-trait':    { fmt: t => (tween(0.5, 3.0, t) * 1.6).toFixed(1) + ' px',
+                  apply: t => { view.look.trait = tween(0.5, 3.0, t); repaint(); } },
 
   // LA PROFONDEUR D'ENCRE des aplats. Le milieu du curseur EST le tirage
   // d'origine — c'est ce qui permet de revenir à la carte connue sans
@@ -273,6 +289,29 @@ function showGrey() {
   for (const k of ['colour', 'franges']) {
     byId('s-' + k).disabled = on;
     byId('l-' + k).classList.toggle('off', on);
+  }
+  repaint();
+  saveKnobs();
+}
+
+// LE COULOIR. Deux pointillés, à 0° et à 42° de hauteur du soleil. Ce
+// n'est pas une donnée de plus : c'est la fenêtre elle-même, rendue
+// visible. Toute la couleur de la carte vit entre ces deux traits, et
+// quand une région reste éteinte, ils disent laquelle des deux raisons
+// est la bonne — pas de pluie, ou pas la bonne heure.
+//
+// Éteint par défaut : la pièce se regarde sans ses coutures. On l'allume
+// pour comprendre, puis on l'éteint.
+function showPorte() {
+  const on = byId('s-porte').checked;
+  view.look.porte = on ? 1 : 0;
+  byId('o-porte').textContent = on ? 'oui' : 'non';
+  // Couloir éteint, ses deux mesures ne décrivent plus rien : elles
+  // s'éteignent aussi, plutôt que de laisser croire qu'on règle quelque
+  // chose. Même geste que « dégradé » avec la couleur et les franges.
+  for (const k of ['ecart', 'trait']) {
+    byId('s-' + k).disabled = !on;
+    byId('l-' + k).classList.toggle('off', !on);
   }
   repaint();
   saveKnobs();
@@ -577,6 +616,29 @@ const NOTES = {
         + 'refait. Replier le registre ESTIMATEUR le met à zéro : les graphes '
         + 'ne se dessinent plus.'
   },
+  formule: {
+    nom: 'la formule de la présence',
+    quoi: 'La présence est le chiffre que la carte peint — 0 à 1. Voici '
+        + 'd’où il vient.',
+    pre: 'présence = S · (wM·météo + wL·légende)\n'
+       + '         + wC · chance · flaque · max(S, fuite·wC)',
+    defs: [
+      ['présence', 'ce que la carte colore, de 0 à 1'],
+      ['S',        'le soleil, ouvert de 0° à 42°'],
+      ['wM wL wC', 'les trois curseurs, somme 100 %'],
+      ['météo',    'pluie du voisinage × trouée'],
+      ['légende',  'le haut lieu le plus proche'],
+      ['chance',   'un bruit lent, seuillé en poches'],
+      ['flaque',   'décroît en s’éloignant du piéton'],
+      ['fuite',    'ce que la porte laisse passer la nuit']
+    ]
+    // PAS DE « POURQUOI » ICI. Toutes les autres notes en ont un, et c'est
+    // leur raison d'être : un chiffre ne dit rien sans ce qui le fait
+    // monter. Une formule, si — elle EST son propre commentaire, et le
+    // paragraphe qui la glosait ne faisait que repousser la liste des
+    // symboles plus bas. La feuille s'arrête donc sur les symboles.
+  },
+
   px: {
     nom: 'pixels',
     quoi: 'Combien de pixels RÉELS le shader calcule à chaque image : la '
@@ -622,7 +684,43 @@ function openNote(key) {
   noted = key;
   byId('note-nom').textContent = n.nom;
   byId('note-quoi').textContent = n.quoi;
-  byId('note-pourquoi').textContent = n.pourquoi;
+
+  // UNE FORMULE SE LIT EN BLOC. Noyée dans une phrase, elle ne se lit
+  // pas du tout — les parenthèses et les points médians n'ont plus de
+  // rang, et l'œil ne voit qu'une file de mots.
+  const pre = byId('note-pre');
+  pre.textContent = n.pre || '';
+  pre.hidden = !n.pre;
+
+  // ET LA FEUILLE S'ÉLARGIT POUR ELLE. Une note ordinaire tient dans une
+  // colonne courte, qui se lit mieux ; une formule, non — coupée, elle
+  // part dans une barre de défilement horizontale et le lecteur doit la
+  // faire glisser pour en voir la fin. C'est le contraire de ce qu'on lui
+  // demande. La feuille prend donc toute sa largeur quand il y a un bloc,
+  // et la reprend quand il n'y en a plus.
+  byId('note-sheet').querySelector('.sheet-inner')
+    .classList.toggle('narrow', !n.pre);
+
+  // Et les symboles juste dessous, un par ligne : le lecteur regarde la
+  // formule, bute sur un signe, descend d'un centimètre.
+  const defs = byId('note-defs');
+  defs.replaceChildren();
+  if (n.defs) {
+    for (const [sigle, dit] of n.defs) {
+      const dt = document.createElement('dt'); dt.textContent = sigle;
+      const dd = document.createElement('dd'); dd.textContent = dit;
+      defs.append(dt, dd);
+    }
+  }
+  defs.hidden = !n.defs;
+
+  // Une note sans « pourquoi » n'affiche pas un paragraphe vide — et
+  // surtout pas le mot « undefined », qui est ce qu'écrivait la ligne
+  // précédente le jour où j'ai retiré celui de la formule.
+  const pq = byId('note-pourquoi');
+  pq.textContent = n.pourquoi || '';
+  pq.hidden = !n.pourquoi;
+
   byId('note-sheet').hidden = false;
   byId('note-close').focus();
 }
@@ -642,6 +740,7 @@ const STORE_KEY = 'estimateur.reglages.2';
 function saveKnobs() {
   try {
     const o = { belief: view.belief, grey: byId('s-grey').checked,
+                porte: byId('s-porte').checked,
                 rig: view.rig, clock: view.clock, plis: folded };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
@@ -656,6 +755,7 @@ function loadKnobs() {
     if (typeof o[id] === 'number') byId(id).value = bound(o[id], 0, 100);
   if (o.belief && typeof o.belief.m === 'number') Object.assign(view.belief, o.belief);
   byId('s-grey').checked = !!o.grey;
+  byId('s-porte').checked = !!o.porte;
   byId(o.rig === 'mini' ? 'rig-mini' : 'rig-laptop').checked = true;
   // Une horloge « météo » mémorisée ne se restaure QUE si la case est
   // encore disponible : sans data/weather.png, le bouton est désactivé et
@@ -1168,13 +1268,17 @@ export function initPanel(invalidate, resize) {
   byId('s-grey').addEventListener('change', showGrey);
   showGrey();
 
+  byId('s-porte').addEventListener('change', showPorte);
+  showPorte();
+
   // LES APPELS DE NOTE, par délégation. Les boutons vivent dans index.html
   // et ne sont jamais refabriqués — un seul écouteur sur le registre entier
   // suffit, et il survivra aux lignes qu'on ajoutera.
-  byId('corps-reg').addEventListener('click', e => {
-    const b = e.target.closest('.ask');
-    if (b) openNote(b.dataset.note);
-  });
+  for (const zone of ['corps-reg', 'corps-croy'])
+    byId(zone).addEventListener('click', e => {
+      const b = e.target.closest('.ask');
+      if (b) openNote(b.dataset.note);
+    });
 
   // LE REGISTRE DES DONNÉES bat à sa propre cadence : une fois par
   // seconde, et SEULEMENT s'il est ouvert. La boucle d'images, elle, peut

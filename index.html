@@ -72,28 +72,41 @@
         <canvas class="plot" id="p-sun"></canvas>
       </div>
 
-      <!-- « Indice » ne disait rien. « Probabilité » mentirait : le chiffre
-           est composite et volontairement poétique. -->
-      <div class="sub tall">
-        <div class="head"><span>présence</span><em id="h-idx">—</em></div>
-        <canvas class="plot" id="p-idx"></canvas>
-      </div>
-
     </div>
   </section>
 
-  <!-- ===================================================== LA CROYANCE -->
-  <!-- Une croyance finie qui se partage : pousser l'une pousse
+  <!-- =================================================== L'ALGORITHME -->
+  <!-- UN SEUL CADRE, UN SEUL TITRE. La courbe de la présence vivait
+       au-dessus, dans l'estimateur, et les trois curseurs qui la
+       fabriquent en dessous, dans un autre registre : on réglait une chose
+       en regardant ailleurs. Ils sont maintenant l'un sous l'autre, sans
+       rien entre eux — pas de sous-titres, qui redécoupaient précisément
+       ce qu'on venait de réunir. Le chiffre est monté dans le bandeau,
+       puisqu'il n'y a plus qu'un bandeau.
+
+       « Algorithme » et non « présence » : le registre ne montre pas un
+       résultat, il montre la machine qui le fabrique — et c'est le seul
+       endroit de la pièce où l'on peut la changer.
+
+       Une croyance finie qui se partage : pousser l'une pousse
        physiquement les deux autres. Les poignées bougent, la somme reste
        100 %. Le soleil n'est pas là : on ne croit pas en sa hauteur, on
        la calcule. -->
   <section class="box">
     <div class="head">
-      <span>croyance</span>
-      <button type="button" id="pli-croy" aria-expanded="true" aria-controls="corps-croy"
-              aria-label="Replier">−</button>
+      <span>algorithme</span>
+      <span class="head-btns">
+        <em id="h-idx">—</em>
+        <button type="button" id="pli-croy" aria-expanded="true" aria-controls="corps-croy"
+                aria-label="Replier">−</button>
+      </span>
     </div>
     <div class="body" id="corps-croy">
+
+      <!-- « Indice » ne disait rien. « Probabilité » mentirait : le chiffre
+           est composite et volontairement poétique. -->
+      <canvas class="plot" id="p-idx"></canvas>
+
       <div class="dials">
         <div class="dial">
           <label for="w-m">météo</label>
@@ -110,6 +123,14 @@
           <input id="w-c" type="range" min="0" max="100" step="1" value="25" style="--fill: var(--chance)">
           <output id="o-c">—</output>
         </div>
+
+        <!-- COMMENT LES TROIS SE MÉLANGENT. Les curseurs disent les
+             proportions ; celui-ci dit la règle. Une somme et non un
+             produit, le soleil qui multiplie tout, et la chance qui seule
+             lui échappe. -->
+        <div class="gauge lone"><span>formule</span>
+          <button type="button" class="ask" data-note="formule"
+                  aria-label="La formule de mélange" title="La formule de mélange">?</button></div>
       </div>
     </div>
   </section>
@@ -192,8 +213,8 @@
             <!-- Les deux suivants ne disent rien au monde entier : ils ne
                  pilotent que ce que le zoom r&#233;v&#232;le. -->
             <div class="dial">
-              <label for="s-trous" id="l-trous">trous</label>
-              <input id="s-trous" type="range" min="0" max="100" value="50"><output id="o-trous">&#8212;</output>
+              <label for="s-seuil" id="l-seuil">seuil</label>
+              <input id="s-seuil" type="range" min="0" max="100" value="67"><output id="o-seuil">&#8212;</output>
             </div>
             <div class="dial">
               <label for="s-fine" id="l-fine">finesse</label>
@@ -203,6 +224,26 @@
               <label for="s-grey" id="l-grey">d&#233;grad&#233;</label>
               <input id="s-grey" type="checkbox">
               <output id="o-grey">&#8212;</output>
+            </div>
+            <!-- LA FEN&#202;TRE DU SOLEIL, en pointill&#233;. Entre les deux traits,
+                 l'astre est entre 0 et 42 degr&#233;s : c'est la seule bande du
+                 globe o&#249; un arc peut se tenir, et toute la couleur y vit.
+                 Sans elle, une zone &#233;teinte ne dit pas pourquoi. -->
+            <div class="dial">
+              <label for="s-porte" id="l-porte">couloir</label>
+              <input id="s-porte" type="checkbox">
+              <output id="o-porte">&#8212;</output>
+            </div>
+            <!-- Les deux mesures du pointill&#233;, et deux curseurs parce qu'un
+                 seul ferait grossir les points en les &#233;cartant. Les chiffres
+                 sont ceux du monde entier : de pr&#232;s, l'&#233;cart s'allonge seul. -->
+            <div class="dial">
+              <label for="s-ecart" id="l-ecart">&#8212; &#233;cart</label>
+              <input id="s-ecart" type="range" min="0" max="100" value="45"><output id="o-ecart">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-trait" id="l-trait">&#8212; trait</label>
+              <input id="s-trait" type="range" min="0" max="100" value="20"><output id="o-trait">&#8212;</output>
             </div>
           </div>
         </div>
@@ -545,6 +586,10 @@
     <button class="sheet-close" id="note-close" aria-label="Fermer">&#215;</button>
     <h1 id="note-nom">&#8212;</h1>
     <p class="lead" id="note-quoi">&#8212;</p>
+    <!-- Une formule se lit en bloc, pas dans une phrase. Cach&#233; quand la
+         note n'en a pas. -->
+    <pre id="note-pre" hidden></pre>
+    <dl class="terms" id="note-defs" hidden></dl>
     <p id="note-pourquoi">&#8212;</p>
   </div>
 </div>

@@ -99,16 +99,20 @@ body.idle .rail { opacity: .62; }
   gap: 8px;
 }
 
-/* Un tiers de l'écran, ferme. Les deux graphes se partagent ce qui reste
-   une fois les bandeaux et la lecture posés — ils grandissent avec
-   l'écran au lieu de se faire rogner. */
-#box-est { height: 33vh; display: flex; flex-direction: column; }
-#box-est .body { flex: 1; min-height: 0; }
+/* LES DEUX GRAPHES ONT CHACUN SA HAUTEUR, ÉCRITE ICI, EN CLAIR.
+   L'estimateur valait un tiers d'écran ferme tant qu'il tenait les DEUX
+   courbes, qui s'y partageaient la place en flex. La présence est partie
+   rejoindre l'algorithme ; l'héliodon restait seul à occuper ce tiers, et
+   il y était énorme. Un partage à un seul participant ne partage rien —
+   autant dire la hauteur qu'on veut, au lieu de la déduire d'un vh et
+   d'une somme de bandeaux. */
+#box-est { display: flex; flex-direction: column; }
+#p-sun { height: 92px; flex: none; }
+#p-idx { height: 118px; flex: none; }
 
-/* Replié, un registre n'est plus que son bandeau : il ne garde ni sa
-   hauteur imposée, ni le filet qui séparait le titre d'un corps absent. */
+/* Replié, un registre n'est plus que son bandeau : il ne garde pas le
+   filet qui séparait le titre d'un corps absent. */
 .box.folded { flex: none; }
-#box-est.folded { height: auto; }
 .box.folded .head { border-bottom: 0; }
 .sub { display: flex; flex-direction: column; min-height: 0; }
 .sub.tall  { flex: 1.15; }
@@ -274,6 +278,9 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   white-space: nowrap;
 }
 .gauge em { margin-left: auto; }
+/* Une jauge SANS chiffre : il n'y a rien à lire à droite, seulement un
+   appel de note. C'est lui qui prend la place que le chiffre laisse. */
+.gauge.lone .ask { margin-left: auto; }
 .gauge.deep { color: var(--ink-faint); }
 .gauge.deep span { padding-left: 11px; }
 .gauge.deep em { color: var(--ink-soft); }
@@ -598,7 +605,6 @@ input[type="range"]::-moz-range-thumb {
 
 @media (max-width: 620px) {
   .rail { width: 100%; }
-  #box-est { height: 44vh; }
   .dial { grid-template-columns: 78px 1fr 42px; }
   .dial.wide { grid-template-columns: 78px 1fr 72px; }
   .sheet-inner { padding: 26px 20px 28px; }

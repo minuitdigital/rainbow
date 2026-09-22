@@ -63,17 +63,20 @@ export const view = {
    *    sat    saturation de l'irisation, 0 = gris de luminance
    *    tache  gain sur la force de la tache
    *    grey   0 = irisé, 1 = densité tramée (ce que fera l'e-ink)
+   *    porte  1 = tracer en pointillé la fenêtre du soleil, 0° et 42°
+   *    pas    l'écart entre les points du couloir, 1 = la course d'origine
+   *    trait  l'épaisseur du couloir, 1 = 1,6 pixel
    *    icon   taille du glyphe des hauts lieux, en pixels
    *    sea    profondeur d'encre des aplats de mer, 1 = le tirage d'origine
    *    land   idem pour les terres
    *    fine   gain sur les octaves profondes du grain, au zoom
-   *    holes  gain sur le seuil qui troue la tache, au zoom
+   *    seuil  sous cette presence, pas de couleur du tout
    *    franges tours de palette dans l'irisation
    *    dot    la teinte du point du réticule : 0 = encre, sinon 0 à 1 du
    *           cercle des teintes
    */
-  look: { sat: 1.5, tache: 1, grey: 0, icon: 15,
-          sea: 1, land: 1, fine: 1, holes: 0.5, franges: 1.35, dot: 0 },
+  look: { sat: 1.5, tache: 1, grey: 0, porte: 0, pas: 1.6, trait: 1, icon: 15,
+          sea: 1, land: 1, fine: 1, seuil: 0.6, franges: 1.35, dot: 0 },
 
   /**
    * LA MACHINE. `laptop` ou `mini` — voir RIGS juste dessous. Ce n'est pas
@@ -531,15 +534,17 @@ export const detail = () => Math.max(0, Math.min(1, (view.zoom - 2.5) / 7.5));
 /**
  * LA RAMPE DU ZOOM PROFOND, bien plus tardive que `detail`. Nulle
  * jusqu'à ×6 — avant, ce qu'elle pilote serait sous le pixel — pleine à
- * ×26. Deux réglages s'y accrochent, et chacun a son gain :
- *
- *    fine   les octaves profondes du grain
- *    holes  le seuil qui troue la tache
- *
- * Tous deux nuls au monde entier : la lecture d'ensemble ne se discute
- * pas, elle doit rester celle du champ.
+ * ×26. Un seul réglage s'y accroche désormais : les octaves profondes du
+ * grain, qui n'auraient aucun sens au monde entier.
  */
 const zoomDeep = () => Math.max(0, Math.min(1, (view.zoom - 6) / 20));
 
-export const fine  = () => zoomDeep() * view.look.fine;
-export const holes = () => zoomDeep() * view.look.holes;
+export const fine = () => zoomDeep() * view.look.fine;
+
+/**
+ * LE SEUIL NE DÉPEND PLUS DU ZOOM, et c'est tout le changement. Accroché
+ * à `zoomDeep`, il ne faisait rien avant ×6 et coupait au mieux à 36 % —
+ * autant dire rien. Or le défaut qu'il vise existe à toute échelle : une
+ * carte uniformément teintée, où le regard n'a aucun bord à saisir.
+ */
+export const seuil = () => view.look.seuil;

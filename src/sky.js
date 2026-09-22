@@ -289,10 +289,12 @@ export function chanceAt(lon, lat, driftC) {
 // lit la chance pleine où qu'on soit, et `history.js` n'a rien à savoir de
 // tout ceci. Ce qui change, c'est la carte alentour.
 //
-// Son rayon s'élargit avec la croyance : huit degrés quand on n'y croit
-// pas — la flaque est alors à peu près sous nos pieds — trente quand on
-// n'y croit que.
-export const LUCK_NEAR = 8, LUCK_FAR = 30;
+// Son rayon s'élargit avec la croyance : dix degrés quand on n'y croit
+// pas — la flaque est alors à peu près sous nos pieds — quarante-huit
+// quand on n'y croit que. Trente ne suffisait pas : à pleine chance, le
+// curseur promettait une carte qui s'allume et ne donnait qu'un halo
+// autour du piéton.
+export const LUCK_NEAR = 10, LUCK_FAR = 48;
 
 /** `g` et `here` sont des vecteurs unitaires ; `wc` la part de chance. */
 export function luckAt(g, here, wc) {
@@ -309,7 +311,11 @@ export function luckAt(g, here, wc) {
 //
 // Elle ne sert QU'À LA CHANCE, et elle est repondérée par wC une seconde
 // fois : la fuite est donc en wC², elle n'apparaît pas par accident.
-export const SPILL_AMP = 0.42, SPILL_DEG = 18;
+//
+// Portée de 0,42 à 0,55 en même temps que la flaque s'élargissait : hors
+// de l'anneau, la chance plafonnait sinon trop bas pour franchir le
+// nouveau seuil de couleur.
+export const SPILL_AMP = 0.55, SPILL_DEG = 18;
 
 export function spillAt(h) {
   const d = Math.max(0.4 - h, h - SUN_MAX, 0);

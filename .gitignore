@@ -41,3 +41,18 @@ desktop.ini
 __pycache__/
 *.pyc
 *.zip
+
+# Les notes de travail. Elles ne partent pas sur le web (le rsync de
+# .github/workflows/meteo.yml exclut deja *.md) et elles n'ont pas non
+# plus a encombrer l'historique : elles vivent sur le poste de l'auteur.
+#
+# build/ N'EST PAS ici, et ne doit pas y venir : le robot GitHub execute
+# build/make_weather.py sur ses serveurs. L'ignorer couperait la meteo.
+#
+# README.md reste suivi : c'est la facade du depot sur GitHub.
+
+CLAUDE.md
+ETAT.md
+JOURNAL.md
+REPRISE.md
+LEGENDES.md

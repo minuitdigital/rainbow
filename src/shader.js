@@ -42,9 +42,11 @@ uniform float uScale;
 uniform mat3  uRot;
 uniform float uDecl, uSublon, uDrift, uDriftC, uDetail;
 uniform float uFine;                   // la finesse : 0 au monde, plein de près
-uniform float uHoles;                  // combien la tache se troue, au zoom
+uniform float uSeuil;                  // sous cette presence, du papier
 uniform float uFranges;                // tours de palette — l'ordre d'interférence
 uniform float uSat, uTache, uGrey;     // l'allure : teinte, force, encodage
+uniform float uPorte;                  // 1 = tracer le couloir du soleil
+uniform vec2  uCouloir;                // x = ecart des points, y = epaisseur
 uniform float uSea, uLand;             // profondeur d'encre des aplats
 uniform vec3  uBelief;                 // météo, légende, chance — somme = 1
 uniform vec3  uHere;                   // le réticule : là où se tient le piéton
@@ -77,8 +79,8 @@ const float GAIN = 1.8;
 const float LEGEND_FLOOR = 0.09;
 const float FIELD_FREQ = 3.6;
 const float CHANCE_FREQ = 0.62;
-const float LUCK_NEAR = 8.0, LUCK_FAR = 30.0;
-const float SPILL_AMP = 0.42, SPILL_DEG = 18.0;
+const float LUCK_NEAR = 10.0, LUCK_FAR = 48.0;
+const float SPILL_AMP = 0.55, SPILL_DEG = 18.0;
 
 // Les deux gammes des aplats : le papier, et l'encre du palier le plus
 // profond. uSea et uLand disent de combien on charge cette encre : 1,0
@@ -325,24 +327,30 @@ void main(){
     // sur la valeur t. La teinte, elle, continue de dire la même chose.
     float fv = clamp(pow(t, 1.15) * 0.98 * uTache, 0.0, 1.0);
 
-    // LES TROUS. Le vrai défaut de la tache vue de près n'était pas sa
-    // force, c'était sa CONTINUITÉ : une nappe sans bord, où le regard
-    // n'a rien à saisir. En montant un seuil avec le zoom, on ne garde
-    // que ce qui dépasse — le reste redevient du papier. La tache cesse
-    // d'être un nuage et devient un semis.
+    // LE SEUIL. Sous cette presence, du papier — rien du tout.
     //
-    // Ce n'est pas un effet : c'est la même sélection que partout
-    // ailleurs dans la pièce. La chance est seuillée serré pour faire
-    // des poches, le relief est découpé en paliers. Ici aussi, et par la
-    // même méthode — le bord est calculé par les dérivées d'écran, donc
-    // net à toute échelle, jamais crénelé.
+    // La premiere version montait ce seuil AVEC LE ZOOM et ne coupait
+    // qu'a 36 % au mieux : elle ne faisait rien avant x6, et pas grand
+    // chose apres. Le defaut qu'elle visait est pourtant reel, et il est
+    // pire de pres : un pays entier sous une nappe de couleur, ou le
+    // regard n'a aucun bord a saisir.
     //
-    // Au-dessus du seuil la valeur est INTACTE : on perd de la surface,
-    // pas de l'intensité. C'est très exactement ce qu'on cherchait.
-    if(uHoles > 0.001){
-      float cut = uHoles * 0.72;
+    // Le seuil vaut donc maintenant A TOUTE ECHELLE, et il est franc.
+    //
+    // ET LA GAMME QUI RESTE EST REETALEE. C'est le second temps, et il
+    // compte autant : garder les valeurs telles quelles ne laisserait
+    // qu'une plage etroite entre le seuil et un, donc des taches toutes
+    // pareilles. On etire ce qui depasse sur toute la course de la
+    // couleur — mais en partant de 0,30 et non de zero, sans quoi le bord
+    // de la tache serait blanc et l'on ne verrait plus sa forme.
+    //
+    // Le bord est calcule par les derivees d'ecran : net a toute echelle,
+    // jamais crenele. Meme methode que les paliers du relief.
+    if(uSeuil > 0.001){
       float w = max(fwidth(fv), 1e-4);
-      fv *= smoothstep(cut - w, cut + w, fv);
+      float edge = smoothstep(uSeuil - w, uSeuil + w, fv);
+      float over = clamp((fv - uSeuil) / max(1.0 - uSeuil, 1e-3), 0.0, 1.0);
+      fv = edge * mix(0.30, 1.0, over);
     }
 
     if(uGrey > 0.5){
@@ -386,5 +394,77 @@ void main(){
   // Multiplication : sur le papier, les taches teintent au lieu d'éclairer.
   // Si le fond redevenait sombre, il faudrait repasser en additif.
   vec3 col = ground * mix(vec3(1.0), hue, field);
+
+  // ====================================================== LE COULOIR
+  // DEUX POINTILLES, et la fenetre du soleil entre eux : 0 degre d'un
+  // cote, 42 de l'autre. Sans ce trace, on ne sait pas si l'absence de
+  // couleur quelque part vient d'un manque de pluie ou d'un soleil trop
+  // haut — et c'est toute la difference entre une carte qui se lit et une
+  // carte qu'on croit sur parole.
+  //
+  // Le trait suit l'ISO-HAUTEUR : la meme grandeur h que la porte, donc
+  // rigoureusement au bon endroit. Sa largeur passe par le GRADIENT DE h
+  // A L'ECRAN — combien de degres de hauteur par pixel — ce qui lui donne
+  // une epaisseur constante a toute echelle, et nette.
+  if(uPorte > 0.5){
+    vec2 gh = vec2(dFdx(h), dFdy(h));
+    float gn = length(gh);
+    float lw = max(gn, 1e-4);
+
+    // La ou la hauteur bascule d'un coup — pres des poles, et sur la
+    // couture de la carte — le gradient explose et le trait deviendrait
+    // une nappe. On l'efface plutot que de mentir sur sa position.
+    float sane = 1.0 - smoothstep(2.0, 6.0, lw);
+
+    // L'EPAISSEUR EST UN REGLAGE. Un trait de 1,6 pixel se lit sur un
+    // ecran d'atelier ; sur le tramage de l'e-ink il disparaitra, et il
+    // faudra pouvoir le charger sans toucher au code.
+    float tw = lw * 1.6 * uCouloir.y;
+    float line = max(1.0 - smoothstep(0.0, tw, abs(h - 0.4)),
+                     1.0 - smoothstep(0.0, tw, abs(h - SUN_MAX)));
+
+    // ---- LE POINTILLE, ET POURQUOI IL SUIT LA COURBE
+    //
+    // La premiere version decoupait le trait avec une trame diagonale de
+    // l'ecran : fract((x + y) * k). Elle a un defaut fatal et invisible
+    // tant qu'on ne tourne pas le globe — la ou la courbe court ELLE AUSSI
+    // en diagonale, la phase de la trame ne change plus le long du trait.
+    // Des portions entieres du couloir passaient alors tout allumees ou
+    // tout eteintes, et entre les deux naissaient les longues franges
+    // qu'on appelle un moire.
+    //
+    // La phase se prend donc LE LONG DE LA COURBE et non de l'ecran. Le
+    // gradient de h pointe perpendiculairement a l'iso-hauteur ; sa
+    // perpendiculaire est donc la tangente au trait. En projetant le pixel
+    // sur cette tangente, on obtient une abscisse curviligne : elle avance
+    // toujours quand on suit le trait, jamais quand on le traverse. Plus
+    // aucune orientation n'est privilegiee, et le moire n'a plus de quoi
+    // se former.
+    vec2 tang = gn > 1e-9 ? vec2(-gh.y, gh.x) / gn : vec2(1.0, 0.0);
+
+    // LA LONGUEUR DU TIRET SUIT LE ZOOM. Au monde entier, les deux courbes
+    // sont serrees et tres incurvees : un tiret court les epouse. De pres
+    // elles sont presque droites, et le meme tiret court devient un
+    // gresillement — on l'allonge.
+    //
+    // uDetail et non uFine : uDetail est la rampe du zoom toute seule,
+    // quand uFine est cette rampe MULTIPLIEE par le curseur « finesse ».
+    // Couper la finesse aurait fige le pointille au monde entier, et
+    // personne n'aurait fait le rapprochement.
+    // Et l'ECART est un reglage aussi : uCouloir.x multiplie la course
+    // entiere, zoom compris. Un pointille trop serre fait un trait plein.
+    float step_px = mix(12.0, 26.0, clamp(uDetail, 0.0, 1.0)) * uCouloir.x;
+
+    // UNE SINUSOIDE PLUTOT QU'UN CRENEAU. Un step() sur un fract() a des
+    // bords francs a l'echelle du pixel : c'est la seconde source de
+    // moire, et celle-la se voit meme sur un trait bien oriente. La
+    // sinusoide n'a aucun bord — le point s'ouvre et se ferme en douceur,
+    // et le rendu reste propre a n'importe quelle densite d'ecran.
+    float s = dot(gl_FragCoord.xy, tang) / step_px;
+    float dash = smoothstep(0.18, 0.62, 0.5 + 0.5 * sin(6.28318 * s));
+
+    col = mix(col, vec3(0.42, 0.45, 0.50), line * dash * sane * 0.85);
+  }
+
   fragColor = vec4(mix(vec3(1.0), col, cov), 1.0);
 }`;
