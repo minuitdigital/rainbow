@@ -10,6 +10,7 @@
 //
 //      projection   maths pures, ne connaît personne
 //      legends      les hauts lieux de la croyance, écrits à la main
+//      weather      la grille Open-Meteo : chargement, fraîcheur, lecture
 //      sky          la porte du soleil, et le partage de la croyance
 //      ground       le relief et les lieux
 //      view         le seul état mutable : où, de quelle distance, quand
@@ -18,7 +19,7 @@
 //      shader       le GLSL
 //      map          la carte peinte
 //      ink          le calque 2D
-//      panel        les quatre registres de droite
+//      panel        les cinq registres de droite
 //      chrome       la main
 //      main         ici
 // =========================================================================
@@ -36,6 +37,39 @@ import { bind } from './chrome.js';
 
 const glCv = document.getElementById('gl');
 const inkCv = document.getElementById('ink');
+
+// ------------------------------------------------- ce qui est encore en route
+//  Huit mégaoctets de relief, et un demi pour la météo. En local on ne les
+//  voit pas passer ; en ligne, c'est plusieurs secondes de carte blanche —
+//  et une carte blanche qui se remplit ressemble beaucoup à une carte
+//  cassée. Le texte de départ est écrit dans index.html pour paraître dès
+//  le premier octet ; à partir d'ici, c'est le compte réel.
+//
+//  Il s'efface dès que plus rien n'est en route, et ne revient qu'au
+//  prochain relevé météo, six heures plus tard.
+
+const loadBox = document.getElementById('loading');
+
+/** nom → octets reçus, et total quand le serveur le dit. */
+const inFlight = new Map();
+
+const mo = o => (o / 1048576).toFixed(1);
+
+function onLoading(nom, got, total, done) {
+  if (done) inFlight.delete(nom);
+  else inFlight.set(nom, { got, total });
+
+  if (!inFlight.size) { loadBox.hidden = true; return; }
+
+  const parts = [];
+  for (const [n, { got: g, total: t }] of inFlight) {
+    // Sans content-length — compression au vol, serveur bavard — on ne
+    // sait pas où l'on va : on dit ce qui est arrivé, et rien de plus.
+    parts.push(t ? `${n} ${mo(g)}/${mo(t)} Mo` : `${n} ${mo(g)} Mo`);
+  }
+  loadBox.textContent = parts.join('  ·  ');
+  loadBox.hidden = false;
+}
 
 // --------------------------------------------------------------- la mesure
 
@@ -168,7 +202,7 @@ window.__rainbow = true;
 
 const fallback = document.getElementById('fallback');
 
-if (!initMap(glCv, invalidate)) {
+if (!initMap(glCv, invalidate, onLoading)) {
   fallback.innerHTML = 'Cette carte est calculée par le processeur graphique.'
                      + '<br>WebGL 2 n\'est pas disponible dans ce navigateur.';
   fallback.hidden = false;
@@ -195,5 +229,5 @@ if (!initMap(glCv, invalidate)) {
       document.getElementById('l-meteo').classList.remove('off');
       invalidate();
     }
-  });
+  }, onLoading);
 }

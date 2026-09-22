@@ -133,7 +133,7 @@ function compile(type, src) {
  * Rend false si WebGL 2 manque — la page affiche alors son repli.
  * onReady est appelé chaque fois qu'une texture finit d'arriver.
  */
-export function initMap(canvas, onReady) {
+export function initMap(canvas, onReady, onLoading = () => {}) {
   gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
   if (!gl) return false;
 
@@ -165,17 +165,59 @@ export function initMap(canvas, onReady) {
   emptyWeather();
   uploadLegends();
 
-  const load = (src, unit, mip) => {
-    const img = new Image();
-    img.onload = () => {
-      try { upload(unit, img, mip); } catch (err) { /* on garde le blanc */ }
+  // ON PASSE PAR fetch ET NON PAR img.src DIRECTEMENT, pour une seule
+  // raison : une balise image ne dit pas où elle en est. Huit mégaoctets
+  // de relief arrivent en silence, et sur une connexion lente la page
+  // reste blanche sans que rien n'explique pourquoi.
+  //
+  // Mais on REDONNE les octets à une vraie balise image par un blob : le
+  // versement WebGL se comporte alors exactement comme avant, avec le même
+  // UNPACK_FLIP_Y. Passer par createImageBitmap aurait été plus direct et
+  // aurait changé l'orientation sur certains pilotes — c'est-à-dire la
+  // carte à l'envers, pour un compteur de progression.
+  const load = async (src, unit, mip, nom) => {
+    let url = null;
+    try {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(src + ' : ' + res.status);
+
+      // Sans content-length (compression au vol, serveur bavard), on
+      // compte quand même les octets reçus : le total reste inconnu, et
+      // l'affichage se contente de dire ce qui est arrivé.
+      const total = +res.headers.get('content-length') || 0;
+      const chunks = [];
+      let got = 0;
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        got += value.length;
+        onLoading(nom, got, total, false);
+      }
+
+      url = URL.createObjectURL(new Blob(chunks));
+      await new Promise((ok, ko) => {
+        const img = new Image();
+        img.onload = () => {
+          try { upload(unit, img, mip); } catch (e) { /* on garde le blanc */ }
+          ok();
+        };
+        img.onerror = ko;
+        img.src = url;
+      });
+    } catch (e) {
+      // Une texture manquante n'arrête rien : le blanc 1x1 tient la place
+      // (piège n°2), et la carte existe quand même.
+      console.warn('%s n a pas pu etre charge (%s)', src, e.message);
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+      onLoading(nom, 0, 0, true);
       onReady();
-    };
-    img.onerror = onReady;
-    img.src = src;
+    }
   };
-  load('data/field.png', 1, true);
-  load('data/mask.png', 2, false);
+  load('data/field.png', 1, true, 'relief');
+  load('data/mask.png', 2, false, 'masque');
 
   return true;
 }

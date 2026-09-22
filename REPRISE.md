@@ -34,8 +34,8 @@ scientifique**. Mais l'algorithme doit reposer sur de vraies conditions météo.
 
 ```
                data/field.png ─┐
-               data/earth.jpg ─┼──► src/shader ──► src/map ──► <canvas id="gl">
-                data/mask.png ─┘                                      │
+                data/mask.png ─┼──► src/shader ──► src/map ──► <canvas id="gl">
+             data/weather.png ─┘   (relevé par un robot, une fois par jour)                                      │
                                                                       │
                 data/coast.js ─┐                                      │
               data/terrain.js ─┼──► src/ink ────────────────► <canvas id="ink">
@@ -50,15 +50,16 @@ quelqu'un d'autre, bien plus que le nombre de lignes.
 ```
 src/projection.js  ← rien                     maths pures, sans état
 src/legends.js     ← rien                     les hauts lieux, et LEURS SOURCES
-src/sky.js         ← projection, legends      soleil, bruit, flaque, fuite
+src/weather.js     ← rien                     LA GRILLE MÉTÉO : chargement, fraîcheur, lecture
+src/sky.js         ← projection, legends, weather   soleil, pluie, flaque, fuite
 src/ground.js      ← projection, données      terrain, villes, plus proche lieu
-src/view.js        ← projection               LE seul module qui se souvienne
+src/view.js        ← projection, weather      LE seul module qui se souvienne
 src/history.js     ← view, sky                les 24 h passées, RECALCULÉES
 src/zones.js       ← sky, ground, view        ce qui vit d'une image à l'autre
 src/shader.js      ← rien                     le GLSL, rien d'autre
-src/map.js         ← view, shader             contexte WebGL, textures, une image
+src/map.js         ← view, shader, sky, weather   contexte WebGL, textures, une image
 src/ink.js         ← projection, view, zones, ground   le calque 2D
-src/panel.js       ← view, sky, history, ink  les quatre registres de droite
+src/panel.js       ← view, sky, history, map, weather, ink   les cinq registres
 src/chrome.js      ← projection, view         la main : glissé, molette, touches
 src/main.js        ← tous                     l'assemblage et la boucle
 ```
@@ -70,6 +71,9 @@ Pour ne pas relire tout le projet à chaque modification :
 | Ce qu'on veut changer | Le fichier, et lui seul |
 |---|---|
 | une croyance, un lieu, une phrase, **une source** | `src/legends.js` |
+| **d'où vient la météo** — la source, la maille, les variables | `build/make_weather.py`, **et lui seul** |
+| la lecture de la grille météo, sa fraîcheur | `src/weather.js` |
+| ce que la page coûte, les deux machines | `src/view.js` (`RIGS`, `beat`) + `src/panel.js` |
 | la formule de la présence | `src/sky.js` **et** `src/shader.js`, puis `node build/check_mirror.mjs` |
 | la flaque de chance, la fuite de la porte | idem — les deux, puis le miroir |
 | les paliers d'altitude, le lustre, le grain, les trous | `src/shader.js` |
@@ -80,7 +84,7 @@ Pour ne pas relire tout le projet à chaque modification :
 | la mise en page du panneau, les graphes, les réglages | `src/panel.js` + `style.css` |
 | ce que couvrent les 24 h, la finesse de l'axe du temps | `src/history.js` |
 | le glissé, le zoom, les touches | `src/chrome.js` |
-| l'état : zoom maximal, vitesse, allure, **la marche** | `src/view.js` |
+| l'état : zoom maximal, vitesse, allure, **la marche**, **l'horloge** | `src/view.js` |
 | la structure de la page et le texte d'explication | `index.html` |
 
 Un module touché ne demande **pas** de relire les autres, à une exception
@@ -117,6 +121,7 @@ mur.
 | `style.css` | le registre : papier, encre, spectre |
 | `src/projection.js` | Equal Earth, aller et retour, et l'algèbre de la sphère |
 | `src/legends.js` | les hauts lieux de la croyance, et leurs sources |
+| `src/weather.js` | la grille Open-Meteo : chargement, fraîcheur, lecture |
 | `src/sky.js` | la porte du soleil, la croyance, la flaque, la fuite |
 | `src/ground.js` | relief accessible, villes, plus proche lieu |
 | `src/view.js` | où l'on regarde, de quelle distance, quand, de quelle allure, **et la foulée** |
@@ -125,13 +130,20 @@ mur.
 | `src/shader.js` | le GLSL, rien d'autre |
 | `src/map.js` | contexte WebGL, textures, une image |
 | `src/ink.js` | le calque 2D, le piéton du réticule, la liste d'encombrement |
-| `src/panel.js` | les quatre registres, et la feuille de provenance |
+| `src/panel.js` | les cinq registres, la provenance, et les notes |
 | `src/chrome.js` | la main : glissé, molette, touches, feuille d'explication |
 | `src/main.js` | l'assemblage et la boucle d'images |
 
-Généré, dans `data/` : `field.png` (8 Mo), `earth.jpg` (3,9 Mo, carte
-d'**ombres**), `mask.png` (48 Ko), `coast.js` (888 Ko), `cities.js`
-(118 Ko), `terrain.js` (86 Ko).
+Généré, dans `data/` : `field.png` (8 Mo), `mask.png` (48 Ko),
+`coast.js` (888 Ko), `cities.js` (118 Ko), `terrain.js` (86 Ko).
+
+Et **`weather.png`** (~500 Ko), relevé par le robot une fois par jour.
+Celui-là n'est PAS dans le dépôt : il est fabriqué à chaque publication et
+publié directement. Voir §7 — c'est la seule exception du `.gitignore`, et
+elle a sa raison.
+
+`earth.jpg` a été retiré en septembre 2026 : 3,9 Mo pour creuser les
+versants de 14 %, et la touche « r » qui allait avec.
 
 ### Les documents
 
@@ -145,7 +157,22 @@ d'**ombres**), `mask.png` (48 Ko), `coast.js` (888 Ko), `cities.js`
 
 `make_field.py`, `make_texture.py`, `make_terrain.py`, `make_coast.py`,
 `make_cities.py`, `eqearth.py`, `bundle.py` (recolle `dist/index.html`),
-et **`check_mirror.mjs`** — vingt règles, voir piège n°19.
+et **`check_mirror.mjs`** — vingt et une règles, voir piège n°19.
+
+Plus deux venus avec la météo :
+
+- **`make_weather.py`** — le relevé mondial. Tourne sur le robot, une fois
+  par jour. `python build/make_weather.py 12` prend une maille de douze
+  degrés en une minute : de quoi vérifier toute la chaîne sans attendre le
+  quart d'heure du relevé complet.
+- **`probe_s3.py`** — un sondage du dépôt AWS d'Open-Meteo, qui ne fabrique
+  rien et ne décide de rien. Il sert à savoir si l'on pourra un jour
+  abandonner l'API par points. Voir §7.
+
+`.github/workflows/meteo.yml` tient le robot. **Le pont vers l'ordinateur
+de l'auteur interdit d'écrire dans ce dossier** — c'est une protection, pas
+une panne : un fichier posé là s'exécute sur les serveurs de GitHub. Claude
+le dépose donc dans `build/` et l'auteur le déplace.
 
 Dépendances Python : `numpy`, `pillow`, `tifffile`, `imagecodecs`, `pyproj`.
 
@@ -184,7 +211,7 @@ ne dit pas où se tient quelqu'un ; une ville si.
 
 **Plafond de zoom : ×32**, limite de la *donnée* (`coast.js` en 1:50 m).
 
-**Treize modules, dépendances à sens unique**, noms uniques.
+**Quatorze modules, dépendances à sens unique**, noms uniques.
 
 ### Ce qui a changé en septembre 2026 — et qui remplace l'ancien
 
@@ -245,6 +272,63 @@ bords calculés par les dérivées d'écran.
 zoom.** Lié à la finesse, il faisait boucler la palette — bleu, vert,
 jaune, orange, rose, puis cyan et ça recommence : un arc-en-ciel de trop
 par-dessus le sujet. La complexité de près vient des trous.
+
+**LA MÉTÉO EST VRAIE.** Le bruit fractal a cédé la place à Open-Meteo :
+`precipitation` et `direct_radiation`, relevés une fois par jour sur toute
+la Terre et versés dans une image que la page lit comme elle lit
+`field.png`. Le tableau ne fait AUCUN appel réseau vers un service — il
+télécharge un fichier statique. Voir §7.
+
+**ET LA CARTE EN EST ALLÉE PLUS VITE.** `rain` était un `fbm` de trois
+octaves, soit vingt-quatre hachages par pixel ; c'est devenu deux lectures
+de texture. Côté JavaScript, `meteoAt` est appelé 321 fois par `recall` et
+2 300 fois par balayage — un tableau au lieu d'un bruit fractal, c'est cent
+fois moins cher. Brancher de vraies données a ALLÉGÉ la pièce, ce qui
+n'allait pas de soi.
+
+**LA TROUÉE N'EST PLUS UNE INVENTION.** Deux gaussiennes sur la latitude
+décrétaient qu'il fait beau sous les tropiques et sur les rails
+dépressionnaires. C'était joli et c'était faux. Le rayonnement DIRECT reçu
+au sol, rapporté à ce qu'un ciel parfaitement clair donnerait à cette
+hauteur de soleil, dit littéralement si des rayons non interceptés
+arrivent ici — la condition même d'un arc-en-ciel. En mode météo, le
+masque littoral disparaît : il rattrapait la climatologie inventée, il n'y
+a plus rien à rattraper. La mer s'allume donc pour de bon, et les
+étiquettes disent déjà qu'il n'y a personne pour voir.
+
+**LA PLUIE EST CELLE DU VOISINAGE**, dilatée d'une case par le script. On
+ne voit pas d'arc DANS l'averse : on est dessous, il pleut, le ciel est
+gris. On le voit à côté.
+
+**DEUX HORLOGES, UNE SEULE À LA FOIS.** `dev` invente un temps que le
+curseur multiplie jusqu'à cent mille ; `météo` suit l'heure réelle et le
+curseur devient un *quand*, de −24 h à +48 h. Les deux vont ensemble : un
+temps inventé ne peut pas aller chercher une prévision, et une prévision ne
+se laisse pas accélérer. En météo la boucle d'images ne tourne QUE toutes
+les dix secondes — le soleil avance de quatre centièmes de degré pendant ce
+temps, et un Raspberry Pi n'a pas à chauffer pour ça.
+
+**LE RELIEF OMBRÉ EST PARTI**, `earth.jpg` et la touche « r » avec lui. Le
+lustre creusait les versants de 14 % pour 3,9 Mo, une texture de 8192
+pixels en mémoire et une lecture de plus par pixel. Les terres sont des
+aplats purs, à bords calculés, nets à toute échelle.
+
+**UN CINQUIÈME SOUS-REGISTRE : *performance*.** Images par seconde, temps
+du shader mesuré par le pilote, temps JavaScript détaillé en trois postes,
+pixels réels. Chaque ligne porte un « ? » qui dit ce qu'elle mesure ET ce
+qui la fait monter — un chiffre en millisecondes ne dit rien tout seul, et
+sans savoir d'où il vient on optimise au hasard.
+
+**DEUX MACHINES, choisies à la main.** `laptop` et `mini` : le plafond de
+pixels réels passe de 2 à 1 par pixel de page — quatre fois moins de
+travail pour le shader — le balayage des zones s'élargit de 30 à 44 px, et
+s'espace de 200 à 320 ms. Manuel et mémorisé : une détection automatique
+aurait changé le rendu sans le dire, et sur une œuvre on ne veut pas d'un
+tableau qui se règle dans notre dos.
+
+**DEUX CASES PLUTÔT QU'UNE À COCHER**, pour l'horloge comme pour la
+machine. Avec une seule, il faut se souvenir de ce que « coché » voulait
+dire ; avec deux, on lit ce qu'on a choisi.
 
 **LA SOURCE EST UN CHAMP OBLIGATOIRE des légendes**, et `null` est une
 réponse. Citer une croyance sans dire d'où elle vient, sur un mur, sous un
@@ -356,6 +440,67 @@ n'étaient plus une liste mais un tableau de bord.
     `centreVec` manquant, donc un écran blanc, donc une demi-heure de
     recherche à côté. Comparer les copies avant d'envoyer.
 
+25. **PAS DE PRÉCISION PAR DÉFAUT POUR LES ÉCHANTILLONNEURS EN TABLEAU.**
+    `precision highp float;` couvre les flottants, et `sampler2D` s'en
+    tire avec une précision implicite — mais `sampler2DArray`,
+    `sampler3D` et leurs variantes entières exigent la leur,
+    explicitement. Sans elle le shader ne compile pas.
+
+        precision highp sampler2DArray;
+
+    Le symptôme est un **écran NOIR**, pas blanc : le canvas a
+    `alpha: false`, il reste noir tant que rien n'y est dessiné. Attrapé
+    en une seconde par `glslangValidator`, jamais à l'œil — voir §10.
+
+26. **LA VEILLE A UN ANGLE MORT.** Elle attrape les modules qui ne se
+    chargent pas, parce qu'elle attend `window.__rainbow`. Mais ce drapeau
+    est posé AVANT `initMap` : tout ce qui échoue après lui échoue en
+    silence, exactement comme au piège n°14 mais sans le filet. C'est ce
+    qui a rendu le piège n°25 muet. **À combler** — voir §8.
+
+27. **UN HORODATAGE SANS FUSEAU EST UNE HEURE LOCALE**, en JavaScript.
+    C'est la norme, et c'est un piège : Open-Meteo rend
+    `2026-09-21T00:00` même interrogé en `timezone=UTC`, et `Date.parse`
+    le lit alors décalé du fuseau du spectateur. Zéro à Londres, deux
+    heures à Paris, neuf à Tokyo. La carte serait juste chez les uns et
+    fausse chez les autres, ce qui est la pire façon de s'en apercevoir.
+    Le script pose le `Z` ; `utcOf()` dans `weather.js` est la ceinture.
+
+28. **DEUX HORLOGES DANS LA MÊME BOÎTE, ET TOUTES LES DEUX SINCÈRES.**
+    `elapsedHours()` a été réécrit pour lire l'heure réelle en mode météo,
+    mais `simDate()` est resté branché sur `simH` — l'horloge accumulée du
+    mode dev, qui avait couru à ×3 981 avant le basculement. Le panneau et
+    le shader lisaient l'une, `recall` et le balayage lisaient l'autre.
+    Le symptôme était retors : un héliodon affichant la bonne hauteur de
+    soleil, juste au-dessus d'une pendule avançant de six heures.
+    **Une seule source d'heure, et c'est `elapsedHours`.**
+
+29. **OPEN-METEO COMPTE UN APPEL PAR COORDONNÉE**, quoi qu'en dise sa
+    formule. La documentation publie *poids = nLieux × (nJours/14) ×
+    (nVariables/10)*, ce qui ferait 0,057 appel par point ; le compteur
+    réel monte d'environ un. Un lot de 400 points passe, le suivant se
+    fait refuser trois secondes plus tard. D'où :
+
+        10 000 appels/jour  ->  10 000 points au maximum
+        600 appels/minute   ->  600 points par minute, incompressible
+
+    C'est ce qui borne la maille à 3°. Le plancher n'est écrit nulle part ;
+    il se découvre en se prenant des 429.
+
+30. **L'URL A UNE LONGUEUR MAXIMALE.** Mille coordonnées font douze mille
+    caractères et le serveur répond 414. La limite usuelle est de huit
+    mille. `fetch` coupe désormais le lot en deux tout seul plutôt que de
+    retenter à l'identique — réessayer une URL trop longue ne la raccourcit
+    pas.
+
+31. **GITHUB REFUSE LES `../` DANS SON ÉDITEUR**, et le pont vers
+    l'ordinateur de l'auteur refuse d'écrire dans `.github/workflows/`.
+    Les deux sont des protections, pas des pannes. Pour déplacer le robot,
+    deux lignes dans le terminal du dépôt :
+
+        mkdir .github\workflows
+        move build\meteo.workflow.yml .github\workflows\meteo.yml
+
 ---
 
 ## 6. L'algorithme actuel
@@ -378,8 +523,16 @@ près, et **la météo comme la légende lui sont soumises sans recours**.
 
 **Les trois parts.**
 
-- **Météo** — `1 − exp(−pluie × trouée/1,2 × 6)`. *À remplacer par
-  Open-Meteo, voir §7.*
+- **Météo** — `1 − exp(−pluie × trouée/1,2 × 6)`, et les deux termes
+  sont désormais MESURÉS. `pluie` est la précipitation du voisinage,
+  dilatée d'une case ; `trouée` vaut `0,14 + 1,66 × clarté`, où la clarté
+  est le rayonnement direct rapporté à un ciel parfaitement clair. La
+  remise à l'échelle garde exactement la course de l'ancienne formule,
+  plancher compris : basculer de `dev` à `météo` ne change pas l'échelle
+  de la carte, seulement ce qu'elle raconte.
+  En mode `dev`, le bruit fractal et la climatologie inventée reprennent
+  leur place — les deux branches vivent côte à côte dans `sky.js` et dans
+  le shader, et **le miroir vérifie les deux**.
 - **Légende** — plancher de 0,09 partout, relevé par le haut lieu le plus
   proche : `max(plancher, force × exp(−corde²/rayon²))`. Un **maximum**,
   pas une somme.
@@ -412,7 +565,7 @@ la pose de repos de `walkerGait(π/2)`. Changer l'un, changer l'autre.
 | ESTIMATEUR | position, heure, héliodon, présence |
 | CROYANCE | les trois curseurs en simplexe |
 | LÉGENDES | les pastilles, ce qu'on dit du lieu, **et d'où ça vient** |
-| RÉGLAGES | quatre sous-registres — mémorisé dans `localStorage` |
+| RÉGLAGES | cinq sous-registres — mémorisé dans `localStorage` |
 
 **Les réglages, par sous-registre :**
 
@@ -421,7 +574,17 @@ la pose de repos de `walkerGait(π/2)`. Changer l'un, changer l'autre.
 | la tache | intensité · couleur · franges · trous · finesse · dégradé |
 | le fond | terres · mer |
 | le panneau | transparence · contraste · texte · icônes · point |
-| le temps | vitesse |
+| le temps | **horloge** (dev / météo) · vitesse, qui devient *quand* |
+| performance | les jauges, et **machine** (laptop / mini) |
+
+**Le registre *performance* ne dit rien du ciel** : c'est un instrument
+d'atelier, replié par défaut. Deux chronomètres, et il faut les deux —
+`performance.now()` autour de `paint` ne mesure PAS le processeur
+graphique, puisque `drawArrays` rend la main avant que le shader ait
+commencé. Le vrai temps vient de `EXT_disjoint_timer_query_webgl2`, quand
+le navigateur la donne ; un tiret veut dire qu'il la refuse, pas que c'est
+gratuit. Règle de lecture : **images/s bas + javascript bas = c'est le
+GPU**.
 
 `view.look` porte : `sat`, `tache`, `grey`, `icon`, `sea`, `land`, `fine`,
 `holes`, `franges`, `dot`.
@@ -453,29 +616,102 @@ terres, 4,0 pour la mer (sa gamme est deux fois plus courte).
 
 ---
 
-## 7. Prochaine étape : brancher la vraie météo
-
-**L'obstacle** n'est pas la donnée, c'est sa forme. La carte calcule un champ
-continu ; Open-Meteo répond par points.
+## 7. La vraie météo — FAIT
 
 ```
-Open-Meteo ──► script ──► weather.png (quelques Ko) ──► la page ──► le shader
+Open-Meteo ──► build/make_weather.py ──► data/weather.png ──► la page ──► le shader
+      (une fois par jour, sur un robot GitHub)      (~500 Ko)
 ```
 
-- grille **5°** = 2 592 points · trois variables · deux passages par jour =
-  **5 200 appels**, sous le plafond gratuit de 10 000/jour
-- image : 72 × 36 cases, 48 pas de temps en damier, trois canaux
-- **GitHub Actions**, `cron` deux fois par jour, le script recommite le PNG
-- une ligne du shader : `fbm(...)` devient `texture(uWeather, ...)`
+**Le tableau ne fait AUCUN appel vers un service.** Il télécharge un
+fichier statique, comme il télécharge `field.png`, et le redemande toutes
+les six heures. Pas de clé, pas de compte, pas de serveur. C'est ce qui
+permet à l'objet de tourner des années sur un mur.
 
-**Deux points d'attention :** 5° font 550 km, garder le bruit fractal comme
-texture haute fréquence par-dessus ; la résolution doit rester une constante
-unique. Open-Meteo est en **CC-BY 4.0** — crédit obligatoire.
+### Le relevé
 
-**Et le curseur change de nature** : il fera défiler la prévision réelle sur
-48 heures.
+- grille **3°** — 7 200 points, 72 % du quota quotidien, quatorze minutes.
+  C'est le plafond de ce qu'Open-Meteo laisse prendre : voir piège n°29,
+  qui a coûté une soirée.
+- **96 heures** au pas de 3 h, soit 32 images : d'hier à après-demain. La
+  marge est délibérée — si le robot rate un passage, le tableau tient
+  encore le lendemain sans rien dire.
+- deux variables : `precipitation` et `direct_radiation`. Pas la
+  nébulosité — voir §4, la trouée.
+- **Open-Meteo est en CC-BY 4.0**, crédit obligatoire. Il est dans la
+  feuille d'explication, section « D'où viennent les données », avec le
+  lien que la licence exige.
 
----
+### Le fichier
+
+Un atlas **VERTICAL** : 32 pas de temps empilés l'un sous l'autre,
+120 × 1 920. Vertical et non en damier, pour une raison qui n'a l'air de
+rien — chaque pas de temps y reste CONTIGU en mémoire, et la page n'a
+qu'à découper le tableau de pixels en tranches. Un damier aurait demandé
+trente-deux recopies ligne à ligne sur un Raspberry Pi.
+
+**La ligne 0 est la latitude la plus au sud.** L'image paraît donc à
+l'envers dans une visionneuse : c'est voulu. La page l'envoie telle quelle
+au processeur graphique, sans retournement, et le shader lit
+`v = (lat + 90) / 180`. La retourner « pour qu'elle soit jolie » mettrait
+l'Australie au Groenland.
+
+|  | ce que le canal porte |
+|---|---|
+| R | la pluie **du voisinage**, dilatée d'une case |
+| G | la clarté directe |
+| B | la pluie locale — les étiquettes, pas le shader |
+
+### Le robot
+
+`.github/workflows/meteo.yml`, une fois par jour à 4h10 UTC, plus à chaque
+poussée sur `main`.
+
+**IL NE COMMITE RIEN.** Le fichier change entièrement chaque jour, et git
+ne sait pas compresser la différence entre deux PNG : il en garderait
+chaque version en entier, soit environ 250 Mo par an, indéfiniment. Le
+robot le fabrique, publie le site, et l'oublie. C'est la seule exception
+du `.gitignore`, et c'est écrit dedans.
+
+Un **cache** garde le dernier relevé d'une exécution à l'autre : un
+déploiement Pages remplace TOUT le site, et pousser du code sans relever
+la météo ferait repartir le site sans elle. Une poussée de code ne
+consomme donc pas le quota — seuls le passage quotidien et un lancement
+manuel interrogent Open-Meteo.
+
+Ce qu'il faut régler une fois dans le dépôt :
+
+- `Settings → Pages → Source` : **GitHub Actions**
+- `Settings → Actions → General` : **Read and write permissions**
+
+### Pour aller plus fin, un jour
+
+3° font 333 km — plus grossier qu'une averse. Le bruit fractal joue
+par-dessus comme texture haute fréquence, et c'était déjà le plan. Mais
+pour faire mieux il faut une source qui livre des **grilles** et non des
+points. Ce qui a été regardé :
+
+- **ECMWF open data** — 0,25°, CC-BY, sans clé. Mais il ne contient ni
+  rayonnement ni nébulosité : seulement `10u, 10v, 2t, msl, ro, skt, sp,
+  st, stl1, tcwv, tp`. Pas de trouée possible. **Écarté.**
+- **OPeNDAP de la NOAA** — aurait tout donné sans GRIB. **Retiré par la
+  NOAA en septembre 2026.**
+- **GRIB2 de GFS**, 0,25° natif — a tout ce qu'il faut, au prix d'une
+  bibliothèque de décodage dont les paquets Windows sont « non testés ».
+- **Le dépôt AWS d'Open-Meteo** (`s3://openmeteo`, anonyme, sans quota) —
+  les mêmes données, en champs complets. `build/probe_s3.py` sert à savoir
+  ce qu'il contient vraiment. **Piste ouverte.**
+
+Un changement de source ne toucherait **que `make_weather.py`**. Le format
+du fichier, `weather.js`, le shader et tout le reste n'en savent rien —
+`weather.js` lit `nx` et `ny` dans le JSON. C'est exactement ce que la
+table du §2 promet.
+
+Et le bénéfice serait double : à partir d'une vraie grille, on prendrait
+le **maximum de la pluie sur les cellules** d'une case au lieu d'un point
+tiré au hasard dedans. C'est la dilatation qu'on fabrique déjà, mais
+offerte par la donnée.
+
 
 ## 8. Ce qui reste, par ordre
 
@@ -489,10 +725,24 @@ unique. Open-Meteo est en **CC-BY 4.0** — crédit obligatoire.
   query) et `src/panel.js` (l'emprise + le geste). `index.html` ne bouge
   pas.
 
+*Dette technique, mesurée mais pas encore payée :*
+- **`recall()` est appelé à chaque image** par `refreshPanel`. 321 points
+  × 2 bruits fractals × 3 octaves = ~15 000 hachages par image, pour un
+  passé qui n'a pas changé. Une garde temporelle à 7 Hz suffirait.
+- **`drawRings` reparcourt tout `COAST`** (888 Ko de lon/lat) par image, et
+  refait `cos`/`sin` sur des vecteurs qui ne changent jamais. C'est la
+  dépense n°1 au monde entier. Figer les vecteurs, décimer selon le zoom.
+- **`cssOf()` appelle `getComputedStyle`** des dizaines de fois par image,
+  ce qui force un recalcul de style à chaque appel. Un cache invalidé par
+  le contraste, et c'est réglé.
+- Le registre *performance* est là pour chiffrer tout ça avant et après.
+
 *À juger à l'écran :*
 - Figer les défauts de **trous**, **finesse** et **franges**.
-- Retirer `earth.jpg` et la touche `r` une fois le choix arrêté (−3,9 Mo).
 - Le noir de la trame de Bayer est à 0,20. Descendre à 0,12 ?
+- **Combler l'angle mort de la veille** — piège n°26. Déplacer
+  `window.__rainbow` après `initMap`, ou envelopper le démarrage dans un
+  `try` qui écrit ce qu'il attrape.
 - `#box-est` fait 33 vh. À revoir sur le 10,3″ réel, qui sera en 4:3.
 - Les vingt pastilles occupent beaucoup de place. Index de l'œuvre, ou
   outil de navigation ?
@@ -528,7 +778,9 @@ intactes, `src: null`, à trancher :
 Plus huit pistes sourcées qui combleraient les trous de la liste (Ashanti,
 Fang, Albanie, Malaisie, Philippines, Nicaragua, Mésopotamie, Muisca).
 
-**B — Données réelles** — voir §7.
+**B — Données réelles** — ~~à faire~~ **FAIT**, voir §7. Reste la
+question de la maille : 3° est le plafond de l'API par points, et le dépôt
+AWS d'Open-Meteo pourrait la faire tomber à 0,25°.
 
 **C — Interaction du tableau**
 Joystick : navigation par sauts · bouton : déposer un indice · où vivent
@@ -581,9 +833,19 @@ puis `http://localhost:8000`. **Pas `python -m http.server`** (piège n°16).
 node build/check_mirror.mjs
 ```
 
-**Navigation** : glisser · molette · double-clic (×2) · flèches · `r`
-(aplats ↔ relief ombré) · `0` (recentrer) · `f` (plein écran) · `?`
-(explication) · Échap (fermer une feuille).
+**Relever la météo** — quatorze minutes, 72 % du quota du jour :
+
+```bash
+python build/make_weather.py
+```
+
+`python build/make_weather.py 12` prend une maille de douze degrés en une
+minute : la carte est inutilisable, mais toute la chaîne se vérifie.
+Dépendances : `numpy`, `pillow`.
+
+**Navigation** : glisser · molette · double-clic (×2) · flèches ·
+`0` (recentrer) · `f` (plein écran) · `?` (explication) · Échap (fermer
+une feuille).
 
 **Régénérer les données** : voir les scripts de `build/`, dans l'ordre
 `make_field`, `make_terrain`, `make_texture`, `make_coast`, `make_cities`,
@@ -604,6 +866,15 @@ node build/check_mirror.mjs
   insère un manifeste et corrompt les images.
 - Après toute retouche à `src/sky.js` ou `src/shader.js` :
   `node build/check_mirror.mjs`.
+- **Et après toute retouche au GLSL, le compiler avant de l'envoyer.**
+  `node --check` ne voit qu'une chaîne de caractères ; le shader, lui, ne
+  se plaint qu'à l'écran, et en silence (piège n°25). Claude dispose de
+  `glslangValidator` : extraire `FRAGMENT`, l'écrire dans un `.frag`, le
+  compiler. Une seconde, contre une demi-heure de recherche.
+- **Le navigateur intégré n'atteint PAS le `localhost` de l'auteur** — ni
+  en `localhost`, ni en `127.0.0.1` : l'accès est refusé. Le piège n°17
+  reste vrai, mais c'est l'auteur qui regarde. Quand quelque chose cloche :
+  **F12, onglet Console**, et coller les lignes rouges.
 - Pour vérifier : l'auteur lance `python serve.py`, Claude regarde
   `http://localhost:8000` dans le navigateur intégré. **Si le volet est
   masqué, `requestAnimationFrame` ne tourne pas et la page reste figée sur

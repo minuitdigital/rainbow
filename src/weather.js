@@ -67,6 +67,9 @@ let grid = null;
 /** Appelé quand la grille arrive ou change. Posé par initWeather. */
 let onArrival = () => {};
 
+/** Où en est le téléchargement. Posé par initWeather également. */
+let onLoading = () => {};
+
 let checking = false, checkedAt = 0;
 
 /**
@@ -182,7 +185,23 @@ export const wxHere = (lon, lat, slot) => grid ? sample(2, lon, lat, slot) : 0;
 async function decode(url) {
   const res = await fetch(url, { cache: 'no-cache' });
   if (!res.ok) throw new Error('weather.png : ' + res.status);
-  const blob = await res.blob();
+
+  // Les octets sont comptés au passage, comme pour le relief : un demi-
+  // mégaoctet sur une connexion lente, c'est plusieurs secondes pendant
+  // lesquelles la case « météo » reste grise sans rien dire.
+  const total = +res.headers.get('content-length') || 0;
+  const chunks = [];
+  let got = 0;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    got += value.length;
+    onLoading('météo', got, total, false);
+  }
+
+  const blob = new Blob(chunks);
   const bmp = await createImageBitmap(blob);
 
   const cv = document.createElement('canvas');
@@ -238,6 +257,10 @@ async function pull() {
     // et nulle part ailleurs.
     if (!grid) console.info('météo : pas de grille (%s)', e.message);
   } finally {
+    // QUOI QU'IL ARRIVE, l'indicateur s'efface. Un 404 — le cas normal
+    // tant que le robot n'a pas fait son premier relevé — ne doit pas
+    // laisser « météo » suspendu à l'écran pour toujours.
+    onLoading('météo', 0, 0, true);
     checking = false;
     checkedAt = Date.now();
   }
@@ -252,8 +275,9 @@ async function pull() {
  * appel de `keepFresh`, qui vient de la boucle d'images — donc jamais
  * quand la carte dort.
  */
-export function initWeather(arrived) {
+export function initWeather(arrived, loading) {
   onArrival = arrived || (() => {});
+  onLoading = loading || (() => {});
   pull();
 }
 

@@ -418,6 +418,33 @@ input[type="range"]::-moz-range-thumb {
 .src-mark:focus-visible { outline: 0; }
 .kbd .src-mark:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
 
+/* ------------------------------------------------------ ce qui est en route
+
+   Sous les registres, et en rouge — la seule couleur franche de toute la
+   page, dans un registre qui n'a que du gris. C'est délibéré : ce texte
+   dit « attends », et il doit se distinguer de tout ce qui décrit le ciel.
+   Il disparaît quand tout est arrivé, et ne revient qu'au prochain relevé
+   météo, six heures plus tard.
+
+   Il ne prend pas les clics : la carte passe dessous. */
+.loading {
+  pointer-events: none;
+  padding: 1px 2px;
+  color: #b4231f;
+  letter-spacing: .05em;
+  font-variant-numeric: tabular-nums;
+  animation: breathe 1.6s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .45; }
+}
+/* Une respiration n'est pas une information : qui ne veut pas de mouvement
+   garde le texte, qui est tout ce qui compte. */
+@media (prefers-reduced-motion: reduce) {
+  .loading { animation: none; }
+}
+
 /* --------------------------------------------------------- l'explication */
 
 .sheet {
