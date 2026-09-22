@@ -146,9 +146,15 @@ export function bind(canvas, invalidate) {
   el('help-close').addEventListener('click', closeHelp);
   sheet.addEventListener('click', e => { if (e.target === sheet) closeHelp(); });
 
+  // N'IMPORTE QUELLE feuille ouverte endort le globe, pas seulement
+  // l'explication : le panneau en a une aussi, pour la provenance des
+  // légendes. Chacune referme la sienne sur Échap ; ici on se contente de
+  // ne pas faire tourner la Terre pendant qu'on lit.
+  const anySheet = () => document.querySelector('.sheet:not([hidden])');
+
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !sheet.hidden) { closeHelp(); return; }
-    if (!sheet.hidden) return;                 // la feuille ouverte, le globe dort
+    if (anySheet()) return;
 
     // Une touche tapée dans un curseur du panneau appartient au curseur.
     const t = e.target;

@@ -15,9 +15,30 @@
 //    lon lat  le centre — approximatif, une croyance n'a pas de coordonnée
 //    r        son rayon d'influence, en degrés
 //    f        sa force, de 0 à 1
+//    src      D'OÙ ÇA VIENT — voir ci-dessous
 //
 //  Le rayon est large exprès. Une tradition ne s'arrête pas à un village,
 //  et un point trop net ferait croire à une mesure.
+//
+// -------------------------------------------------------------------------
+//  LA SOURCE EST UN CHAMP OBLIGATOIRE, et `null` est une réponse.
+//
+//  Citer une croyance sans dire d'où elle vient, sur un mur, sous un nom
+//  propre, c'est de l'appropriation avec une jolie police. La pièce affiche
+//  donc la provenance de chaque phrase, et quand il n'y en a pas, elle
+//  l'écrit : « source non établie ». Un point dont on ne sait pas d'où il
+//  vient reste sur la carte — mais il le dit.
+//
+//    src: { qui: '…', url: '…' }   une référence qu'on peut ouvrir
+//    src: null                      rien de vérifié à ce jour
+//
+//  `qui` nomme l'institution ou l'ouvrage, pas la page : c'est ce qui se
+//  lit dans la bulle, et c'est ce qui engage.
+//
+//  ATTENTION : une source atteste le NOM et l'existence de la tradition.
+//  Elle n'atteste pas forcément la phrase telle qu'elle est écrite ici —
+//  voir LEGENDES.md, qui tient le détail de ce qui a été vérifié et de ce
+//  qui ne l'a pas été.
 // =========================================================================
 
 /** Ce à quoi l'humanité croit partout, faute de mieux. */
@@ -27,66 +48,92 @@ export const LEGENDS = [
 
   // ------------------------------------------------------------- Europe
   { nom: 'Connemara',   lon:  -9.6, lat:  53.5, r: 4.0, f: 1.00,
-    dit: "Au pied de l'arc, le chaudron d'or du leprechaun." },
+    dit: "Au pied de l'arc, le chaudron d'or du leprechaun.",
+    src: null },
 
   { nom: 'Bifröst',     lon:   9.0, lat:  61.5, r: 7.0, f: 0.95,
-    dit: 'Le pont de flammes entre la terre et Ásgard.' },
+    dit: 'Le pont de flammes entre la terre et Ásgard.',
+    src: { qui: 'Encyclopædia Britannica',
+           url: 'https://www.britannica.com/topic/Bifrost' } },
 
   { nom: 'Delphes',     lon:  22.5, lat:  38.5, r: 3.5, f: 0.85,
-    dit: 'Iris, messagère des dieux, descend par l’arc.' },
+    dit: 'Iris, messagère des dieux, descend par l’arc.',
+    src: { qui: 'Encyclopædia Britannica',
+           url: 'https://www.britannica.com/topic/Iris-Greek-mythology' } },
 
   { nom: 'Kalevala',    lon:  26.0, lat:  62.5, r: 4.5, f: 0.80,
-    dit: 'La vierge de l’air tisse, assise sur l’arc.' },
+    dit: 'La vierge de l’air tisse, assise sur l’arc.',
+    src: null },
 
   { nom: 'Plaine slave', lon: 26.0, lat:  51.0, r: 8.0, f: 0.70,
-    dit: 'L’arc boit l’eau des rivières et la rend en pluie.' },
+    dit: 'L’arc boit l’eau des rivières et la rend en pluie.',
+    src: null },
 
   { nom: 'Highlands',   lon:  -4.5, lat:  57.0, r: 3.0, f: 0.60,
-    dit: 'Le même chaudron qu’en Irlande, de l’autre côté de la mer.' },
+    dit: 'Le même chaudron qu’en Irlande, de l’autre côté de la mer.',
+    src: null },
 
   // -------------------------------------------------------------- Asie
   { nom: 'Ararat',      lon:  44.3, lat:  39.7, r: 4.0, f: 0.90,
-    dit: 'L’arc de l’alliance, posé après les eaux.' },
+    dit: 'L’arc de l’alliance, posé après les eaux.',
+    src: null },
 
   { nom: 'Indradhanush', lon: 78.0, lat:  25.0, r: 8.0, f: 0.95,
-    dit: 'L’arc d’Indra, tendu quand la pluie cesse.' },
+    dit: 'L’arc d’Indra, tendu quand la pluie cesse.',
+    src: null },
 
   { nom: 'Nüwa',        lon: 112.0, lat:  34.0, r: 8.0, f: 0.90,
-    dit: 'Le ciel recousu avec des pierres de cinq couleurs.' },
+    dit: 'Le ciel recousu avec des pierres de cinq couleurs.',
+    src: { qui: 'Encyclopædia Britannica',
+           url: 'https://www.britannica.com/topic/Nu-Gua' } },
 
   { nom: 'Ame-no-ukihashi', lon: 137.0, lat: 36.0, r: 4.0, f: 0.85,
-    dit: 'Le pont flottant du ciel, par où l’on descend.' },
+    dit: 'Le pont flottant du ciel, par où l’on descend.',
+    src: null },
 
   // ------------------------------------------------------------ Afrique
   { nom: 'Aido-Hwedo',  lon:   2.3, lat:   7.0, r: 4.0, f: 0.95,
-    dit: 'Le serpent arc-en-ciel porte le monde sur ses anneaux.' },
+    dit: 'Le serpent arc-en-ciel porte le monde sur ses anneaux.',
+    src: { qui: 'Oxford Reference',
+           url: 'https://www.oxfordreference.com/display/10.1093/oi/authority.20110803095357396' } },
 
   { nom: 'Oshumare',    lon:   4.5, lat:   7.6, r: 3.5, f: 0.85,
-    dit: 'Le serpent qui relie le ciel à la terre.' },
+    dit: 'Le serpent qui relie le ciel à la terre.',
+    src: null },
 
   { nom: 'Drakensberg', lon:  29.5, lat: -29.0, r: 5.0, f: 0.70,
-    dit: 'Le serpent descend boire à la rivière.' },
+    dit: 'Le serpent descend boire à la rivière.',
+    src: null },
 
   // ------------------------------------------------------------ Océanie
   { nom: 'Terre d’Arnhem', lon: 133.5, lat: -12.5, r: 7.0, f: 1.00,
-    dit: 'Ngalyod, le Serpent Arc-en-ciel, a creusé les gorges.' },
+    dit: 'Ngalyod, le Serpent Arc-en-ciel, a creusé les gorges.',
+    src: { qui: 'Art Gallery of South Australia',
+           url: 'https://www.agsa.sa.gov.au/collection-publications/collection/works/ngalyod-rainbow-serpent/29224/' } },
 
   { nom: 'Aotearoa',    lon: 175.5, lat: -39.0, r: 5.0, f: 0.90,
-    dit: 'Uenuku : l’arc dit s’il faut partir ou rester.' },
+    dit: 'Uenuku : l’arc dit s’il faut partir ou rester.',
+    src: { qui: 'Te Ara, encyclopédie de Nouvelle-Zélande',
+           url: 'https://teara.govt.nz/en/tawhirimatea-the-weather/page-6' } },
 
   { nom: 'Mānoa',       lon: -157.8, lat: 21.3, r: 2.5, f: 0.95,
-    dit: 'Ānuenue annonce le passage des esprits.' },
+    dit: 'Ānuenue annonce le passage des esprits.',
+    src: null },
 
   // ----------------------------------------------------------- Amériques
   { nom: 'Dinétah',     lon: -110.0, lat: 36.0, r: 4.0, f: 0.85,
-    dit: 'L’arc-en-ciel porte les Êtres saints.' },
+    dit: 'L’arc-en-ciel porte les Êtres saints.',
+    src: null },
 
   { nom: 'Cusco',       lon:  -72.0, lat: -13.5, r: 5.0, f: 0.90,
-    dit: 'K’uychi — on ne montre pas l’arc du doigt.' },
+    dit: 'K’uychi — on ne montre pas l’arc du doigt.',
+    src: null },
 
   { nom: 'Amazonie',    lon:  -60.0, lat:  -3.0, r: 7.0, f: 0.80,
-    dit: 'Le grand serpent des eaux se lève en arc.' },
+    dit: 'Le grand serpent des eaux se lève en arc.',
+    src: null },
 
   { nom: 'Wallmapu',    lon:  -71.5, lat: -38.5, r: 3.5, f: 0.70,
-    dit: 'Relmu porte un nom propre, et on le respecte.' },
+    dit: 'Relmu porte un nom propre, et on le respecte.',
+    src: null },
 ];

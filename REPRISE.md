@@ -121,7 +121,7 @@ mur.
 | `src/zones.js` | détection des taches, suivi, les cinq observateurs |
 | `src/shader.js` | le GLSL, rien d'autre |
 | `src/map.js` | contexte WebGL, textures, une image |
-| `src/ink.js` | le calque 2D et sa liste d'encombrement |
+| `src/ink.js` | le calque 2D, le piéton du réticule, la liste d'encombrement |
 | `src/panel.js` | les quatre registres : estimateur, croyance, légendes, réglages |
 | `src/chrome.js` | la main : glissé, molette, touches, feuille d'explication |
 | `src/main.js` | l'assemblage et la boucle d'images |
@@ -392,6 +392,23 @@ l'arbitrage était juste, mais invisible. Voir `pushBelief` dans
 **Quand la légende porte le chiffre, la légende parle** : la phrase de
 l'étiquette devient la croyance du lieu — « K'uychi, on ne montre pas
 l'arc du doigt » — au lieu d'un résumé. Voir `phraseFor` dans `zones.js`.
+
+### Le piéton
+
+Le réticule **est** une silhouette de piéton, debout sur le point visé,
+pieds au sol. Le point visé n'est pas une coordonnée : c'est un endroit où
+quelqu'un se tiendrait — un arc-en-ciel n'existe pas *à un endroit*, il
+existe *pour quelqu'un*. La même figure, aux mêmes coordonnées, apparaît
+à la ligne « Position » du panneau : `WALKER_LIMBS` dans `src/ink.js` et
+le `<svg class="walker">` d'`index.html`. **Changer l'un, changer
+l'autre.**
+
+Deux garde-fous : les bras du réticule (gauche, droite, bas — le haut est
+occupé par la figure) marquent le point *exact*, qu'une silhouette ne sait
+pas désigner ; et le glyphe d'un haut lieu **visé** se décale de 16 px à
+droite, sinon les deux dessins se superposent. Proportions de pictogramme
+et non de bonhomme : tête au cinquième de la hauteur, jamais au quart —
+le halo blanc l'épaissit encore et la figure devient un poupon.
 
 ### Le panneau
 

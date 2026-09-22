@@ -19,7 +19,7 @@
 // =========================================================================
 
 import { dateAt, driftAt, driftChanceAt, elapsedHours } from './view.js';
-import { solar, sunElev, sunGate, meteoAt, chanceAt, legendAt } from './sky.js';
+import { solar, sunElev, sunGate, spillAt, meteoAt, chanceAt, legendAt } from './sky.js';
 
 /** La profondeur de champ, en heures simulées. */
 export const AGE_MAX = 24;
@@ -45,10 +45,16 @@ export const posOf = age => 1 - Math.log1p(Math.max(0, age) / TAU) / LNSPAN;
  *    t     heure simulée absolue
  *    h     hauteur du soleil, en degrés
  *    gate  la porte, de 0 à ~0,80
+ *    spill ce que la porte laisserait fuir ici, AVANT pondération
  *    m l c les trois croyances, chacune de 0 à 1, NON pondérées
  *
  *  Les poids sont appliqués au dessin et non ici : bouger un curseur
- *  repondère toute l'histoire d'un coup, sans rien recalculer.
+ *  repondère toute l'histoire d'un coup, sans rien recalculer. C'est
+ *  aussi pourquoi `spill` est rangé brut : la fuite dépend du curseur de
+ *  chance, et le curseur n'entre qu'au tracé.
+ *
+ *  La FLAQUE, elle, n'apparaît nulle part : on est au réticule, elle y
+ *  vaut 1. Le passé se lit donc toujours à chance pleine.
  */
 export const past = [];
 
@@ -60,6 +66,7 @@ function skyAt(lon, lat, h, leg) {
     t: h,
     h: e,
     gate: sunGate(e),
+    spill: spillAt(e),
     m: meteoAt(lon, lat, sun, driftAt(h)),
     l: leg,
     c: chanceAt(lon, lat, driftChanceAt(h))

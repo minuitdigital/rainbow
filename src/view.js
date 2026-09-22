@@ -14,7 +14,7 @@
 
 import {
   RAD, XMAX, YMAX, clamp1,
-  inverseEE, geoVec, matMul, matVec, matT, identity,
+  inverseEE, flatten, geoVec, matMul, matVec, matT, identity,
   orthonormalize, between, rodrigues
 } from './projection.js';
 
@@ -66,8 +66,16 @@ export const view = {
    *    tache  gain sur la force de la tache
    *    grey   0 = irisé, 1 = densité tramée (ce que fera l'e-ink)
    *    icon   taille du glyphe des hauts lieux, en pixels
+   *    sea    profondeur d'encre des aplats de mer, 1 = le tirage d'origine
+   *    land   idem pour les terres
+   *    fine   gain sur les octaves profondes du grain, au zoom
+   *    holes  gain sur le seuil qui troue la tache, au zoom
+   *    franges tours de palette dans l'irisation
+   *    dot    la teinte du point du réticule : 0 = encre, sinon 0 à 1 du
+   *           cercle des teintes
    */
-  look: { sat: 1.5, tache: 1, grey: 0, icon: 15 }
+  look: { sat: 1.5, tache: 1, grey: 0, icon: 15,
+          sea: 1, land: 1, fine: 1, holes: 0.5, franges: 1.35, dot: 0 }
 };
 
 /** Les trois parts ramenées à une somme de 1. */
@@ -117,9 +125,16 @@ export function geoAt(px, py) {
   return [Math.atan2(g[1], g[0]) * RAD, Math.asin(clamp1(g[2])) * RAD];
 }
 
+/**
+ * Le centre de l'écran en vecteur unitaire géographique — là où se tient
+ * le piéton. C'est la première ligne de la rotation, sans détour par les
+ * degrés : le shader et la flaque de chance le veulent sous cette forme.
+ */
+export const centreVec = () => [view.R[0], view.R[1], view.R[2]];
+
 /** Le centre de l'écran, en géographique. */
 export function centre() {
-  const g = [view.R[0], view.R[1], view.R[2]];
+  const g = centreVec();
   return [Math.atan2(g[1], g[0]) * RAD, Math.asin(clamp1(g[2])) * RAD];
 }
 
@@ -219,9 +234,127 @@ export const driftChanceAt = h => (h * 0.011) % 512;
 export const drift = () => driftAt(simH);
 export const driftChance = () => driftChanceAt(simH);
 
+// ------------------------------------------------------------- LA MARCHE
+//  Le piéton du réticule marche quand le monde défile sous lui.
+//
+//  Sa cadence ne suit PAS le temps mais la DISTANCE : un pas vaut tant de
+//  pixels de sol glissé. C'est la seule mesure qui ait un sens pour une
+//  silhouette posée sur l'écran — à ×32 comme au monde entier, le même
+//  geste de la main fait le même nombre de pas. Une carte immobile ne le
+//  fait pas piétiner, et ne coûte donc toujours rien.
+//
+//  L'état vit ici parce qu'il vit d'une image à l'autre, et il
+//  S'ACCUMULE : `stride` est appelé une fois par image dans main.js, et
+//  nulle part ailleurs. Même règle que l'horloge, pour la même raison
+//  (piège n°18).
+
+const TAU = Math.PI * 2;
+const wrap = v => ((v % TAU) + TAU) % TAU;
+
+/** La pose de repos : jambes au plein écart. C'est celle d'index.html. */
+const GAIT_REST = Math.PI / 2;
+
+/** Pixels de sol glissé pour une demi-foulée. */
+const STRIDE_PX = 26;
+
+/** Par image. Une téléportation — une pastille cliquée — n'est pas une course. */
+const GAIT_MAX = 58;
+
+// ------------------------------------------------------------- LA GIRATION
+//  Le piéton PIVOTE AUTOUR DU POINT VISÉ, et il prend l'envers de la
+//  direction choisie : on monte vers le nord, il se retrouve la tête en
+//  bas. Ses pieds restent au point — c'est lui qui tourne autour, pas le
+//  point qui se déplace.
+//
+//  La règle tient en une phrase : SA TÊTE POINTE À L'OPPOSÉ DU
+//  DÉPLACEMENT. C'est ce qui donne les cent quatre-vingts degrés quand on
+//  va vers le haut, et le quart de tour quand on va sur le côté.
+//
+//  L'angle ne revient pas à l'endroit quand on s'arrête : il garde le
+//  dernier cap. La figure se souvient d'où l'on vient.
+
+/** Vitesse de rattrapage de l'angle, par seconde. Plus bas = plus lourd. */
+const TURN_RATE = 5;
+
+/** En deçà, le déplacement est du bruit et ne dicte aucun cap. */
+const TURN_MIN_PX = 0.6;
+
+/**
+ *  phase  où en est la foulée
+ *  angle  de combien la figure est tournée autour du point visé
+ */
+export const gait = { phase: GAIT_REST, angle: 0 };
+
+let gaitPrev = null, gaitAim = 0;
+
+/** Le plus court chemin d'un angle à l'autre : par la gauche ou la droite. */
+const shortest = a => { a = wrap(a); return a > Math.PI ? a - TAU : a; };
+
+/**
+ * Appelé une fois par image, APRÈS toutes les rotations. Rend true tant
+ * qu'il reste du mouvement à dessiner.
+ */
+export function stride(dt) {
+  const c = centre();
+  if (!gaitPrev) { gaitPrev = c; return false; }
+
+  // Où le centre de l'image précédente se trouve-t-il maintenant ? L'écart
+  // est le glissement APPARENT du sol, en pixels. Le zoom, lui, ne bouge
+  // pas le centre : on ne marche donc pas en s'approchant.
+  const f = flatten(matT(view.R), geoVec(gaitPrev[0], gaitPrev[1]));
+  const dx = view.W / 2 - sx(f[0]), dy = view.H / 2 - sy(f[1]);
+  gaitPrev = c;
+
+  const d = Math.min(GAIT_MAX, Math.hypot(dx, dy));
+  const moving = d > 0.25;
+
+  if (moving) {
+    gait.phase = wrap(gait.phase + d / STRIDE_PX * Math.PI);
+
+    // (dx, dy) est là où NOUS allons : le sol part à gauche, donc nous
+    // allons à droite. La tête vise l'opposé — d'où le signe.
+    if (d > TURN_MIN_PX) gaitAim = Math.atan2(-dx, dy);
+  } else {
+    // Arrêté, il FINIT SON PAS : la phase continue vers le repos en
+    // ralentissant, elle ne revient pas en arrière — on ne marche pas à
+    // reculons pour s'immobiliser.
+    const left = wrap(GAIT_REST - gait.phase);
+    if (left > 2e-3) {
+      gait.phase = wrap(gait.phase +
+        Math.max(left * (1 - Math.exp(-dt * 7)), Math.min(left, dt * 1.6)));
+    } else gait.phase = GAIT_REST;
+  }
+
+  // L'INERTIE. On rattrape le cap par le plus court chemin — sans quoi un
+  // passage par 359° ferait faire un tour complet à la figure pour un
+  // degré de correction.
+  const off = shortest(gaitAim - gait.angle);
+  gait.angle = wrap(gait.angle + off * (1 - Math.exp(-dt * TURN_RATE)));
+
+  return moving
+      || wrap(GAIT_REST - gait.phase) > 2e-3
+      || Math.abs(off) > 3e-3;
+}
+
 /**
  * Combien de grain, et combien la tache s'efface. Nul au monde entier —
  * le grain n'y ferait que du bruit et ferait mentir la lecture d'ensemble ;
  * plein à partir de ×10.
  */
 export const detail = () => Math.max(0, Math.min(1, (view.zoom - 2.5) / 7.5));
+
+/**
+ * LA RAMPE DU ZOOM PROFOND, bien plus tardive que `detail`. Nulle
+ * jusqu'à ×6 — avant, ce qu'elle pilote serait sous le pixel — pleine à
+ * ×26. Deux réglages s'y accrochent, et chacun a son gain :
+ *
+ *    fine   les octaves profondes du grain
+ *    holes  le seuil qui troue la tache
+ *
+ * Tous deux nuls au monde entier : la lecture d'ensemble ne se discute
+ * pas, elle doit rester celle du champ.
+ */
+const zoomDeep = () => Math.max(0, Math.min(1, (view.zoom - 6) / 20));
+
+export const fine  = () => zoomDeep() * view.look.fine;
+export const holes = () => zoomDeep() * view.look.holes;

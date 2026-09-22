@@ -44,12 +44,20 @@
            au tramage de l'e-ink. -->
       <div class="reading">
         <b>
-          <svg class="walker" viewBox="0 0 10 14" aria-hidden="true">
-            <circle cx="5" cy="2.3" r="1.5"/>
-            <path d="M5 4.2 L4.3 8.2"/>
-            <path d="M4.3 8.2 L6.3 12.2"/>
-            <path d="M4.3 8.2 L2.3 11.6"/>
-            <path d="M4.7 5.4 L6.7 6.9"/>
+          <!-- La MÊME figure que le réticule de la carte, aux mêmes
+               coordonnées. Sur la carte elle marche — voir walkerGait()
+               dans src/ink.js ; ici elle reste posée, et ces coordonnées
+               sont exactement sa pose de repos. -->
+          <svg class="walker" viewBox="-7.4 -23 14.8 24" aria-hidden="true">
+            <g fill="currentColor" stroke="currentColor"
+               stroke-linecap="round" stroke-linejoin="round">
+              <path d="M-1.7 -16.2 L-4.2 -11.2" fill="none" stroke-width="2"/>
+              <path d="M1.7 -16.2 L4.6 -11.8"   fill="none" stroke-width="2"/>
+              <path d="M-0.5 -9.7 L-2.6 -5.2 L-4.6 -1.3" fill="none" stroke-width="2.6"/>
+              <path d="M0.7 -9.7 L3.1 -5.4 L5 -1.3"      fill="none" stroke-width="2.6"/>
+              <path d="M-1.9 -17.2 L2.1 -17 L2.5 -13 L2.1 -9.6 L-2.2 -9.8 L-2.2 -13.4 Z"/>
+              <circle cx="0.4" cy="-19.2" r="2.1"/>
+            </g>
           </svg>
           Position <span id="f-pos">—</span>
         </b>
@@ -111,14 +119,16 @@
   <section class="box">
     <div class="head">
       <span>légendes</span>
-      <span class="head-btns">
-        <em id="h-leg">—</em>
-        <button type="button" id="pli-leg" aria-expanded="false" aria-controls="corps-leg"
-                aria-label="Déplier">+</button>
-      </span>
+      <button type="button" id="pli-leg" aria-expanded="false" aria-controls="corps-leg"
+              aria-label="Déplier">+</button>
     </div>
     <div class="body" id="corps-leg" hidden>
       <div class="chips" id="chips"></div>
+      <!-- La phrase, et au bout le renvoi vers sa provenance. Citer une
+           croyance sans dire d'où elle vient, sur un mur, sous un nom
+           propre, c'est de l'appropriation avec une jolie police. Le
+           bouton est rempli par src/panel.js, et il apparaît même quand
+           la source manque — il dit alors qu'elle manque. -->
       <p class="said" id="said">—</p>
     </div>
   </section>
@@ -132,42 +142,126 @@
       <button type="button" id="pli-reg" aria-expanded="false" aria-controls="corps-reg"
               aria-label="Déplier">+</button>
     </div>
+    <!-- QUATRE SOUS-REGISTRES. Onze curseurs en colonne, ça n'est plus une
+         liste, c'est un tableau de bord — on ne trouve plus rien. Ils sont
+         donc rangés par CE SUR QUOI ILS AGISSENT, et chacun se replie :
+         la tache, le fond, le panneau, le temps.
+
+         Le pli suit la même mécanique que les registres du dessus, à ceci
+         près que c'est le `.sub` qui porte la classe `folded` et non la
+         boîte entière. -->
     <div class="body" id="corps-reg" hidden>
-      <div class="dials">
-        <div class="dial">
-          <label for="s-alpha">transparence</label>
-          <input id="s-alpha" type="range" min="0" max="100" value="80"><output id="o-alpha">—</output>
+
+      <!-- ============================================ LA TACHE -->
+      <div class="sub">
+        <div class="head quiet">
+          <span>la tache</span>
+          <button type="button" id="pli-r-tache" aria-expanded="true"
+                  aria-controls="corps-r-tache" aria-label="Replier">&#8722;</button>
         </div>
-        <div class="dial">
-          <label for="s-contrast">contraste</label>
-          <input id="s-contrast" type="range" min="0" max="100" value="62"><output id="o-contrast">—</output>
-        </div>
-        <div class="dial">
-          <label for="s-grey" id="l-grey">dégradé</label>
-          <input id="s-grey" type="checkbox">
-          <output id="o-grey">—</output>
-        </div>
-        <div class="dial">
-          <label for="s-colour" id="l-colour">couleur</label>
-          <input id="s-colour" type="range" min="0" max="100" value="83"><output id="o-colour">—</output>
-        </div>
-        <div class="dial">
-          <label for="s-tache">intensité</label>
-          <input id="s-tache" type="range" min="0" max="100" value="54"><output id="o-tache">—</output>
-        </div>
-        <div class="dial">
-          <label for="s-text">texte</label>
-          <input id="s-text" type="range" min="0" max="100" value="20"><output id="o-text">—</output>
-        </div>
-        <div class="dial">
-          <label for="s-icon">icônes</label>
-          <input id="s-icon" type="range" min="0" max="100" value="32"><output id="o-icon">—</output>
-        </div>
-        <div class="dial">
-          <label for="s-time">temps</label>
-          <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">—</output>
+        <div class="dials" id="corps-r-tache">
+          <div class="dial">
+            <label for="s-tache">intensit&#233;</label>
+            <input id="s-tache" type="range" min="0" max="100" value="54"><output id="o-tache">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-colour" id="l-colour">couleur</label>
+            <input id="s-colour" type="range" min="0" max="100" value="83"><output id="o-colour">&#8212;</output>
+          </div>
+          <!-- Combien de fois la palette fait le tour. Au-del&#224; de deux, on
+               voit un arc-en-ciel par-dessus le sujet. -->
+          <div class="dial">
+            <label for="s-franges" id="l-franges">franges</label>
+            <input id="s-franges" type="range" min="0" max="100" value="33"><output id="o-franges">&#8212;</output>
+          </div>
+          <!-- Les deux suivants ne disent rien au monde entier : ils ne
+               pilotent que ce que le zoom r&#233;v&#232;le. -->
+          <div class="dial">
+            <label for="s-trous" id="l-trous">trous</label>
+            <input id="s-trous" type="range" min="0" max="100" value="50"><output id="o-trous">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-fine" id="l-fine">finesse</label>
+            <input id="s-fine" type="range" min="0" max="100" value="50"><output id="o-fine">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-grey" id="l-grey">d&#233;grad&#233;</label>
+            <input id="s-grey" type="checkbox">
+            <output id="o-grey">&#8212;</output>
+          </div>
         </div>
       </div>
+
+      <!-- ============================================= LE FOND -->
+      <!-- La profondeur d'encre des aplats. Le papier ne bouge pas : c'est
+           le palier le plus profond qu'on charge ou qu'on all&#232;ge. 50 % est
+           le tirage d'origine. -->
+      <div class="sub">
+        <div class="head quiet">
+          <span>le fond</span>
+          <button type="button" id="pli-r-fond" aria-expanded="false"
+                  aria-controls="corps-r-fond" aria-label="D&#233;plier">+</button>
+        </div>
+        <div class="dials" id="corps-r-fond" hidden>
+          <div class="dial">
+            <label for="s-terres">terres</label>
+            <input id="s-terres" type="range" min="0" max="100" value="50"><output id="o-terres">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-mer">mer</label>
+            <input id="s-mer" type="range" min="0" max="100" value="50"><output id="o-mer">&#8212;</output>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========================================== LE PANNEAU -->
+      <div class="sub">
+        <div class="head quiet">
+          <span>le panneau</span>
+          <button type="button" id="pli-r-panneau" aria-expanded="false"
+                  aria-controls="corps-r-panneau" aria-label="D&#233;plier">+</button>
+        </div>
+        <div class="dials" id="corps-r-panneau" hidden>
+          <div class="dial">
+            <label for="s-alpha">transparence</label>
+            <input id="s-alpha" type="range" min="0" max="100" value="80"><output id="o-alpha">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-contrast">contraste</label>
+            <input id="s-contrast" type="range" min="0" max="100" value="62"><output id="o-contrast">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-text">texte</label>
+            <input id="s-text" type="range" min="0" max="100" value="20"><output id="o-text">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-icon">ic&#244;nes</label>
+            <input id="s-icon" type="range" min="0" max="100" value="32"><output id="o-icon">&#8212;</output>
+          </div>
+          <!-- Le point du r&#233;ticule. Tout &#224; gauche il reste de l'encre ;
+               ensuite il parcourt le cercle des teintes. -->
+          <div class="dial">
+            <label for="s-point">point</label>
+            <input id="s-point" type="range" min="0" max="100" value="0"><output id="o-point">&#8212;</output>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================ LE TEMPS -->
+      <div class="sub">
+        <div class="head quiet">
+          <span>le temps</span>
+          <button type="button" id="pli-r-temps" aria-expanded="false"
+                  aria-controls="corps-r-temps" aria-label="D&#233;plier">+</button>
+        </div>
+        <div class="dials" id="corps-r-temps" hidden>
+          <div class="dial">
+            <label for="s-time">vitesse</label>
+            <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">&#8212;</output>
+          </div>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -186,8 +280,10 @@
       et il n'y a plus rien à voir, pour personne. Cette seule contrainte
       dessine un anneau qui fait deux fois le tour de la Terre chaque jour,
       à l'aube et au crépuscule.</p>
-    <p>C'est la seule partie exacte du calcul, et elle n'a pas de curseur :
-      on ne croit pas en la hauteur du soleil, on la calcule.</p>
+    <p>C'est la seule partie exacte du calcul, et aucun curseur ne la
+      change : on ne croit pas en la hauteur du soleil, on la calcule.
+      La pluie et la légende lui sont soumises sans recours — ce qui est
+      vrai et ce qu'on raconte ont toujours besoin du soleil.</p>
 
     <h2>La croyance</h2>
     <p>La porte ouverte, trois raisons d'y croire se partagent ce qui reste.
@@ -197,7 +293,7 @@
     <dl class="terms">
       <dt>météo</dt><dd>la pluie et la trouée — ce qui est vrai</dd>
       <dt>légende</dt><dd>la foi attachée au lieu — ce qu'on raconte</dd>
-      <dt>chance</dt><dd>un champ qui oscille — ce qui n'a pas de raison</dd>
+      <dt>chance</dt><dd>ce que vous portez sur vous — ce qui n'a pas de raison</dd>
     </dl>
     <p>Une <b>somme</b> et non un produit : avec un produit, un seul zéro
       éteindrait tout, et qui ne croirait qu'aux légendes ne verrait rien
@@ -205,6 +301,16 @@
     <p>Partout on croit un peu à l'arc-en-ciel. Certains lieux beaucoup :
       ils portent un petit arc et une baguette, et disent leur croyance
       quand on s'approche.</p>
+
+    <h2>Votre chance</h2>
+    <p>La chance n'est pas un endroit du monde : c'est ce que vous portez.
+      Elle vous suit — une flaque centrée sur le piéton, qui s'élargit à
+      mesure que vous y croyez. Loin de vous, elle ne vaut rien.</p>
+    <p>Et c'est là, dans cette flaque seulement, que <b>la porte fuit</b> :
+      un arc peut s'allumer alors que le soleil est couché ou trop haut.
+      Il n'a aucune raison d'être là — c'est exactement ce que dit le
+      curseur. Ces arcs-là ne portent pas de durée : ce qui n'a pas de
+      raison n'a pas d'horaire.</p>
 
     <h2>Le panneau</h2>
     <dl class="terms">
@@ -252,6 +358,19 @@
       Traits de côte, lacs, lieux habités — <b>Natural Earth</b>.<br>
       Les précipitations sont pour l'instant <b>simulées</b> par un bruit
       fractal. Elles seront remplacées par de vraies prévisions.</p>
+  </div>
+</div>
+
+<!-- LA PROVENANCE. Même feuille que l'explication, en plus petit : on y
+     relit la croyance en entier, on voit qui l'atteste, et on peut aller
+     vérifier. Quand rien n'est établi, la feuille le dit plutôt que de
+     rester muette — c'est une information sur la carte, pas un manque. -->
+<div class="sheet" id="src-sheet" hidden>
+  <div class="sheet-inner narrow" role="dialog" aria-modal="true" aria-labelledby="src-nom">
+    <button class="sheet-close" id="src-close" aria-label="Fermer">×</button>
+    <h1 id="src-nom">—</h1>
+    <p class="lead" id="src-dit">—</p>
+    <p id="src-qui">—</p>
   </div>
 </div>
 

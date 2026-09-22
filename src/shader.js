@@ -33,8 +33,13 @@ uniform vec2  uRes;
 uniform float uScale, uMode;
 uniform mat3  uRot;
 uniform float uDecl, uSublon, uDrift, uDriftC, uDetail;
+uniform float uFine;                   // la finesse : 0 au monde, plein de près
+uniform float uHoles;                  // combien la tache se troue, au zoom
+uniform float uFranges;                // tours de palette — l'ordre d'interférence
 uniform float uSat, uTache, uGrey;     // l'allure : teinte, force, encodage
+uniform float uSea, uLand;             // profondeur d'encre des aplats
 uniform vec3  uBelief;                 // météo, légende, chance — somme = 1
+uniform vec3  uHere;                   // le réticule : là où se tient le piéton
 uniform int   uLegN;
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
 uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
@@ -52,6 +57,17 @@ const float GAIN = 1.8;
 const float LEGEND_FLOOR = 0.09;
 const float FIELD_FREQ = 3.6;
 const float CHANCE_FREQ = 0.62;
+const float LUCK_NEAR = 8.0, LUCK_FAR = 30.0;
+const float SPILL_AMP = 0.42, SPILL_DEG = 18.0;
+
+// Les deux gammes des aplats : le papier, et l'encre du palier le plus
+// profond. uSea et uLand disent de combien on charge cette encre : 1,0
+// est le tirage d'origine. (Pas d'accent grave dans ce fichier — tout le
+// GLSL vit dans un gabarit de chaîne, et le premier le refermerait.)
+const vec3 SEA_LIGHT  = vec3(0.948, 0.954, 0.964);
+const vec3 SEA_DEEP   = vec3(0.792, 0.806, 0.830);
+const vec3 LAND_LIGHT = vec3(0.995, 0.996, 1.000);
+const vec3 LAND_DEEP  = vec3(0.655, 0.667, 0.688);
 const float BANDS = 6.0;
 
 float fyf (float t){ float a=t*t, b=a*a*a; return t*(A1 + A2*a + b*(A3 + A4*a)); }
@@ -159,8 +175,20 @@ void main(){
   float shaded = textureGrad(uEarth, uv, gx, gy).r;
   float shade = 1.0 - clamp((shaded - 0.54) / 0.46, 0.0, 1.0);
 
-  vec3 sea  = mix(vec3(0.948, 0.954, 0.964), vec3(0.792, 0.806, 0.830), qS);
-  vec3 land = mix(vec3(0.995, 0.996, 1.000), vec3(0.655, 0.667, 0.688), qL);
+  // LA PROFONDEUR D'ENCRE. Le papier ne bouge pas — c'est le palier le
+  // plus profond qui monte ou descend, comme on charge une plaque. À 1,0
+  // on retrouve exactement la carte d'origine ; à 0 il ne reste que le
+  // papier, et les paliers s'effacent sans se déplacer.
+  //
+  // Pourquoi ne pas simplement éclaircir tout l'aplat : parce que tirer
+  // toute la gamme vers le blanc rapproche les paliers les uns des
+  // autres, et la marche entre deux altitudes — qui est TOUTE la lecture
+  // du relief ici — se perd. En tenant le papier fixe, l'écart entre
+  // deux paliers reste proportionnel à l'encre, donc lisible.
+  vec3 seaInk  = max(SEA_LIGHT  + (SEA_DEEP  - SEA_LIGHT)  * uSea,  vec3(0.0));
+  vec3 landInk = max(LAND_LIGHT + (LAND_DEEP - LAND_LIGHT) * uLand, vec3(0.0));
+  vec3 sea  = mix(SEA_LIGHT,  seaInk,  qS);
+  vec3 land = mix(LAND_LIGHT, landInk, qL);
   land *= 1.0 - shade * 0.14;
 
   vec3 ground = mix(sea, land, isLand);
@@ -175,51 +203,103 @@ void main(){
   float d = radians(uDecl), pl = radians(lat), Hh = radians(lon - uSublon);
   float h = degrees(asin(clamp(sin(pl) * sin(d) + cos(pl) * cos(d) * cos(Hh), -1.0, 1.0)));
 
-  if(h > 0.4 && h < SUN_MAX){
-    // Le soleil ouvre la fenêtre, et rien d'autre ne peut l'ouvrir.
-    float S = pow(1.0 - h / SUN_MAX, 1.3) * smoothstep(0.0, 6.5, h);
+  // Le soleil ouvre la fenêtre, et rien d'autre ne peut l'ouvrir — pour
+  // ce qui a une raison. La fuite, elle, ne sert qu'à la chance : pleine
+  // au bord de la fenêtre, éteinte SPILL_DEG plus loin.
+  float S = (h > 0.4 && h < SUN_MAX)
+          ? pow(1.0 - h / SUN_MAX, 1.3) * smoothstep(0.0, 6.5, h)
+          : 0.0;
+  float dOut = max(max(0.4 - h, h - SUN_MAX), 0.0);
+  float spill = SPILL_AMP * (1.0 - smoothstep(0.0, SPILL_DEG, dOut));
+  float gateC = max(S, spill * uBelief.z);
 
+  if(S > 0.0 || gateC > 0.002){
     float ccl = cos(pl);
     vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * FIELD_FREQ;
 
-    // ---- MÉTÉO : la pluie et la trouée
-    float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
-    float a = (lat - uDecl * 0.45) / 9.5;
-    float b = (abs(lat) - 48.0) / 15.0;
-    float gap = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
-    float MET = 1.0 - exp(-rain * (gap / 1.2) * 6.0);
-
-    // ---- LÉGENDE : le plancher, et les hauts lieux
-    float LEG = legendAt(g);
-
     // ---- CHANCE : plus lente, plus large, et sans rapport avec la météo.
-    // Seuillée serré : ce ne sont pas des voiles mais des poches.
+    // Seuillée serré : ce ne sont pas des voiles mais des poches. Puis
+    // multipliée par LA FLAQUE — ce que le piéton porte. Loin de lui elle
+    // ne vaut rien, et c'est pour ça que la fuite ne fait pas un anneau
+    // plus gras mais des taches isolées, autour de nous.
     float CHA = smoothstep(0.46, 0.76,
                   fbm(sp * CHANCE_FREQ + vec3(uDriftC + 41.0, 17.0, 7.0)));
+    vec3 dh = g - uHere;
+    float lr = radians(mix(LUCK_NEAR, LUCK_FAR, uBelief.z));
+    float luck = exp(-dot(dh, dh) / (lr * lr));
 
-    // ---- le partage de la croyance
-    float belief = uBelief.x * MET + uBelief.y * LEG + uBelief.z * CHA;
-    float t = clamp(S * belief * GAIN, 0.0, 1.0);
+    float belief = uBelief.z * CHA * luck * gateC;
+
+    // ---- MÉTÉO et LÉGENDE n'existent que porte ouverte. Ce qui est vrai
+    // et ce qu'on raconte ont toujours besoin du soleil.
+    if(S > 0.0){
+      float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
+      float a = (lat - uDecl * 0.45) / 9.5;
+      float b = (abs(lat) - 48.0) / 15.0;
+      float gap = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
+      float MET = 1.0 - exp(-rain * (gap / 1.2) * 6.0);
+      float LEG = legendAt(g);
+      belief += S * (uBelief.x * MET + uBelief.y * LEG);
+    }
+
+    float t = clamp(belief * GAIN, 0.0, 1.0);
 
     // LE GRAIN. Le bruit de base n'a rien de plus fin que ~400 km : passé
-    // ×10 on regardait un aplat uniforme, et s'approcher ne montrait rien.
+    // x10 on regardait un aplat uniforme, et s'approcher ne montrait rien.
     // Deux octaves fines entrent progressivement. Elles ne DÉPLACENT pas la
     // tache — elles la dépolissent : la structure, donc l'indice lu, reste
     // celle du champ. C'est de la matière, pas de la donnée.
     if(uDetail > 0.002){
       float grain = (vnoise(sp *  6.1) - 0.5) * 1.10
                   + (vnoise(sp * 15.7) - 0.5) * 0.60;
+
+      // LES OCTAVES PROFONDES. Les deux du dessus valent 290 et 113 km :
+      // à x32 l'écran fait 1 250 km de large, elles y sont encore des
+      // masses. Trois octaves de plus — 47, 19 et 8 km — pour que
+      // s'approcher continue de RÉVÉLER au lieu d'agrandir.
+      //
+      // Elles n'entrent qu'au-delà de x6, et par uFine seul : au monde
+      // entier elles ne feraient qu'un fourmillement sous le pixel, et
+      // elles mentiraient sur la lecture d'ensemble.
+      if(uFine > 0.002){
+        grain += ((vnoise(sp *  38.0) - 0.5) * 0.46
+                + (vnoise(sp *  92.0) - 0.5) * 0.30
+                + (vnoise(sp * 221.0) - 0.5) * 0.18) * uFine;
+      }
       t = clamp(t * (1.0 + uDetail * 0.55 * grain), 0.0, 1.0);
     }
 
-    // Et elle s'efface en s'approchant. Vue du monde, la tache est un
-    // signal qu'on lit d'un continent à l'autre ; de près, on est DANS le
-    // paysage et l'arc n'est plus qu'un indice — sinon la couleur noie le
-    // relief et zoomer revient à se coller à un vitrail.
+    // Elle NE S'EFFACE PLUS en s'approchant. Le facteur 0,40 qui tenait
+    // ici partait d'un constat juste — de près la couleur noyait le
+    // relief — mais il traitait le symptôme : ce qui saturait l'écran,
+    // c'était un aplat de couleur agrandi, pas la couleur elle-même. Ce
+    // sont les octaves profondes qui règlent ça, en donnant à la tache
+    // une structure à regarder. La force, elle, reste celle du monde
+    // entier : zoomer précise, ça ne doit rien retirer.
     //
     // uTache n'entre QUE là : c'est un gain sur la force de la tache, pas
     // sur la valeur t. La teinte, elle, continue de dire la même chose.
-    float fv = clamp(pow(t, 1.15) * 0.98 * mix(1.0, 0.40, uDetail) * uTache, 0.0, 1.0);
+    float fv = clamp(pow(t, 1.15) * 0.98 * uTache, 0.0, 1.0);
+
+    // LES TROUS. Le vrai défaut de la tache vue de près n'était pas sa
+    // force, c'était sa CONTINUITÉ : une nappe sans bord, où le regard
+    // n'a rien à saisir. En montant un seuil avec le zoom, on ne garde
+    // que ce qui dépasse — le reste redevient du papier. La tache cesse
+    // d'être un nuage et devient un semis.
+    //
+    // Ce n'est pas un effet : c'est la même sélection que partout
+    // ailleurs dans la pièce. La chance est seuillée serré pour faire
+    // des poches, le relief est découpé en paliers. Ici aussi, et par la
+    // même méthode — le bord est calculé par les dérivées d'écran, donc
+    // net à toute échelle, jamais crénelé.
+    //
+    // Au-dessus du seuil la valeur est INTACTE : on perd de la surface,
+    // pas de l'intensité. C'est très exactement ce qu'on cherchait.
+    if(uHoles > 0.001){
+      float cut = uHoles * 0.72;
+      float w = max(fwidth(fv), 1e-4);
+      fv *= smoothstep(cut - w, cut + w, fv);
+    }
 
     if(uGrey > 0.5){
       // EN DÉGRADÉ, la force ne peut plus passer par la teinte : elle
@@ -244,7 +324,14 @@ void main(){
       // Irisation : palette cosinus parcourue plusieurs fois, décalée par un
       // bruit lent. On obtient des bandes imbriquées, comme de l'huile sur
       // l'eau, plutôt qu'un simple dégradé chaud-froid.
-      float k = t * 1.35 + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
+      //
+      // LE NOMBRE DE TOURS EST UN RÉGLAGE, et il ne monte plus avec le
+      // zoom. Je l'avais lié à la finesse : plus on s'approchait, plus la
+      // palette bouclait — bleu, vert, jaune, orange, rose, puis cyan et
+      // ça recommence. Un arc-en-ciel de trop par-dessus le sujet. La
+      // complexité de près doit venir des TROUS, qui donnent une forme à
+      // lire ; la teinte, elle, gagne à tourner moins.
+      float k = t * uFranges + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
       vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
       c = mix(vec3(dot(c, vec3(0.3333))), c, uSat);      // saturation
       // plancher relevé : sur papier blanc, une teinte trop basse vire à la boue

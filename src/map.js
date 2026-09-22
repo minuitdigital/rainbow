@@ -9,7 +9,8 @@
 //  pas de bibliothèque. Toute la carte est un calcul par pixel.
 // =========================================================================
 
-import { view, scale, drift, driftChance, detail, beliefWeights } from './view.js';
+import { view, scale, drift, driftChance, detail, fine, holes,
+         beliefWeights, centreVec } from './view.js';
 import { VERTEX, FRAGMENT, MAX_LEGENDS } from './shader.js';
 import { LEGEND_POINTS } from './sky.js';
 
@@ -17,8 +18,9 @@ let gl = null;
 const U = {};
 
 const UNIFORMS = ['uRes', 'uScale', 'uMode', 'uRot', 'uDecl', 'uSublon',
-                  'uDrift', 'uDriftC', 'uDetail', 'uBelief',
-                  'uSat', 'uTache', 'uGrey',
+                  'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uHoles', 'uFranges',
+                  'uBelief', 'uHere',
+                  'uSat', 'uTache', 'uGrey', 'uSea', 'uLand',
                   'uLegN', 'uLegP', 'uLegQ', 'uEarth', 'uField', 'uMask'];
 
 /**
@@ -160,10 +162,19 @@ export function paint(canvas, sun) {
   gl.uniform1f(U.uDrift, drift());
   gl.uniform1f(U.uDriftC, driftChance());
   gl.uniform1f(U.uDetail, detail());
+  gl.uniform1f(U.uFine, fine());
+  gl.uniform1f(U.uHoles, holes());
+  gl.uniform1f(U.uFranges, view.look.franges);
   const w = beliefWeights();
   gl.uniform3f(U.uBelief, w.m, w.l, w.c);
+  // Où se tient le piéton : le centre de la flaque de chance. C'est la
+  // première ligne de la rotation, donc le centre exact de l'écran.
+  const p = centreVec();
+  gl.uniform3f(U.uHere, p[0], p[1], p[2]);
   gl.uniform1f(U.uSat, view.look.sat);
   gl.uniform1f(U.uTache, view.look.tache);
   gl.uniform1f(U.uGrey, view.look.grey);
+  gl.uniform1f(U.uSea, view.look.sea);
+  gl.uniform1f(U.uLand, view.look.land);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }

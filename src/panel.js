@@ -24,7 +24,8 @@
 // =========================================================================
 
 import { view, beliefWeights, anchorTo } from './view.js';
-import { GAIN, SUN_MAX, openFor, nearestLegend, LEGEND_POINTS } from './sky.js';
+import { GAIN, SUN_MAX, SPILL_DEG, openFor, nearestLegend,
+         LEGEND_POINTS } from './sky.js';
 import { past, recall, posOf, AGE_MAX } from './history.js';
 import { measureRail } from './ink.js';
 
@@ -70,14 +71,23 @@ function showBelief() {
 // Chaque registre se replie sur son bandeau. Au démarrage, seuls
 // l'estimateur et la croyance sont ouverts : ce sont eux qu'on lit. Les
 // légendes sont un index et les réglages un outil — ils s'appellent, ils
-// ne s'imposent pas. Et le bandeau continue de dire l'essentiel une fois
-// replié : la foi du lieu reste lisible sans déplier les vingt pastilles.
+// ne s'imposent pas. Un bandeau replié ne dit QUE son nom : un chiffre
+// posé là (« foi 9 % ») se lisait comme un titre, et un titre qui change
+// tout seul fait du bruit — la croyance du lieu se dit dans le corps du
+// registre, où on est venu la chercher.
 
+// Les quatre registres, puis les quatre sous-registres des réglages :
+// onze curseurs en colonne ne se lisent plus, ils se subissent. Rangés
+// par ce sur quoi ils agissent, et repliés sauf celui qu'on travaille.
 const FOLDS = [
-  ['pli-est',  'corps-est',  true ],
-  ['pli-croy', 'corps-croy', true ],
-  ['pli-leg',  'corps-leg',  false],
-  ['pli-reg',  'corps-reg',  false]
+  ['pli-est',        'corps-est',        true ],
+  ['pli-croy',       'corps-croy',       true ],
+  ['pli-leg',        'corps-leg',        false],
+  ['pli-reg',        'corps-reg',        false],
+  ['pli-r-tache',    'corps-r-tache',    true ],
+  ['pli-r-fond',     'corps-r-fond',     false],
+  ['pli-r-panneau',  'corps-r-panneau',  false],
+  ['pli-r-temps',    'corps-r-temps',    false]
 ];
 
 /** id du corps → est-il replié ? */
@@ -86,7 +96,9 @@ const folded = {};
 function showFold(btnId, bodyId) {
   const body = byId(bodyId), open = !folded[bodyId];
   body.hidden = !open;
-  body.closest('.box').classList.toggle('folded', !open);
+  // Un sous-registre replie son `.sub` ; un registre replie sa boîte. Sans
+  // ce premier terme, plier « le fond » plierait tous les réglages.
+  (body.closest('.sub') || body.closest('.box')).classList.toggle('folded', !open);
   const b = byId(btnId);
   b.textContent = open ? '−' : '+';
   b.setAttribute('aria-expanded', String(open));
@@ -110,6 +122,21 @@ function setContrast(t) {
   root.style.setProperty('--chance',    L(90, 78));
 }
 
+/**
+ * Le curseur des aplats, en deux moitiés : de 0 à 50 % on va du papier nu
+ * au tirage d'origine, de 50 à 100 % on charge jusqu'à INK_MAX. Une
+ * course linéaire de 0 à INK_MAX aurait mis l'origine à 38 % du rail —
+ * introuvable à la main, et impossible à retrouver.
+ *
+ * Les deux surfaces n'ont pas la même course : la gamme de la mer est
+ * bien plus courte que celle des terres — huit paliers contre sept, sur
+ * un écart d'encre deux fois moindre — donc le même facteur l'aurait
+ * laissée grise clair à fond de curseur.
+ */
+const INK_MAX = { land: 2.4, sea: 4.0 };
+const inkDepth = (t, kind) =>
+  (t <= 0.5 ? t * 2 : 1 + (t - 0.5) * 2 * (INK_MAX[kind] - 1));
+
 const KNOBS = {
   's-alpha':    { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => root.style.setProperty('--alpha', tween(0.02, 0.96, t).toFixed(3)) },
@@ -122,11 +149,47 @@ const KNOBS = {
   's-tache':    { fmt: t => Math.round(tween(0.3, 1.6, t) * 100) + ' %',
                   apply: t => { view.look.tache = tween(0.3, 1.6, t); repaint(); } },
 
+  // COMBIEN DE FOIS LA PALETTE FAIT LE TOUR. C'est l'ordre
+  // d'interférence, et c'est le réglage le plus brutal de la page :
+  // au-delà de deux tours on voit un arc-en-ciel par-dessus le sujet,
+  // et la carte n'est plus lisible. En deçà d'un, la tache tend vers une
+  // seule teinte qui se contente de foncer.
+  's-franges':  { fmt: t => tween(0.30, 3.50, t).toFixed(2) + ' tr',
+                  apply: t => { view.look.franges = tween(0.30, 3.50, t); repaint(); } },
+
+  // LES TROUS et LA FINESSE ne disent rien au monde entier : ce sont des
+  // gains sur ce que le zoom révèle. Le milieu du rail est le réglage
+  // d'usine, le haut force le trait — utile pour juger au tramage de
+  // l'e-ink, où le détail fin sera le premier à disparaître.
+  's-trous':    { fmt: t => (t <= 0.005 ? 'nappe' : Math.round(t * 72) + ' % coupé'),
+                  apply: t => { view.look.holes = t; repaint(); } },
+
+  's-fine':     { fmt: t => (t <= 0.005 ? 'aplat' : Math.round(t * 200) + ' %'),
+                  apply: t => { view.look.fine = t * 2; repaint(); } },
+
+  // LA PROFONDEUR D'ENCRE des aplats. Le milieu du curseur EST le tirage
+  // d'origine — c'est ce qui permet de revenir à la carte connue sans
+  // chercher, et de voir d'un coup d'œil si on s'en est écarté. En deçà
+  // l'encre s'allège jusqu'au papier nu, au-delà elle se charge.
+  's-terres':   { fmt: t => Math.round(inkDepth(t, 'land') * 100) + ' %',
+                  apply: t => { view.look.land = inkDepth(t, 'land'); repaint(); } },
+
+  's-mer':      { fmt: t => Math.round(inkDepth(t, 'sea') * 100) + ' %',
+                  apply: t => { view.look.sea = inkDepth(t, 'sea'); repaint(); } },
+
   's-text':     { fmt: t => tween(9, 14, t).toFixed(0) + ' px',
                   apply: t => root.style.setProperty('--ui-pt', tween(9, 14, t).toFixed(1) + 'px') },
 
   's-icon':     { fmt: t => Math.round(tween(9, 28, t)) + ' px',
                   apply: t => { view.look.icon = tween(9, 28, t); repaint(); } },
+
+  // LE POINT DU RÉTICULE. Zéro le laisse à l'encre — c'est le réglage
+  // d'usine et celui qui part sur l'e-ink, où il n'y aura pas de teinte.
+  // Au-delà, il parcourt le cercle des teintes : sur l'écran d'atelier,
+  // une couleur franche est le seul moyen de garder le point visible
+  // par-dessus une tache irisée.
+  's-point':    { fmt: t => (t <= 0.02 ? 'encre' : Math.round(t * 360) + '°'),
+                  apply: t => { view.look.dot = t; repaint(); } },
 
   // Cinq décades, de la seconde à l'année.
   's-time':     { fmt: t => (t <= 0 ? 'figé' : '×' + Math.round(Math.pow(10, t * 5)).toLocaleString('fr-FR')),
@@ -139,8 +202,12 @@ function showGrey() {
   const on = byId('s-grey').checked;
   view.look.grey = on ? 1 : 0;
   byId('o-grey').textContent = on ? 'oui' : 'non';
-  byId('s-colour').disabled = on;
-  byId('l-colour').classList.toggle('off', on);
+  // En dégradé il n'y a plus de teinte : ni saturation, ni ordre
+  // d'interférence. Les deux curseurs s'éteignent plutôt que de mentir.
+  for (const k of ['colour', 'franges']) {
+    byId('s-' + k).disabled = on;
+    byId('l-' + k).classList.toggle('off', on);
+  }
   repaint();
   saveKnobs();
 }
@@ -263,6 +330,25 @@ function drawHeliodon() {
   const yOf = d => BOT - (d - lo) / (hi - lo) * (BOT - TOP);
 
   const y0 = yOf(0), y42 = yOf(SUN_MAX);
+
+  // CE QUE LA PORTE LAISSE FUIR. Deux bandes plus claires de part et
+  // d'autre de la fenêtre, d'autant plus marquées qu'on croit à la
+  // chance. Sans elles, une présence non nulle avec la courbe du soleil
+  // hors de la bande grise passerait pour un bug.
+  //
+  // Les bornes de la fuite tombent sur −17,6° et 60° : exactement le
+  // cadre que ce graphe se donnait déjà. Heureuse coïncidence, rien de
+  // plus — mais elle veut dire que la fuite est toujours dans le champ.
+  const wc = beliefWeights().c;
+  if (wc > 0.02) {
+    // Bornées au cadre : sous les tropiques la courbe ne descend pas à
+    // −17°, et la bande déborderait sous l'axe du temps.
+    const yb = v => bound(yOf(v), TOP, BOT);
+    g.fillStyle = `rgba(20,22,26,${(0.055 * wc).toFixed(3)})`;
+    g.fillRect(0, yb(SUN_MAX + SPILL_DEG), plotW, y42 - yb(SUN_MAX + SPILL_DEG));
+    g.fillRect(0, y0, plotW, yb(0.4 - SPILL_DEG) - y0);
+  }
+
   g.fillStyle = 'rgba(20,22,26,0.05)';
   g.fillRect(0, y42, plotW, y0 - y42);
 
@@ -373,16 +459,22 @@ function drawPresence() {
   for (const [key, wk, colour] of [['m', wt.m, cssOf('--meteo')],
                                    ['l', wt.l, cssOf('--legende')],
                                    ['c', wt.c, cssOf('--chance')]]) {
+    // La chance a sa propre porte : celle du soleil, ou la fuite. C'est
+    // ce qui fait que la bande de chance dépasse maintenant la nuit,
+    // exactement comme la carte.
+    const gateOf = key === 'c'
+      ? s => Math.max(s.gate, s.spill * wt.c)
+      : s => s.gate;
     g.beginPath();
     past.forEach((s, i) => {
-      const x = X(s), y = yOf(Math.min(1, base[i] + s[key] * wk * s.gate * GAIN));
+      const x = X(s), y = yOf(Math.min(1, base[i] + s[key] * wk * gateOf(s) * GAIN));
       i ? g.lineTo(x, y) : g.moveTo(x, y);
     });
     for (let i = past.length - 1; i >= 0; i--) g.lineTo(X(past[i]), yOf(Math.min(1, base[i])));
     g.closePath();
     g.fillStyle = colour;
     g.fill();
-    base = past.map((s, i) => base[i] + s[key] * wk * s.gate * GAIN);
+    base = past.map((s, i) => base[i] + s[key] * wk * gateOf(s) * GAIN);
   }
 
   g.beginPath();
@@ -452,6 +544,90 @@ function buildChips() {
   }
 }
 
+// ============================================================ LA PROVENANCE
+// Citer une croyance sans dire d'où elle vient, sur un mur, sous un nom
+// propre, c'est de l'appropriation avec une jolie police. La phrase porte
+// donc un renvoi, et le renvoi dit d'où elle vient.
+//
+// LE MÊME MARQUEUR POUR TOUTES, sourcées ou non : un triangle avec un i.
+// Deux signes différents auraient trié les légendes à la lecture, avant
+// même qu'on ait cliqué — et fait du manque de source un défaut visible
+// plutôt qu'un fait à constater. Le triangle ne juge pas : il dit qu'il y
+// a quelque chose à savoir. Ce qu'on y trouve, c'est la boîte qui le dit.
+//
+// Dessiné au trait et non en caractère : « ⓘ » est un cercle, il n'existe
+// pas de triangle-i en Unicode, et un glyphe de police ne survivrait pas
+// au tramage de l'e-ink de la même façon qu'un tracé.
+const INFO_SVG =
+  '<svg viewBox="0 0 12 11" aria-hidden="true">' +
+    '<path d="M6 1 L11.2 10 L0.8 10 Z" fill="none" stroke="currentColor"' +
+      ' stroke-width="1" stroke-linejoin="round"/>' +
+    '<circle cx="6" cy="5" r="0.62" fill="currentColor"/>' +
+    '<path d="M6 6.5 L6 8.6" stroke="currentColor" stroke-width="1.1"' +
+      ' stroke-linecap="round"/>' +
+  '</svg>';
+
+const FLOOR_SAID = 'Partout on y croit un peu — c’est le plancher.';
+
+/** Le haut lieu dont la bulle parle. Null quand elle est fermée. */
+let shown = null;
+
+/**
+ * Le dernier haut lieu écrit. `refreshPanel` passe soixante fois par
+ * seconde : refabriquer le bouton à chaque image le rendrait incliquable
+ * — le clic partirait sur un nœud déjà remplacé — en plus d'être du
+ * gâchis. On ne réécrit que quand le lieu change.
+ */
+let saidFor;
+
+function showSaid(leg) {
+  if (leg === saidFor) return;
+  saidFor = leg;
+
+  const p = byId('said');
+  p.textContent = leg ? leg.dit : FLOOR_SAID;
+  if (!leg) return;
+
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'src-mark';
+  b.innerHTML = INFO_SVG;
+  b.title = 'D’où vient cette phrase';
+  b.setAttribute('aria-label', b.title);
+  b.addEventListener('click', () => openSrc(leg));
+  p.append(' ', b);
+}
+
+function openSrc(leg) {
+  shown = leg;
+  byId('src-nom').textContent = leg.nom;
+  byId('src-dit').textContent = leg.dit;
+
+  // La boîte ne commente pas, elle cite. Un avertissement sur ce que la
+  // source atteste vraiment tenait ici : il pesait plus que la phrase
+  // qu'il accompagnait, et une œuvre n'a pas à se justifier dans sa
+  // propre marge. Ce travail-là vit dans LEGENDES.md.
+  const qui = byId('src-qui');
+  qui.textContent = 'Source : ';
+  if (leg.src) {
+    const a = document.createElement('a');
+    a.href = leg.src.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = leg.src.qui;
+    qui.append(a);
+  } else {
+    qui.append('(sans source)');
+  }
+  byId('src-sheet').hidden = false;
+  byId('src-close').focus();
+}
+
+function closeSrc() {
+  byId('src-sheet').hidden = true;
+  shown = null;
+}
+
 // ================================================================ LA LECTURE
 
 const HHMM = n => String(n).padStart(2, '0');
@@ -480,15 +656,23 @@ export function refreshPanel(sun, c, now) {
   const mn = last.gate > 0 ? openFor(lon, lat, sun) : null;
   const reste = mn == null ? ''
     : ' ' + (mn >= 90 ? (mn / 60).toFixed(1) + ' h' : Math.round(mn) + ' min');
+  // Porte fermée, la chance peut encore passer — il faut le dire, sinon
+  // une présence non nulle en pleine nuit ressemble à une panne.
+  const leak = last.gate <= 0 && last.spill * wt.c > 0.02;
   byId('h-sun').textContent = last.h.toFixed(1) + '° · ' +
-    (last.gate > 0 ? 'ouverte' + reste : last.h <= 0.4 ? 'nuit' : 'trop haut');
+    (last.gate > 0 ? 'ouverte' + reste
+                   : (last.h <= 0.4 ? 'nuit' : 'trop haut') +
+                     (leak ? ' · la chance passe' : ''));
 
-  const idx = Math.min(1, (last.m * wt.m + last.l * wt.l + last.c * wt.c) * last.gate * GAIN);
+  // Même formule que le shader, au réticule : la flaque y vaut 1, et la
+  // chance a sa propre porte.
+  const gC = Math.max(last.gate, last.spill * wt.c);
+  const idx = Math.min(1, ((last.m * wt.m + last.l * wt.l) * last.gate
+                        + last.c * wt.c * gC) * GAIN);
   byId('h-idx').textContent = idx.toFixed(2);
 
-  byId('h-leg').textContent = 'foi ' + Math.round(last.l * 100) + ' %';
   const near = nearestLegend(lon, lat);
-  byId('said').textContent = near ? near.dit : 'Partout on y croit un peu — c’est le plancher.';
+  showSaid(near);
   const kids = byId('chips').children;
   for (let i = 0; i < kids.length; i++)
     kids[i].setAttribute('aria-pressed', String(LEGEND_POINTS[i] === near));
@@ -529,6 +713,15 @@ export function initPanel(invalidate) {
 
   byId('s-grey').addEventListener('change', showGrey);
   showGrey();
+
+  // La feuille de provenance. Même mécanique que l'explication : clic hors
+  // du cadre ou Échap. Elle vit ici et non dans chrome.js parce que son
+  // contenu est celui du registre — c'est le panneau qui sait quel haut
+  // lieu est sous le réticule.
+  const sheet = byId('src-sheet');
+  byId('src-close').addEventListener('click', closeSrc);
+  sheet.addEventListener('click', e => { if (e.target === sheet) closeSrc(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && shown) closeSrc(); });
 
   for (const [btnId, bodyId] of FOLDS) {
     showFold(btnId, bodyId);

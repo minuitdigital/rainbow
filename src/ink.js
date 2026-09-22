@@ -19,7 +19,7 @@
 // =========================================================================
 
 import { DEG, flatten, matT, geoVec, angDist } from './projection.js';
-import { view, scale, sx, sy } from './view.js';
+import { view, scale, sx, sy, gait } from './view.js';
 import { zones } from './zones.js';
 import { CITY, tierAt, placeLine } from './ground.js';
 import { LEGEND_POINTS } from './sky.js';
@@ -339,18 +339,23 @@ function drawLegends(boxes, Rt) {
     // lui, reste soumis à la règle commune.
     const aimed = Math.hypot(X - view.W / 2, Y - view.H / 2) < 26;
 
+    // Visé, le glyphe est exactement là où se tient le piéton : il passe
+    // donc à sa droite. Un décalage de quinze pixels ment moins que deux
+    // dessins superposés — et le nom suit le glyphe.
+    const ox = aimed ? 16 * gk : 0;
+
     const tw = Math.max(wn, wd);
-    const box = [X - 13 * gk, Y - 12 * gk,
-                 X + 13 * gk + (tw ? tw + 6 : 0),
+    const box = [X + ox - 13 * gk, Y - 12 * gk,
+                 X + ox + 13 * gk + (tw ? tw + 6 : 0),
                  Y + 12 * gk + (say ? 10 : 0)];
     if (!aimed && overlaps(box, boxes)) continue;
     if (!aimed) boxes.push(box);
 
-    wandGlyph(X, Y);
+    wandGlyph(X + ox, Y);
 
     if (!named || (aimed && overlaps(box, boxes))) continue;
     if (aimed) boxes.push(box);
-    const tx = X + 17 * gk;
+    const tx = X + ox + 17 * gk;
     ink.strokeStyle = 'rgba(255,255,255,0.95)';
 
     ink.font = `10px ${FACE}`;
@@ -413,17 +418,147 @@ function drawPlaces(boxes, Rt) {
 }
 
 // ------------------------------------------------------------ le réticule
+//
+//  LE PIÉTON. Le point visé n'est pas une coordonnée, c'est un endroit où
+//  quelqu'un se tiendrait : un arc-en-ciel n'existe pas *à un endroit*, il
+//  existe *pour quelqu'un*. La silhouette dit « c'est nous », et c'est la
+//  même figure que celle du panneau, à la ligne « Position ».
+//
+//  Elle se tient SUR le point, pieds au sol : le repère local a son
+//  origine entre les pieds, y vers le haut négatif, hauteur 20.
+//
+//  Dessinée au trait plein et non en emoji : un emoji couleur devient un
+//  pâté au tramage de l'e-ink, et sa forme dépend du système.
+
+// Proportions de pictogramme et non de bonhomme : la tête vaut un
+// cinquième de la hauteur, pas un quart. Au-delà, le halo l'épaissit
+// encore et la figure devient un poupon.
+const WALKER_TORSO = [[-1.9, -17.2], [2.1, -17.0], [2.5, -13.0],
+                      [2.1, -9.6], [-2.2, -9.8], [-2.2, -13.4]];
+const WALKER_HEAD = [0.4, -19.2, 2.1];
+
+// LA FOULÉE. Les membres ne sont plus des coordonnées mais deux
+// articulations : une hanche, un genou. À la phase de repos (π/2) le
+// calcul retombe à un dixième de pixel près sur le dessin d'index.html —
+// c'est voulu, la figure du panneau ne marche pas et les deux doivent
+// rester la même.
+//
+// Les bras s'ouvrent DU MÊME CÔTÉ que la jambe voisine, ce qu'aucun
+// marcheur ne fait. À quinze pixels, des bras en contre-balancement se
+// croisent devant le torse et la figure devient un pâté ; l'écart
+// symétrique se lit d'un coup d'œil. C'est un pictogramme, pas une
+// planche d'anatomie.
+//
+// Le genou ne plie qu'en phase d'envol — quand la jambe part en avant.
+// Une jambe qui plie en poussant donne une démarche d'ivrogne.
+//
+// LE PIED RESTE AU SOL, et c'est de là que vient le balancement : jambes
+// écartées, la figure est plus courte ; jambes jointes, elle est plus
+// haute d'une unité. Plutôt que de laisser le pied s'enfoncer sous le
+// point visé — le contraire de ce que la silhouette est là pour dire —
+// on relève toute la figure de ce qu'il faut. Le dandinement n'est donc
+// pas un effet ajouté : c'est la conséquence du contact.
+const HIP      = [[-0.5, -9.7], [0.7, -9.7]];
+const SHOULDER = [[-1.7, -16.2], [1.7, -16.2]];
+const THIGH = 4.95, SHIN = 4.45, ARM = 5.4;
+const SWING = 0.47, ARM_SWING = 0.50, KNEE = 0.72;
+const GROUND = -1.3;
+
+function walkerGait(phase) {
+  const s = Math.sin(phase), c = Math.cos(phase);
+  const limbs = [];
+
+  for (let i = 0; i < 2; i++) {
+    const w = i ? 1 : -1;                          // arrière, puis avant
+    const [ax, ay] = SHOULDER[i], a = w * ARM_SWING * s;
+    limbs.push([[ax, ay], [ax + ARM * Math.sin(a), ay + ARM * Math.cos(a)]]);
+  }
+
+  let low = -Infinity;
+  for (let i = 0; i < 2; i++) {
+    const w = i ? 1 : -1;
+    const [hx, hy] = HIP[i];
+    const t = w * SWING * s;                       // la cuisse
+    const f = KNEE * Math.max(0, w * c);           // le genou, en envol
+    const kx = hx + THIGH * Math.sin(t), ky = hy + THIGH * Math.cos(t);
+    const fx = kx + SHIN * Math.sin(t - f), fy = ky + SHIN * Math.cos(t - f);
+    if (fy > low) low = fy;
+    limbs.push([[hx, hy], [kx, ky], [fx, fy]]);
+  }
+
+  return { limbs, lift: GROUND - low };
+}
+
+/**
+ * `angle` fait pivoter TOUTE la figure autour de (cx, cy) — le point visé,
+ * qui est aussi le sol sous ses pieds. Le repère local est donc tourné
+ * d'un bloc : membres, torse et tête gardent leurs proportions, seule
+ * l'orientation change.
+ */
+function drawWalker(cx, cy, k, phase, angle) {
+  const { limbs: WALKER_LIMBS, lift } = walkerGait(phase);
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  const P = (x, y) => {
+    const u = x * k, v = (y + lift) * k;
+    return [cx + u * ca - v * sa, cy + u * sa + v * ca];
+  };
+  const X = (x, y) => P(x, y)[0], Y = (x, y) => P(x, y)[1];
+
+  // deux passes : le halo blanc d'abord, l'encre ensuite. La figure doit
+  // tenir par-dessus une tache irisée — c'est là qu'elle sert le plus.
+  for (const pass of [0, 1]) {
+    const halo = pass === 0;
+    const paint = halo ? 'rgba(255,255,255,0.95)' : 'rgba(20,22,26,0.78)';
+    ink.lineCap = 'round';
+    ink.lineJoin = 'round';
+    ink.strokeStyle = paint;
+    ink.fillStyle = paint;
+
+    for (const limb of WALKER_LIMBS) {
+      ink.lineWidth = (limb.length > 2 ? 2.6 : 2.0) * k + (halo ? 2.0 * k : 0);
+      ink.beginPath();
+      limb.forEach(([x, y], i) => (i ? ink.lineTo(X(x, y), Y(x, y))
+                                     : ink.moveTo(X(x, y), Y(x, y))));
+      ink.stroke();
+    }
+
+    ink.beginPath();
+    WALKER_TORSO.forEach(([x, y], i) => (i ? ink.lineTo(X(x, y), Y(x, y))
+                                           : ink.moveTo(X(x, y), Y(x, y))));
+    ink.closePath();
+    if (halo) { ink.lineWidth = 2.0 * k; ink.stroke(); }
+    ink.fill();
+
+    ink.beginPath();
+    ink.arc(X(WALKER_HEAD[0], WALKER_HEAD[1]), Y(WALKER_HEAD[0], WALKER_HEAD[1]),
+            (WALKER_HEAD[2] + (halo ? 0.9 : 0)) * k, 0, 6.2832);
+    ink.fill();
+  }
+}
 
 function drawReticle(cx, cy) {
-  const g = 7, a = 17;
-  ink.strokeStyle = 'rgba(20,22,26,0.45)';
-  ink.lineWidth = 1;
+  const k = view.look.icon / GLYPH_PX;
+
+  // UN POINT, plus une croix. Les bras marquaient le point exact parce
+  // que la silhouette se tenait toujours au-dessus ; maintenant qu'elle
+  // pivote tout autour, ils lui passeraient au travers. Un point noir dit
+  // la même chose sans occuper de direction — et il reste vrai quel que
+  // soit l'angle.
   ink.beginPath();
-  ink.moveTo(cx - a, cy); ink.lineTo(cx - g, cy);
-  ink.moveTo(cx + g, cy); ink.lineTo(cx + a, cy);
-  ink.moveTo(cx, cy - a); ink.lineTo(cx, cy - g);
-  ink.moveTo(cx, cy + g); ink.lineTo(cx, cy + a);
+  ink.arc(cx, cy, 2.4 * k, 0, 6.2832);
+  ink.strokeStyle = 'rgba(255,255,255,0.95)';
+  ink.lineWidth = 2 * k;
   ink.stroke();
+  // Encre par défaut — c'est ce qui partira sur l'e-ink, où il n'y aura
+  // pas de teinte. Au-delà, une couleur franche : sur l'écran d'atelier
+  // c'est le seul moyen de garder le point visible par-dessus une tache
+  // irisée, qui prend toutes les valeurs de gris à tour de rôle.
+  const d = view.look.dot;
+  ink.fillStyle = d <= 0.02 ? 'rgba(20,22,26,0.92)'
+                            : `hsl(${Math.round(d * 360)} 78% 44%)`;
+  ink.fill();
+
+  drawWalker(cx, cy, k, gait.phase, gait.angle);
 }
 
 // --------------------------------------------------------------- la passe
@@ -441,8 +576,13 @@ export function trace(centre) {
   const cx = W / 2, cy = H / 2;
   drawReticle(cx, cy);
 
+  // L'emprise du réticule est devenue un CARRÉ centré : la figure pivote
+  // tout autour du point, elle peut donc se tenir dans n'importe quelle
+  // direction. Une boîte plus haute que large ne décrirait plus qu'un cas
+  // sur quatre.
+  const rk = view.look.icon / GLYPH_PX;
   const boxes = [
-    [cx - 26, cy - 26, cx + 26, cy + 26]          // le réticule
+    [cx - 24 * rk, cy - 24 * rk, cx + 24 * rk, cy + 24 * rk]
   ];
   if (railBox) boxes.push(railBox);               // le panneau
   drawCallouts(boxes, Rt);

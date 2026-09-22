@@ -9,18 +9,33 @@
 //  personne, quoi qu'on en pense. Cette seule contrainte dessine un
 //  anneau qui fait deux fois le tour de la Terre chaque jour.
 //
-//  Porte fermée : zéro. Aucun curseur ne peut rien y faire. On ne croit
-//  pas en la hauteur du soleil, on la calcule. C'est ce qui empêche la
-//  pièce de devenir un jouet.
+//  Porte fermée : zéro pour ce qui a une raison. On ne croit pas en la
+//  hauteur du soleil, on la calcule — c'est ce qui empêche la pièce de
+//  devenir un jouet, et `sunGate` reste exacte au degré près.
 //
 //  Porte ouverte, trois raisons d'y croire se partagent ce qui reste :
 //
 //      MÉTÉO    la pluie et la trouée        ce qui est vrai
 //      LÉGENDE  la foi attachée au lieu      ce qu'on raconte
-//      CHANCE   un champ qui oscille         ce qui n'a pas de raison
+//      CHANCE   ce qu'on porte sur soi       ce qui n'a pas de raison
 //
-//      indice = Soleil × ( wM·Météo + wL·Légende + wC·Chance )
+//      indice = Soleil × ( wM·Météo + wL·Légende )
+//             + wC · Chance · flaque · max(Soleil, fuite · wC)
 //               avec wM + wL + wC = 1
+//
+//  LA CHANCE N'EST PAS UN LIEU DU MONDE, C'EST CE QUE LE PIÉTON PORTE.
+//  Elle est multipliée par une FLAQUE centrée sur le réticule, qui
+//  s'élargit à mesure qu'on croit en elle. Au réticule la flaque vaut
+//  exactement 1 : le panneau lit donc toujours la chance pleine, et c'est
+//  la carte alentour qui la perd. On promène sa chance sur la Terre.
+//
+//  Et c'est là, dans la flaque et nulle part ailleurs, que LA PORTE FUIT.
+//  Un arc peut s'allumer alors que le soleil est couché ou trop haut,
+//  parce qu'il n'a aucune raison de s'allumer — c'est très exactement ce
+//  que le curseur dit. La fuite est en wC² : elle n'existe pas tant qu'on
+//  ne l'a pas voulue, et elle ne touche que la chance. La météo et la
+//  légende restent enfermées dans l'anneau, comme avant : ce qui est vrai
+//  et ce qu'on raconte ont toujours besoin du soleil.
 //
 //  Une SOMME et non un produit : avec un produit, un seul zéro éteindrait
 //  tout, et le spectateur qui ne croit qu'aux légendes ne verrait rien
@@ -181,7 +196,7 @@ const LEG = LEGENDS.map(l => {
   const v = geoVec(l.lon, l.lat);
   const chord = l.r * DEG;                    // approximation corde ≈ angle
   return { v, q: chord * chord, f: l.f, nom: l.nom, dit: l.dit,
-           lon: l.lon, lat: l.lat };
+           src: l.src || null, lon: l.lon, lat: l.lat };
 });
 
 export const LEGEND_POINTS = LEG;
@@ -232,6 +247,42 @@ export function chanceAt(lon, lat, driftC) {
   return smooth01(raw, 0.46, 0.76);
 }
 
+// -------------------------------------------------------------- LA FLAQUE
+// Ce qu'on porte sur soi. Le champ de chance existe partout, mais il ne
+// compte que près de celui qui le porte — la flaque décroît en gaussienne
+// depuis le réticule, comme un haut lieu, et par la même formule.
+//
+// AU RÉTICULE ELLE VAUT 1, toujours. C'est ce qui sauve le panneau : il
+// lit la chance pleine où qu'on soit, et `history.js` n'a rien à savoir de
+// tout ceci. Ce qui change, c'est la carte alentour.
+//
+// Son rayon s'élargit avec la croyance : huit degrés quand on n'y croit
+// pas — la flaque est alors à peu près sous nos pieds — trente quand on
+// n'y croit que.
+export const LUCK_NEAR = 8, LUCK_FAR = 30;
+
+/** `g` et `here` sont des vecteurs unitaires ; `wc` la part de chance. */
+export function luckAt(g, here, wc) {
+  if (!here) return 1;
+  const r = (LUCK_NEAR + (LUCK_FAR - LUCK_NEAR) * wc) * DEG;
+  const dx = g[0] - here[0], dy = g[1] - here[1], dz = g[2] - here[2];
+  return Math.exp(-(dx*dx + dy*dy + dz*dz) / (r * r));
+}
+
+// --------------------------------------------------------------- LA FUITE
+// De combien la porte laisse passer, hors de sa fenêtre. Pleine au bord,
+// éteinte dix-huit degrés plus loin — soit très exactement les bornes que
+// l'héliodon se donnait déjà (−18°, 60°), par une coïncidence commode.
+//
+// Elle ne sert QU'À LA CHANCE, et elle est repondérée par wC une seconde
+// fois : la fuite est donc en wC², elle n'apparaît pas par accident.
+export const SPILL_AMP = 0.42, SPILL_DEG = 18;
+
+export function spillAt(h) {
+  const d = Math.max(0.4 - h, h - SUN_MAX, 0);
+  return SPILL_AMP * (1 - smooth01(d, 0, SPILL_DEG));
+}
+
 // ============================================================== L'INDICE
 
 /**
@@ -242,23 +293,43 @@ export function chanceAt(lon, lat, driftC) {
  * dépolit la tache sans la déplacer — c'est de la matière, pas de la
  * donnée — donc la structure lue ici reste celle du champ.
  */
-export function rainbowIndex(lon, lat, sun, drift, driftC, w) {
-  const S = sunGate(sunElev(lon, lat, sun));
-  if (S <= 0) return 0;
-  const belief = w.m * meteoAt(lon, lat, sun, drift)
-               + w.l * legendAt(lon, lat)
-               + w.c * chanceAt(lon, lat, driftC);
-  const t = S * belief * GAIN;
+export function rainbowIndex(lon, lat, sun, drift, driftC, w, here) {
+  const h = sunElev(lon, lat, sun);
+  const S = sunGate(h);
+
+  // La porte de la chance : celle du soleil, ou la fuite si elle est plus
+  // généreuse. C'est le seul endroit du projet où un curseur pèse sur le
+  // soleil, et il ne pèse que sur ce qui n'a pas de raison.
+  const gateC = Math.max(S, spillAt(h) * w.c);
+  if (S <= 0 && gateC <= 0.002) return 0;
+
+  const g = geoVec(lon, lat);
+  let sum = w.c * chanceAt(lon, lat, driftC) * luckAt(g, here, w.c) * gateC;
+  if (S > 0) sum += S * (w.m * meteoAt(lon, lat, sun, drift) + w.l * legendAtVec(g));
+
+  const t = sum * GAIN;
   return t > 1 ? 1 : t;
 }
 
-/** Les trois parts séparément — pour l'étiquette et pour la lecture. */
-export function ingredients(lon, lat, sun, drift, driftC) {
+/**
+ * Les parts séparément — pour l'étiquette et pour la lecture.
+ *
+ * Porte fermée, la météo et la légende sont rendues NULLES et non
+ * calculées à vide : elles n'ont rien porté du chiffre, et c'est ce que
+ * l'étiquette doit dire. Sans quoi une tache de pleine nuit annoncerait
+ * « averse en cours » là où il n'y a que de la chance.
+ */
+export function ingredients(lon, lat, sun, drift, driftC, here, w) {
+  const h = sunElev(lon, lat, sun), S = sunGate(h);
+  const wc = w ? w.c : 0;
+  const g = geoVec(lon, lat);
   return {
-    sun:     sunElev(lon, lat, sun),
-    gate:    sunGate(sunElev(lon, lat, sun)),
-    meteo:   meteoAt(lon, lat, sun, drift),
-    legende: legendAt(lon, lat),
-    chance:  chanceAt(lon, lat, driftC)
+    sun:     h,
+    gate:    S,
+    gateC:   Math.max(S, spillAt(h) * wc),
+    luck:    luckAt(g, here, wc),
+    meteo:   S > 0 ? meteoAt(lon, lat, sun, drift) : 0,
+    legende: S > 0 ? legendAtVec(g) : 0,
+    chance:  chanceAt(lon, lat, driftC) * luckAt(g, here, wc)
   };
 }

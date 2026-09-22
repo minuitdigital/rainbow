@@ -58,8 +58,24 @@ const RULES = [
     /const CHANCE_FREQ = ([\d.]+);/],
 
   ['le bord bas de la porte',
-    /if\(h > ([\d.]+) && h < SUN_MAX\)/,
+    /\(h > ([\d.]+) && h < SUN_MAX\)/,
     /if \(h <= ([\d.]+) \|\| h >= SUN_MAX\) return 0;/],
+
+  ['la flaque de chance',
+    /const float LUCK_NEAR = ([\d.]+), LUCK_FAR = ([\d.]+);/,
+    /export const LUCK_NEAR = ([\d.]+), LUCK_FAR = ([\d.]+);/],
+
+  ['la fuite de la porte',
+    /const float SPILL_AMP = ([\d.]+), SPILL_DEG = ([\d.]+);/,
+    /export const SPILL_AMP = ([\d.]+), SPILL_DEG = ([\d.]+);/],
+
+  ['le bord de la fuite',
+    /float dOut = max\(max\(([\d.]+) - h, h - SUN_MAX\), 0\.0\);/,
+    /const d = Math\.max\(([\d.]+) - h, h - SUN_MAX, 0\);/],
+
+  ['le seuil au-dessous duquel on ne calcule rien',
+    /gateC > ([\d.]+)\)\{/,
+    /gateC <= ([\d.]+)\) return 0;/],
 
   ['la courbe de la porte',
     /pow\(1\.0 - h \/ SUN_MAX, ([\d.]+)\)/,

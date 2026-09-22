@@ -43,11 +43,11 @@ const hash01 = n => {
  * chance se tient ; la chance d'ici est celle d'une personne. La première
  * se partage entre voisins, la seconde non.
  */
-export function estimate(lon, lat, sun, drift, driftC, w, seed, simH) {
-  const base = rainbowIndex(lon, lat, sun, drift, driftC, w);
+export function estimate(lon, lat, sun, drift, driftC, w, seed, simH, here) {
+  const base = rainbowIndex(lon, lat, sun, drift, driftC, w, here);
   if (base <= 0.02) return null;
 
-  const ing = ingredients(lon, lat, sun, drift, driftC);
+  const ing = ingredients(lon, lat, sun, drift, driftC, here, w);
   const [acc, open] = terrainAt(lon, lat);
   const luck = 0.5 + 0.5 * Math.sin(simH * (2 * Math.PI / 1.3) + seed * 6.2832);
   const soft = 0.58 + 0.42 * (0.34 * open + 0.24 * acc + 0.42 * luck);
@@ -119,13 +119,13 @@ function makePoints(id) {
 }
 
 /** Les sommets du champ visibles à l'écran, espacés d'au moins 150 px. */
-function findPeaks(sun, drift, driftC, w) {
+function findPeaks(sun, drift, driftC, w, here) {
   const step = 30, found = [];
   for (let py = step * 0.5; py < view.H; py += step) {
     for (let px = step * 0.5; px < view.W; px += step) {
       const g = geoAt(px, py);
       if (!g) continue;
-      const v = rainbowIndex(g[0], g[1], sun, drift, driftC, w);
+      const v = rainbowIndex(g[0], g[1], sun, drift, driftC, w, here);
       if (v > 0.55) found.push({ px, py, v, lon: g[0], lat: g[1] });
     }
   }
@@ -149,7 +149,7 @@ function findPeaks(sun, drift, driftC, w) {
       for (; r < 400; r += 24) {
         const g = geoAt(p.px + Math.cos(a) * r, p.py + Math.sin(a) * r);
         if (!g) break;
-        if (rainbowIndex(g[0], g[1], sun, drift, driftC, w) < p.v * 0.5) break;
+        if (rainbowIndex(g[0], g[1], sun, drift, driftC, w, here) < p.v * 0.5) break;
       }
       sum += r;
     }
@@ -164,8 +164,8 @@ function findPeaks(sun, drift, driftC, w) {
  * lui, suit chaque image, parce que les points sont rangés en coordonnées
  * géographiques et non en pixels.
  */
-export function scan(sun, drift, driftC, simH, w) {
-  const peaks = findPeaks(sun, drift, driftC, w);
+export function scan(sun, drift, driftC, simH, w, here) {
+  const peaks = findPeaks(sun, drift, driftC, w, here);
 
   // Appariement géographique avec les zones déjà vivantes.
   const free = zones.slice();
@@ -204,7 +204,7 @@ export function scan(sun, drift, driftC, simH, w) {
       pt.on += ((i < n ? 1 : 0) - pt.on) * 0.22;
       pt.lat = z.lat + pt.rf * rg * Math.sin(pt.ang);
       pt.lon = wrap180(z.lon + pt.rf * rg * Math.cos(pt.ang) / cl);
-      pt.est = estimate(pt.lon, pt.lat, sun, drift, driftC, w, pt.seed, simH);
+      pt.est = estimate(pt.lon, pt.lat, sun, drift, driftC, w, pt.seed, simH, here);
       pt.phrase = pt.est ? phraseFor(pt.est, pt.seed, w) : '';
     }
     z.seen = false;

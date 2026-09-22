@@ -23,8 +23,8 @@
 //      main         ici
 // =========================================================================
 
-import { view, measure, centre, coast, anchorTo, simDate, elapsedHours,
-         advanceClock, drift, driftChance, beliefWeights } from './view.js';
+import { view, measure, centre, centreVec, coast, anchorTo, simDate, elapsedHours,
+         advanceClock, stride, drift, driftChance, beliefWeights } from './view.js';
 import { solar } from './sky.js';
 import { scan } from './zones.js';
 import { initMap, paint } from './map.js';
@@ -88,6 +88,11 @@ function frame(now) {
 
   if (ease('mode', view.modeTarget, 8, dt, 1e-3)) animating = true;
   if (coast(dt)) animating = true;
+
+  // La foulée se mesure APRÈS toutes les rotations : elle lit le
+  // déplacement, elle ne le décide pas.
+  if (stride(dt)) animating = true;
+
   if (view.speed > 0) animating = true;          // le temps avance
 
   if (dirty || animating) {
@@ -98,9 +103,12 @@ function frame(now) {
     // Les zones ne sont ré-examinées que cinq fois par seconde. Le tracé,
     // lui, suit chaque image : les points sont rangés en coordonnées
     // géographiques, pas en pixels.
+    //
+    // `centreVec` est le centre de la flaque de chance : le balayage doit
+    // savoir où se tient le piéton, puisque sa chance le suit.
     if (now - lastScan > 200) {
       lastScan = now;
-      scan(sun, drift(), driftChance(), elapsedHours(), beliefWeights());
+      scan(sun, drift(), driftChance(), elapsedHours(), beliefWeights(), centreVec());
     }
 
     const c = centre();
