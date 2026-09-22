@@ -1,4 +1,21 @@
 # =========================================================================
+#  ATTENTION — CE FICHIER N'EST PAS CELUI QUI TOURNE.
+#
+#  Le robot vit dans .github/workflows/meteo.yml. Celui-ci en est la
+#  SOURCE, et il existe pour une raison precise : le pont entre Claude et
+#  l'ordinateur de l'auteur refuse d'ecrire dans .github/workflows/ — une
+#  protection, pas une panne, puisqu'un fichier pose la s'execute sur les
+#  serveurs de GitHub.
+#
+#  Apres toute modification ici, une ligne dans le terminal du depot :
+#
+#      copy build\meteo.workflow.yml .github\workflows\meteo.yml
+#
+#  Puis commiter les deux. Si les deux fichiers divergent, c'est celui de
+#  .github/ qui fait foi — et celui-ci qui ment.
+# =========================================================================
+
+# =========================================================================
 #  LE ROBOT : LA MÉTÉO, ET LE SITE
 #
 #  Une fois par jour, GitHub va chercher la météo du monde entier chez
