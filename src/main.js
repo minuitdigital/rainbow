@@ -88,7 +88,6 @@ function frame(now) {
     animating = true;
   }
 
-  if (ease('mode', view.modeTarget, 8, dt, 1e-3)) animating = true;
   if (coast(dt)) animating = true;
 
   // La foulée se mesure APRÈS toutes les rotations : elle lit le

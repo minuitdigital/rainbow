@@ -34,9 +34,6 @@ export const view = {
 
   zoom: 1, zoomTarget: 1,
 
-  /** 0 = aplats, 1 = relief ombré. La touche « r » fond de l'un à l'autre. */
-  mode: 0, modeTarget: 0,
-
   /** Le point que le zoom doit garder sous le curseur, le temps de l'élan. */
   anchor: null,
 

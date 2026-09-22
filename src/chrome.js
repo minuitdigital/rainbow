@@ -170,7 +170,6 @@ export function bind(canvas, invalidate) {
       case '+': case '=': view.anchor = null; setZoomTarget(view.zoomTarget * 1.3); break;
       case '-': case '_': view.anchor = null; setZoomTarget(view.zoomTarget / 1.3); break;
       case '0': recentre(); break;
-      case 'r': case 'R': view.modeTarget = view.modeTarget > 0.5 ? 0 : 1; break;
       case '?': openHelp(); break;
       case 'f': case 'F':
         if (document.fullscreenElement) document.exitFullscreen();

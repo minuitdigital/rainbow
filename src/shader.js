@@ -38,7 +38,7 @@ precision highp float;
 precision highp sampler2DArray;
 
 uniform vec2  uRes;
-uniform float uScale, uMode;
+uniform float uScale;
 uniform mat3  uRot;
 uniform float uDecl, uSublon, uDrift, uDriftC, uDetail;
 uniform float uFine;                   // la finesse : 0 au monde, plein de près
@@ -51,7 +51,7 @@ uniform vec3  uHere;                   // le réticule : là où se tient le pi�
 uniform int   uLegN;
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
 uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
-uniform sampler2D uEarth, uField, uMask;
+uniform sampler2D uField, uMask;
 
 // LA VRAIE METEO, en couches : un pas de temps par couche, trente-deux
 // pas de trois heures. Un sampler2DArray plutot qu'un damier dans une
@@ -189,11 +189,12 @@ void main(){
   float wC = max(fwidth(f), 1e-5);
   float isLand = smoothstep(0.5 - wC, 0.5 + wC, f);
 
-  // --- LE LUSTRE. earth.jpg n'est pas une carte de reflets, c'est une carte
-  // d'OMBRES : à pleine amplitude elle réimprime tout le relief par-dessus
-  // les aplats. Elle ne sert donc qu'à creuser légèrement les versants.
-  float shaded = textureGrad(uEarth, uv, gx, gy).r;
-  float shade = 1.0 - clamp((shaded - 0.54) / 0.46, 0.0, 1.0);
+  // LE LUSTRE A ETE RETIRE, et avec lui data/earth.jpg — 3,9 Mo sur 13,
+  // une texture de 8192 pixels en memoire et une lecture de plus par
+  // pixel, pour creuser les versants de quatorze pour cent. La carte
+  // assume ses aplats : des bords calcules, nets a toute echelle, et rien
+  // d'imprime par-dessus. La touche « r » qui fondait vers le relief
+  // ombre s'en va par la meme occasion.
 
   // LA PROFONDEUR D'ENCRE. Le papier ne bouge pas — c'est le palier le
   // plus profond qui monte ou descend, comme on charge une plaque. À 1,0
@@ -209,11 +210,8 @@ void main(){
   vec3 landInk = max(LAND_LIGHT + (LAND_DEEP - LAND_LIGHT) * uLand, vec3(0.0));
   vec3 sea  = mix(SEA_LIGHT,  seaInk,  qS);
   vec3 land = mix(LAND_LIGHT, landInk, qL);
-  land *= 1.0 - shade * 0.14;
 
   vec3 ground = mix(sea, land, isLand);
-  vec3 alt = mix(vec3(0.90, 0.912, 0.928), vec3(shaded), isLand);
-  ground = mix(ground, alt, uMode);
   float m = texture(uMask, uv).r;
 
   // ====================================================== LA PORTE

@@ -66,11 +66,11 @@ function timerRead() {
   timerBusy = false;
 }
 
-const UNIFORMS = ['uRes', 'uScale', 'uMode', 'uRot', 'uDecl', 'uSublon',
+const UNIFORMS = ['uRes', 'uScale', 'uRot', 'uDecl', 'uSublon',
                   'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uHoles', 'uFranges',
                   'uBelief', 'uHere',
                   'uSat', 'uTache', 'uGrey', 'uSea', 'uLand',
-                  'uLegN', 'uLegP', 'uLegQ', 'uEarth', 'uField', 'uMask',
+                  'uLegN', 'uLegP', 'uLegQ', 'uField', 'uMask',
                   'uWx', 'uWxOn', 'uSlot', 'uWxN'];
 
 /**
@@ -156,12 +156,12 @@ export function initMap(canvas, onReady) {
   gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
   for (const n of UNIFORMS) U[n] = gl.getUniformLocation(prog, n);
-  gl.uniform1i(U.uEarth, 0);
   gl.uniform1i(U.uField, 1);
   gl.uniform1i(U.uMask, 2);
   gl.uniform1i(U.uWx, 3);
 
-  placeholder(0); placeholder(1); placeholder(2);
+  // L'unite 0 n'est plus utilisee depuis le retrait de earth.jpg.
+  placeholder(1); placeholder(2);
   emptyWeather();
   uploadLegends();
 
@@ -176,7 +176,6 @@ export function initMap(canvas, onReady) {
   };
   load('data/field.png', 1, true);
   load('data/mask.png', 2, false);
-  load('data/earth.jpg', 0, true);
 
   return true;
 }
@@ -286,7 +285,6 @@ export function paint(canvas, sun, slot) {
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.uniform2f(U.uRes, canvas.width, canvas.height);
   gl.uniform1f(U.uScale, scale() * view.dpr);
-  gl.uniform1f(U.uMode, view.mode);
   gl.uniformMatrix3fv(U.uRot, false, view.R);
   gl.uniform1f(U.uDecl, sun.decl);
   gl.uniform1f(U.uSublon, sun.sublon);
