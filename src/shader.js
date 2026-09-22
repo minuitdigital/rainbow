@@ -29,6 +29,14 @@ void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
 export const FRAGMENT = `#version 300 es
 precision highp float;
 
+// LES TABLEAUX DE TEXTURES N'ONT PAS DE PRECISION PAR DEFAUT. En GLSL ES
+// 3.00, la ligne ci-dessus couvre les flottants, et sampler2D s'en tire
+// avec une precision implicite — mais sampler2DArray, sampler3D et leurs
+// variantes entieres exigent la leur, explicitement. Sans cette ligne le
+// shader ne compile pas, initMap leve, et le canvas reste NOIR sans un
+// mot : l'ecran noir de septembre 2026, une demi-heure de recherche.
+precision highp sampler2DArray;
+
 uniform vec2  uRes;
 uniform float uScale, uMode;
 uniform mat3  uRot;
@@ -44,6 +52,18 @@ uniform int   uLegN;
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
 uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
 uniform sampler2D uEarth, uField, uMask;
+
+// LA VRAIE METEO, en couches : un pas de temps par couche, trente-deux
+// pas de trois heures. Un sampler2DArray plutot qu'un damier dans une
+// seule image, parce qu'un damier fait baver les tuiles l'une dans
+// l'autre au filtrage bilineaire et qu'il faudrait border chaque case.
+//
+//      R   la pluie DU VOISINAGE, dilatee d'une case par le script
+//      G   la clarte directe : des rayons non interceptes arrivent-ils ici
+//      B   la pluie locale — les etiquettes s'en servent, pas le shader
+uniform sampler2DArray uWx;
+uniform float uWxOn;                   // 0 = le bruit fractal, 1 = la grille
+uniform float uSlot, uWxN;             // ou l'on en est, et combien de pas
 out vec4 fragColor;
 
 const float A1 = 1.340264, A2 = -0.081106, A3 = 0.000893, A4 = 0.003796;
@@ -233,10 +253,36 @@ void main(){
     // ---- MÉTÉO et LÉGENDE n'existent que porte ouverte. Ce qui est vrai
     // et ce qu'on raconte ont toujours besoin du soleil.
     if(S > 0.0){
-      float rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
-      float a = (lat - uDecl * 0.45) / 9.5;
-      float b = (abs(lat) - 48.0) / 15.0;
-      float gap = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
+      float rain, gap;
+
+      // DEUX SOURCES POUR LA MEME CHOSE. La branche est UNIFORME : tous
+      // les pixels prennent le meme chemin, le processeur graphique ne
+      // diverge pas, et la branche non prise ne coute rien.
+      //
+      // Et il se trouve que la vraie meteo est la MOINS chere des deux :
+      // deux lectures de texture au lieu de vingt-quatre hachages. Brancher
+      // Open-Meteo accelere la carte, ce qui n'allait pas de soi.
+      if(uWxOn > 0.5){
+        float k0 = floor(uSlot);
+        float k1 = min(k0 + 1.0, uWxN - 1.0);
+        vec4 w0 = texture(uWx, vec3(uv, k0));
+        vec4 w1 = texture(uWx, vec3(uv, k1));
+        vec4 w  = mix(w0, w1, uSlot - k0);
+        rain = w.r;
+        // La clarte mesuree, remise sur la course de l'ancienne formule :
+        // meme plancher, meme amplitude. Le masque littoral DISPARAIT ici
+        // — il servait a rattraper une climatologie inventee, et il n'y a
+        // plus rien a rattraper. La mer s'allume donc pour de bon : il y
+        // pleut vraiment, et les etiquettes disent deja qu'il n'y a
+        // personne pour voir.
+        gap = 0.14 + 1.66 * w.g;
+      } else {
+        rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
+        float a = (lat - uDecl * 0.45) / 9.5;
+        float b = (abs(lat) - 48.0) / 15.0;
+        gap = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
+      }
+
       float MET = 1.0 - exp(-rain * (gap / 1.2) * 6.0);
       float LEG = legendAt(g);
       belief += S * (uBelief.x * MET + uBelief.y * LEG);

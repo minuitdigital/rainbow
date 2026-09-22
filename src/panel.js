@@ -23,10 +23,13 @@
 //  à l'écran.
 // =========================================================================
 
-import { view, beliefWeights, anchorTo } from './view.js';
+import { view, beliefWeights, anchorTo,
+         beat, beatIdle, pixelCount } from './view.js';
 import { GAIN, SUN_MAX, SPILL_DEG, openFor, nearestLegend,
          LEGEND_POINTS } from './sky.js';
 import { past, recall, posOf, AGE_MAX } from './history.js';
+import { weatherReach } from './weather.js';
+import { gpuMs } from './map.js';
 import { measureRail } from './ink.js';
 
 const byId = id => document.getElementById(id);
@@ -38,6 +41,13 @@ const tween = (a, b, t) => a + (b - a) * t;
 /** Posé par initPanel : le panneau ne connaît pas la boucle d'images. */
 let repaint = () => {};
 
+/**
+ * Posé par initPanel également. Changer de machine change le nombre de
+ * pixels réels : il faut remesurer les deux calques, pas seulement
+ * redessiner. C'est la seule chose du panneau qui touche à la taille.
+ */
+let remeasure = () => {};
+
 // ===================================================== LE PARTAGE DE LA CROYANCE
 // Une croyance FINIE. Pousser l'une pousse physiquement les deux autres,
 // au prorata de ce qu'elles valaient, et LEURS POIGNÉES BOUGENT. Une
@@ -45,6 +55,10 @@ let repaint = () => {};
 // place ne se lit pas : on ne voit pas l'arbitrage, on le devine.
 
 const SHARES = [['w-m', 'm', 'o-m'], ['w-l', 'l', 'o-l'], ['w-c', 'c', 'o-c']];
+
+/** Les fonctions de rafraîchissement des curseurs, posées par initPanel. */
+const SYNCS = {};
+const syncKnob = id => SYNCS[id] && SYNCS[id]();
 
 function pushBelief(key, v) {
   const b = view.belief;
@@ -87,7 +101,8 @@ const FOLDS = [
   ['pli-r-tache',    'corps-r-tache',    true ],
   ['pli-r-fond',     'corps-r-fond',     false],
   ['pli-r-panneau',  'corps-r-panneau',  false],
-  ['pli-r-temps',    'corps-r-temps',    false]
+  ['pli-r-temps',    'corps-r-temps',    false],
+  ['pli-r-perf',     'corps-r-perf',     false]
 ];
 
 /** id du corps → est-il replié ? */
@@ -191,10 +206,51 @@ const KNOBS = {
   's-point':    { fmt: t => (t <= 0.02 ? 'encre' : Math.round(t * 360) + '°'),
                   apply: t => { view.look.dot = t; repaint(); } },
 
-  // Cinq décades, de la seconde à l'année.
-  's-time':     { fmt: t => (t <= 0 ? 'figé' : '×' + Math.round(Math.pow(10, t * 5)).toLocaleString('fr-FR')),
-                  apply: t => { view.speed = t <= 0 ? 0 : Math.pow(10, t * 5); repaint(); } }
+  // LE CURSEUR QUI CHANGE DE NATURE. En dev c'est une vitesse, cinq
+  // décades de la seconde à l'année. En météo ça n'aurait aucun sens —
+  // une prévision ne s'accélère pas — et il devient un « quand » : de
+  // vingt-quatre heures en arrière à quarante-huit en avant, dans la
+  // fenêtre que le fichier couvre. Le même rail, deux significations, et
+  // le libellé à gauche dit laquelle.
+  's-time':     { fmt: t => view.clock === 'meteo' ? whenSaid(whenOf(t))
+                          : (t <= 0 ? 'figé'
+                             : '×' + Math.round(Math.pow(10, t * 5)).toLocaleString('fr-FR')),
+                  apply: t => {
+                    if (view.clock === 'meteo') view.when = whenOf(t);
+                    else view.speed = t <= 0 ? 0 : Math.pow(10, t * 5);
+                    repaint();
+                  } }
 };
+
+// ------------------------------------------------------- le « quand »
+// La fenêtre du fichier météo : hier, et deux jours devant. Maintenant
+// tombe au tiers du rail — et pas au milieu, parce que le passé qu'on
+// peut consulter est deux fois plus court que l'avenir qu'on prévoit.
+
+const WHEN_BACK = -24, WHEN_AHEAD = 48;
+
+const whenOf = t => WHEN_BACK + t * (WHEN_AHEAD - WHEN_BACK);
+
+/** La position du rail qui vaut « maintenant ». */
+const WHEN_NOW = -WHEN_BACK / (WHEN_AHEAD - WHEN_BACK);
+
+function whenSaid(h) {
+  // Une demi-heure de part et d'autre : le rail fait cent un crans pour
+  // soixante-douze heures, un cran vaut donc quarante-trois minutes et
+  // « maintenant » ne serait sinon jamais atteignable à la main.
+  if (Math.abs(h) < 0.5) return 'maintenant';
+  const s = h < 0 ? '−' : '+';
+  const a = Math.abs(h);
+  const said = a >= 24 ? `${s}${(a / 24).toFixed(1)} j` : `${s}${Math.round(a)} h`;
+
+  // AU-DELÀ DU RELEVÉ, la carte répète son dernier pas de temps sans le
+  // dire — et l'on croit regarder après-demain. Le tilde ne coûte qu'un
+  // caractère et il empêche exactement ce malentendu. Il apparaît quand
+  // le robot a manqué un passage : la fenêtre glisse alors vers le passé
+  // sans que le rail bouge.
+  const reach = weatherReach(Date.now());
+  return (reach != null && h > reach) ? '~' + said : said;
+}
 
 // La case « dégradé » est un ENCODAGE, pas une teinte en moins : quand
 // elle est mise, le curseur « couleur » n'a plus rien à dire.
@@ -212,6 +268,226 @@ function showGrey() {
   saveKnobs();
 }
 
+// ============================================================ LA PERFORMANCE
+// Ce que la page coûte, et sur quelle machine. Ce registre ne dit rien du
+// ciel : c'est un instrument d'atelier, replié par défaut, qu'on ne trouve
+// que si on le cherche.
+
+function showRig() {
+  view.rig = byId('rig-mini').checked ? 'mini' : 'laptop';
+  // Changer de machine change le nombre de pixels RÉELS : les deux calques
+  // doivent être retaillés, un simple redessin n'y suffirait pas.
+  remeasure();
+  saveKnobs();
+}
+
+// ================================================================ L'HORLOGE
+// D'où vient l'heure, et donc d'où vient la pluie. Les deux vont ensemble :
+// un temps inventé ne peut pas aller chercher une prévision, et une vraie
+// prévision ne se laisse pas accélérer dix mille fois.
+//
+// « météo » reste éteint tant que data/weather.png n'est pas à côté de la
+// page. Une case qui prétendrait brancher des données absentes mentirait —
+// et sur un mur, un réglage qui ne fait rien est pire qu'un réglage absent.
+
+/**
+ * UNE POSITION DE CURSEUR PAR MODE. Sans ça, basculer en météo laisserait
+ * le rail à 72 % — la vitesse ×3981 du mode dev — qui vaut « dans 28
+ * heures » une fois relu comme un « quand ». On retrouverait la carte de
+ * mercredi prochain sans avoir rien demandé.
+ */
+const timePos = { dev: null, meteo: null };
+
+function showClock() {
+  const was = view.clock;
+  const now = byId('clk-meteo').checked ? 'meteo' : 'dev';
+  if (was === now) return;
+
+  timePos[was] = +byId('s-time').value;
+  view.clock = now;
+
+  // En arrivant en météo pour la première fois, on se pose sur
+  // maintenant. C'est le seul instant qui ne demande pas d'explication.
+  const back = timePos[now] != null ? timePos[now]
+             : now === 'meteo' ? Math.round(WHEN_NOW * 100) : 72;
+  byId('s-time').value = back;
+
+  // Le libellé dit laquelle des deux significations le rail porte. Sans
+  // lui, un curseur qui affiche « +6 h » là où il disait « ×3 981 » est
+  // une énigme.
+  byId('l-time').textContent = now === 'meteo' ? 'quand' : 'vitesse';
+
+  // En dev, le temps reprend sa course ; en météo, il n'y a plus de
+  // vitesse du tout et `elapsedHours` lit l'heure réelle.
+  if (now === 'dev') view.when = 0;
+
+  syncKnob('s-time');
+  saveKnobs();
+  remeasure();
+}
+
+/**
+ * Les jauges, quatre fois par seconde et pas davantage.
+ *
+ * Écrire dans le document force un recalcul de mise en page. Le faire
+ * soixante fois par seconde ralentirait très exactement ce qu'on essaie de
+ * mesurer — l'instrument fausserait sa propre lecture. Et à soixante hertz,
+ * un chiffre ne se lit de toute façon pas.
+ */
+let gaugeAt = 0;
+
+function showBeat() {
+  const t = performance.now();
+  if (t - gaugeAt < 250) return;
+  gaugeAt = t;
+
+  const rest = beatIdle();
+  const ms = v => v.toFixed(v < 10 ? 2 : 1) + ' ms';
+
+  // LE REPOS EST UN ÉTAT, PAS UNE PANNE. La boucle s'arrête quand rien ne
+  // bouge — c'est ce qui rend la pièce supportable sur un mur des années
+  // durant. Afficher une cadence figée ferait croire à un gel.
+  byId('g-fps').textContent = rest ? 'repos' : Math.round(beat.fps) + ' im/s';
+
+  // Le seul chiffre qui dise vraiment ce que le shader coûte. Un tiret
+  // veut dire que le navigateur refuse l'extension, pas que c'est gratuit.
+  const gpu = gpuMs();
+  byId('g-gpu').textContent = gpu == null ? '—' : ms(gpu);
+
+  byId('g-ms').textContent    = ms(beat.ms);
+  byId('g-map').textContent   = ms(beat.map);
+  byId('g-ink').textContent   = ms(beat.ink);
+  byId('g-panel').textContent = ms(beat.panel);
+  byId('g-px').textContent    = (pixelCount() / 1e6).toFixed(2) + ' Mpx';
+}
+
+// ================================================================= LA NOTE
+// Un chiffre en millisecondes ne dit rien tout seul. Il faut savoir ce
+// qu'il mesure, et SURTOUT ce qui le fait monter — sans quoi on optimise
+// au hasard, ce qui est la façon la plus sûre de perdre une semaine.
+//
+// D'où deux phrases par note, jamais une : `quoi` dit ce que le chronomètre
+// a mesuré, `pourquoi` dit sur quoi agir. La seconde est celle qui sert.
+
+const NOTES = {
+  fps: {
+    nom: 'images par seconde',
+    quoi: 'La cadence réelle, tout compris — matériel et logiciel ensemble. '
+        + "C'est le seul chiffre qui dise si l'expérience est fluide : au-dessus "
+        + 'de cinquante on ne sent rien, en dessous de trente le glissé accroche.',
+    pourquoi: '« repos » n’est pas un gel. La boucle d’images s’arrête quand '
+        + 'rien ne bouge, et c’est exactement ce qui permet au tableau de ne '
+        + 'rien consommer sur un mur pendant des années. Bouge la carte et le '
+        + 'compteur repart. Si ce chiffre est bas, regarde lequel des deux '
+        + 'chronomètres ci-dessous est gros : celui-là est le coupable.'
+  },
+  gpu: {
+    nom: 'shader',
+    quoi: 'Le temps que la carte graphique passe à peindre la carte, mesuré '
+        + 'par le pilote lui-même et non à la montre. C’est du MATÉRIEL pur : '
+        + 'la projection inversée, le bruit, les aplats, l’irisation — tout ce '
+        + 'qui est calculé pixel par pixel.',
+    pourquoi: 'Il monte avec le nombre de pixels (voir « pixels » plus bas), '
+        + 'avec « trous » et « finesse » au zoom profond, et avec le nombre de '
+        + 'hauts lieux. Pour le faire baisser d’un coup : passer la machine sur '
+        + '« mini ». Un tiret veut dire que le navigateur refuse l’extension de '
+        + 'mesure — pas que c’est gratuit.'
+  },
+  js: {
+    nom: 'javascript',
+    quoi: 'Le temps que le processeur central passe à préparer une image. '
+        + 'C’est du LOGICIEL, et c’est la somme exacte des trois lignes en '
+        + 'retrait juste en dessous.',
+    pourquoi: 'Il ne dépend presque pas de la taille de la fenêtre — un écran '
+        + 'deux fois plus grand ne le change pas — mais du nombre de POINTS à '
+        + 'parcourir : sommets des côtes, villes, échantillons d’histoire. '
+        + 'Si ce chiffre dépasse celui du shader, c’est le JavaScript qu’il '
+        + 'faut alléger, pas la carte.'
+  },
+  map: {
+    nom: 'carte',
+    quoi: 'L’envoi des réglages au processeur graphique : une vingtaine de '
+        + 'nombres, et l’ordre de dessiner un triangle.',
+    pourquoi: 'Ce chiffre est toujours minuscule, et c’est normal — il ne dit '
+        + 'RIEN du coût de la carte. L’ordre de dessiner rend la main avant que '
+        + 'le shader ait commencé son travail ; ce travail est sur la ligne '
+        + '« shader ». Ne cherche pas à optimiser ici.'
+  },
+  ink: {
+    nom: 'encre',
+    quoi: 'Le calque en deux dimensions posé par-dessus la carte : les traits '
+        + 'de côte, les villes, les étiquettes d’arc, les hauts lieux et le '
+        + 'piéton du réticule.',
+    pourquoi: 'C’est le poste le plus lourd du logiciel au monde entier, parce '
+        + 'qu’il reparcourt les sommets des côtes à chaque image. Il BAISSE '
+        + 'quand on zoome : moins de côtes tiennent à l’écran. Si tu vois un '
+        + 'gros chiffre ici au monde entier et un petit à ×32, c’est le '
+        + 'comportement attendu.'
+  },
+  panel: {
+    nom: 'panneau',
+    quoi: 'Les deux graphes, et les vingt-quatre heures passées sous le '
+        + 'réticule — recalculées à chaque fois, jamais mémorisées.',
+    pourquoi: 'Il ne dépend ni du zoom ni de la taille de l’écran, seulement '
+        + 'du nombre de points d’histoire et de la fréquence à laquelle on les '
+        + 'refait. Replier le registre ESTIMATEUR le met à zéro : les graphes '
+        + 'ne se dessinent plus.'
+  },
+  px: {
+    nom: 'pixels',
+    quoi: 'Combien de pixels RÉELS le shader calcule à chaque image : la '
+        + 'largeur par la hauteur de la fenêtre, multipliées par la densité de '
+        + 'l’écran.',
+    pourquoi: 'C’est le levier le plus brutal de toute la page, et il agit '
+        + 'directement sur la ligne « shader ». Sur un écran dense, passer la '
+        + 'machine sur « mini » divise ce nombre par QUATRE — et le temps du '
+        + 'shader avec lui. Aucun autre réglage n’a cet effet.'
+  },
+  rig: {
+    nom: 'la machine',
+    quoi: 'De quel calculateur la page dispose. « laptop » pour l’écran '
+        + 'd’atelier, « mini » pour le Raspberry Pi du tableau.',
+    pourquoi: 'Trois choses changent, et ce sont les trois qui comptent : les '
+        + 'pixels réels passent de deux à un par pixel de page (quatre fois '
+        + 'moins de travail pour le shader), le balayage des zones s’élargit de '
+        + '30 à 44 pixels (moitié moins d’appels), et l’intervalle entre deux '
+        + 'balayages passe de 200 à 320 millisecondes. Le choix est mémorisé.'
+  },
+  clock: {
+    nom: 'l’horloge',
+    quoi: 'D’où vient l’heure, et donc d’où vient la pluie. « dev » invente '
+        + 'un temps que le curseur accélère, de la seconde à l’année, et la '
+        + 'pluie est un bruit fractal. « météo » suit le temps réel et va '
+        + 'chercher la vraie prévision.',
+    pourquoi: 'Les deux vont ensemble : un temps inventé ne peut pas aller '
+        + 'chercher une prévision, et une vraie prévision ne se laisse pas '
+        + 'accélérer dix mille fois. « météo » restera éteint tant que le '
+        + 'fichier data/weather.png ne sera pas à côté de la page — une case '
+        + 'qui prétendrait brancher des données absentes mentirait. En météo, '
+        + 'le curseur cessera d’être une vitesse pour devenir un « quand », '
+        + 'de vingt-quatre heures en arrière à quarante-huit en avant.'
+  }
+};
+
+/** La note ouverte, ou null. */
+let noted = null;
+
+function openNote(key) {
+  const n = NOTES[key];
+  if (!n) return;
+  noted = key;
+  byId('note-nom').textContent = n.nom;
+  byId('note-quoi').textContent = n.quoi;
+  byId('note-pourquoi').textContent = n.pourquoi;
+  byId('note-sheet').hidden = false;
+  byId('note-close').focus();
+}
+
+function closeNote() {
+  byId('note-sheet').hidden = true;
+  noted = null;
+}
+
 // Sur un mur, on ne veut pas refaire ses réglages à chaque allumage. Tout
 // est enveloppé : le stockage peut être refusé, et la page doit tenir sans.
 // Le numéro fait partie de la clé : changer une valeur par défaut dans
@@ -221,7 +497,8 @@ const STORE_KEY = 'estimateur.reglages.2';
 
 function saveKnobs() {
   try {
-    const o = { belief: view.belief, grey: byId('s-grey').checked, plis: folded };
+    const o = { belief: view.belief, grey: byId('s-grey').checked,
+                rig: view.rig, clock: view.clock, plis: folded };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
   } catch (e) { /* sans mémoire, la page marche quand même */ }
@@ -235,6 +512,13 @@ function loadKnobs() {
     if (typeof o[id] === 'number') byId(id).value = bound(o[id], 0, 100);
   if (o.belief && typeof o.belief.m === 'number') Object.assign(view.belief, o.belief);
   byId('s-grey').checked = !!o.grey;
+  byId(o.rig === 'mini' ? 'rig-mini' : 'rig-laptop').checked = true;
+  // Une horloge « météo » mémorisée ne se restaure QUE si la case est
+  // encore disponible : sans data/weather.png, le bouton est désactivé et
+  // cocher un bouton désactivé donnerait un état que l'on ne peut plus
+  // quitter, puisqu'aucun clic ne l'atteindrait.
+  const met = byId('clk-meteo');
+  byId(o.clock === 'meteo' && !met.disabled ? 'clk-meteo' : 'clk-dev').checked = true;
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -679,12 +963,14 @@ export function refreshPanel(sun, c, now) {
 
   drawHeliodon();
   drawPresence();
+  showBeat();
 }
 
 // ============================================================== LE DÉMARRAGE
 
-export function initPanel(invalidate) {
+export function initPanel(invalidate, resize) {
   repaint = invalidate;
+  remeasure = resize || invalidate;
 
   // Les plis d'usine d'abord : loadKnobs n'écrase que ce qu'il connaît.
   for (const [, bodyId, openByDefault] of FOLDS) folded[bodyId] = !openByDefault;
@@ -698,6 +984,26 @@ export function initPanel(invalidate) {
   }
   showBelief();
 
+  // LES DEUX CHOIX D'ABORD, ET L'ORDRE COMPTE.
+  //
+  // La machine, parce que `measure` lit son plafond de pixels : la poser
+  // après taillerait les deux calques une seconde fois au démarrage. D'où
+  // l'affectation directe plutôt qu'un appel à showRig, qui déclencherait
+  // très exactement ce second taillage.
+  //
+  // L'horloge, parce que le curseur du temps lui demande s'il est une
+  // vitesse ou un « quand ». Le synchroniser avant que `view.clock` soit
+  // restauré afficherait une vitesse là où un réglage mémorisé dit
+  // « maintenant ».
+  for (const id of ['rig-laptop', 'rig-mini'])
+    byId(id).addEventListener('change', showRig);
+  view.rig = byId('rig-mini').checked ? 'mini' : 'laptop';
+
+  for (const id of ['clk-dev', 'clk-meteo'])
+    byId(id).addEventListener('change', showClock);
+  view.clock = byId('clk-meteo').checked ? 'meteo' : 'dev';
+  byId('l-time').textContent = view.clock === 'meteo' ? 'quand' : 'vitesse';
+
   for (const [id, knob] of Object.entries(KNOBS)) {
     const input = byId(id);
     const sync = () => {
@@ -707,12 +1013,29 @@ export function initPanel(invalidate) {
       knob.apply(t);
       saveKnobs();
     };
+    // Rangée pour que l'horloge puisse rejouer celle du temps : quand le
+    // rail change de signification, il faut relire sa valeur avec la
+    // nouvelle règle, sans attendre que la main y revienne.
+    SYNCS[id] = sync;
     input.addEventListener('input', sync);
     sync();
   }
 
   byId('s-grey').addEventListener('change', showGrey);
   showGrey();
+
+  // LES APPELS DE NOTE, par délégation. Les boutons vivent dans index.html
+  // et ne sont jamais refabriqués — un seul écouteur sur le registre entier
+  // suffit, et il survivra aux lignes qu'on ajoutera.
+  byId('corps-reg').addEventListener('click', e => {
+    const b = e.target.closest('.ask');
+    if (b) openNote(b.dataset.note);
+  });
+
+  const note = byId('note-sheet');
+  byId('note-close').addEventListener('click', closeNote);
+  note.addEventListener('click', e => { if (e.target === note) closeNote(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && noted) closeNote(); });
 
   // La feuille de provenance. Même mécanique que l'explication : clic hors
   // du cadre ou Échap. Elle vit ici et non dans chrome.js parce que son

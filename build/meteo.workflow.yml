@@ -1,0 +1,138 @@
+# =========================================================================
+#  LE ROBOT : LA MÉTÉO, ET LE SITE
+#
+#  Une fois par jour, GitHub va chercher la météo du monde entier chez
+#  Open-Meteo, puis publie le site. À chaque poussée sur main, il republie
+#  le site sans retoucher à la météo.
+#
+#  LE RELEVÉ N'EST JAMAIS COMMITÉ, et c'est tout l'intérêt de ce montage.
+#  Le fichier pèse quelques centaines de kilo-octets et change ENTIÈREMENT
+#  chaque jour ; git ne sait pas compresser la différence entre deux PNG,
+#  il garde chaque version en entier. Un commit quotidien ferait grossir le
+#  dépôt d'environ 250 Mo par an, indéfiniment, pour une oeuvre censée
+#  tourner des années. Ici le relevé est fabriqué, publié, et oublié.
+#
+#  Le tableau accroché au mur, lui, ne voit aucune différence : il
+#  télécharge data/weather.png comme il télécharge field.png.
+#
+#  ----------------------------------------------------------------------
+#  POURQUOI UN CACHE
+#
+#  Un déploiement Pages remplace TOUT le site. Si l'on poussait du code
+#  sans relever la météo, le site repartirait sans son relevé et la carte
+#  perdrait sa météo jusqu'au lendemain matin.
+#
+#  Le cache garde donc le dernier relevé d'une exécution à l'autre. On ne
+#  redemande à Open-Meteo que sur le passage quotidien — pas à chaque
+#  virgule corrigée dans le code, ce qui brûlerait le quota pour rien.
+#
+#  ----------------------------------------------------------------------
+#  CE QU'IL FAUT RÉGLER UNE FOIS, DANS LE DÉPÔT
+#
+#      Settings -> Pages -> Source : GitHub Actions
+#          (et non « Deploy from a branch » : c'est ce robot qui publie)
+#
+#      Settings -> Actions -> General -> Workflow permissions
+#          -> Read and write permissions
+#
+#  POUR LE LANCER À LA MAIN : onglet Actions, « site et météo », bouton
+#  « Run workflow ». C'est ce qu'il faut faire la première fois.
+# =========================================================================
+
+name: site et météo
+
+on:
+  schedule:
+    # 04h10 UTC. Les modèles globaux tournent à 00 h UTC et leurs sorties
+    # arrivent vers 03-04 h ; plus tôt, on irait chercher celles de la
+    # veille. L'heure exacte importe peu par ailleurs : le relevé couvre
+    # quatre jours, il y a largement de quoi tenir.
+    - cron: '10 4 * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pas de `contents: write` : le robot ne commite RIEN. Il lit le dépôt et
+# publie le site, c'est tout.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Deux publications qui se chevaucheraient se battraient pour le même
+# site. La seconde attend — on ne l'annule pas, sans quoi un passage
+# météo pourrait être tué par une poussée de code.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    # Le script dort trois secondes entre deux requêtes pour rester sous
+    # les 600 appels par minute du quota gratuit : comptons une dizaine de
+    # minutes en marche normale, et laissons de la marge pour les réessais.
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # LE DERNIER RELEVÉ, s'il en existe un. Sur une poussée de code c'est
+      # lui qui fournit la météo ; sur le passage quotidien il sera écrasé
+      # par le relevé du jour.
+      - name: Retrouver le dernier relevé
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/weather.png
+            data/weather.json
+          key: meteo-${{ github.run_id }}
+          restore-keys: meteo-
+
+      - uses: actions/setup-python@v5
+        if: github.event_name != 'push'
+        with:
+          python-version: '3.12'
+
+      - name: Installer numpy et pillow
+        if: github.event_name != 'push'
+        run: pip install --quiet numpy pillow
+
+      # Seulement sur le passage quotidien et sur un lancement manuel. Une
+      # poussée de code ne doit pas consommer 37 % du quota du jour.
+      - name: Relever la météo mondiale
+        if: github.event_name != 'push'
+        run: python build/make_weather.py
+
+      # CE QUI PART SUR LE WEB, et rien d'autre. En EXCLUANT plutôt qu'en
+      # énumérant : un dossier de données ajouté demain partira tout seul,
+      # là où une liste blanche l'aurait oublié en silence — c'est très
+      # exactement le piège n°13, qui a déjà coûté une page blanche.
+      - name: Rassembler le site
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='_site' \
+            --exclude='build' \
+            --exclude='Claude outputs' \
+            --exclude='*.md' \
+            --exclude='serve.py' \
+            ./ _site/
+          echo "--- ce qui sera publié ---"
+          find _site -maxdepth 2 -printf '%10s  %p\n' | sort -k2
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - id: pages
+        uses: actions/deploy-pages@v4

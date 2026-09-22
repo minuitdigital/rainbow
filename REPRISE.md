@@ -5,6 +5,8 @@
 >
 > **Dépôt de travail** : `C:\00 - CREATIONS\RAINBOW ESTIMATEUR\GIT\rainbow`
 > On y travaille directement, il n'y a plus qu'à commiter et pousser.
+>
+> *Dernière mise à jour : 22 septembre 2026.*
 
 ---
 
@@ -47,7 +49,8 @@ quelqu'un d'autre, bien plus que le nombre de lignes.
 
 ```
 src/projection.js  ← rien                     maths pures, sans état
-src/sky.js         ← projection               soleil, bruit, indice, durée
+src/legends.js     ← rien                     les hauts lieux, et LEURS SOURCES
+src/sky.js         ← projection, legends      soleil, bruit, flaque, fuite
 src/ground.js      ← projection, données      terrain, villes, plus proche lieu
 src/view.js        ← projection               LE seul module qui se souvienne
 src/history.js     ← view, sky                les 24 h passées, RECALCULÉES
@@ -55,7 +58,7 @@ src/zones.js       ← sky, ground, view        ce qui vit d'une image à l'autr
 src/shader.js      ← rien                     le GLSL, rien d'autre
 src/map.js         ← view, shader             contexte WebGL, textures, une image
 src/ink.js         ← projection, view, zones, ground   le calque 2D
-src/panel.js       ← view, sky, history       les quatre registres de droite
+src/panel.js       ← view, sky, history, ink  les quatre registres de droite
 src/chrome.js      ← projection, view         la main : glissé, molette, touches
 src/main.js        ← tous                     l'assemblage et la boucle
 ```
@@ -66,16 +69,18 @@ Pour ne pas relire tout le projet à chaque modification :
 
 | Ce qu'on veut changer | Le fichier, et lui seul |
 |---|---|
-| une croyance, un lieu, une phrase de légende | `src/legends.js` |
+| une croyance, un lieu, une phrase, **une source** | `src/legends.js` |
 | la formule de la présence | `src/sky.js` **et** `src/shader.js`, puis `node build/check_mirror.mjs` |
-| les paliers d'altitude, le lustre, le grain | `src/shader.js` |
+| la flaque de chance, la fuite de la porte | idem — les deux, puis le miroir |
+| les paliers d'altitude, le lustre, le grain, les trous | `src/shader.js` |
+| l'encre des aplats (terres, mer) | `src/shader.js`, bloc `SEA_*` / `LAND_*` |
 | l'encodage en dégradé de gris (paliers, trame) | `src/shader.js`, bloc `uGrey` |
 | les phrases des étiquettes de la carte | `src/zones.js` |
-| le dessin sur la carte : villes, glyphes, réticule | `src/ink.js` |
+| le dessin sur la carte : villes, glyphes, **le piéton** | `src/ink.js` |
 | la mise en page du panneau, les graphes, les réglages | `src/panel.js` + `style.css` |
 | ce que couvrent les 24 h, la finesse de l'axe du temps | `src/history.js` |
 | le glissé, le zoom, les touches | `src/chrome.js` |
-| l'état : zoom maximal, vitesse, allure par défaut | `src/view.js` |
+| l'état : zoom maximal, vitesse, allure, **la marche** | `src/view.js` |
 | la structure de la page et le texte d'explication | `index.html` |
 
 Un module touché ne demande **pas** de relire les autres, à une exception
@@ -106,65 +111,41 @@ mur.
 
 ### Le site (à déployer)
 
-Écrit à la main :
-
 | Fichier | Rôle |
 |---|---|
-| `index.html` | la structure de la page, et rien d'autre — 2 Ko |
+| `index.html` | la structure de la page, et rien d'autre |
 | `style.css` | le registre : papier, encre, spectre |
 | `src/projection.js` | Equal Earth, aller et retour, et l'algèbre de la sphère |
-| `src/legends.js` | les hauts lieux de la croyance — écrits à la main, à tailler |
-| `src/sky.js` | la porte du soleil, et le partage de la croyance |
+| `src/legends.js` | les hauts lieux de la croyance, et leurs sources |
+| `src/sky.js` | la porte du soleil, la croyance, la flaque, la fuite |
 | `src/ground.js` | relief accessible, villes, plus proche lieu |
-| `src/view.js` | où l'on regarde, de quelle distance, quand, et de quelle allure |
+| `src/view.js` | où l'on regarde, de quelle distance, quand, de quelle allure, **et la foulée** |
 | `src/history.js` | les 24 dernières heures sous le réticule, recalculées |
 | `src/zones.js` | détection des taches, suivi, les cinq observateurs |
 | `src/shader.js` | le GLSL, rien d'autre |
 | `src/map.js` | contexte WebGL, textures, une image |
 | `src/ink.js` | le calque 2D, le piéton du réticule, la liste d'encombrement |
-| `src/panel.js` | les quatre registres : estimateur, croyance, légendes, réglages |
+| `src/panel.js` | les quatre registres, et la feuille de provenance |
 | `src/chrome.js` | la main : glissé, molette, touches, feuille d'explication |
 | `src/main.js` | l'assemblage et la boucle d'images |
 
-Généré, dans `data/` :
+Généré, dans `data/` : `field.png` (8 Mo), `earth.jpg` (3,9 Mo, carte
+d'**ombres**), `mask.png` (48 Ko), `coast.js` (888 Ko), `cities.js`
+(118 Ko), `terrain.js` (86 Ko).
 
-| Fichier | Taille | Rôle |
-|---|---|---|
-| `field.png` | 8 Mo | champ hypsométrique 8192×4096 — 0 fosses, 0,5 côte, 1 sommets |
-| `earth.jpg` | 3,9 Mo | carte d'**ombres** 8192×4096 (voir piège n°5) |
-| `mask.png` | 48 Ko | coefficient de surface mer / littoral / intérieur, 720×360 |
-| `coast.js` | 888 Ko | traits de côte et lacs, Natural Earth 1:50 m, ~55 000 points |
-| `cities.js` | 118 Ko | 4 235 lieux habités gradués par palier de zoom, Natural Earth 1:10 m |
-| `terrain.js` | 86 Ko | accessibilité + dégagement de l'horizon, 1 octet par degré carré |
+### Les documents
 
-`README.md` — présentation publique : résumé, navigation, algorithme.
-
-### Les scripts de génération (`build/`, inutiles en ligne)
-
-| Script | Produit |
+| Fichier | Rôle |
 |---|---|
-| `make_field.py` | `field.png` depuis ETOPO 2022 |
-| `make_texture.py` | `earth.jpg` + `mask.png` depuis le relief ombré Natural Earth |
-| `make_terrain.py` | `terrain.js` depuis ETOPO + masque terre/mer |
-| `make_coast.py` | `coast.js` depuis les vecteurs Natural Earth |
-| `make_cities.py` | `cities.js` depuis les lieux habités Natural Earth |
-| `bundle.py` | `dist/index.html` — tout recollé en un seul fichier |
-| `eqearth.py` | formules de la projection, utilisé par les autres |
+| `README.md` | présentation publique |
+| `REPRISE.md` | ce fichier |
+| `LEGENDES.md` | **fiche de travail des hauts lieux** : les vingt à plat, l'état du sourçage, les corrections que la recherche impose, les pistes d'élargissement. Ne tourne pas — `src/legends.js` fait foi. |
 
-**Modules ES natifs**, aucune bibliothèque, aucune étape de construction pour
-faire tourner la page. Il faut la servir par HTTP — mais il le fallait déjà
-(piège n°3).
+### Les scripts (`build/`, inutiles en ligne)
 
-`python build/bundle.py` recolle tout en un `dist/index.html` autonome : pour
-l'Artifact Claude, et plus tard pour le rendu serveur vers l'e-ink, où il n'y
-aura ni serveur HTTP ni résolution d'imports. Ce fichier est **un produit,
-jamais une source à éditer** — il est dans `.gitignore`.
-
-### Les sources (non incluses, à retélécharger si besoin)
-
-- **ETOPO 2022, 60 arc-secondes, surface de la glace** — `ETOPO_2022_v1_60s_N90W180_surface.tif`, 444 Mo, sur le site du NCEI (NOAA). Prendre `surface`, pas `bed`.
-- **Natural Earth** — `ne_50m_land`, `ne_50m_lakes`, `ne_10m_populated_places`, `ne_50m_admin_0_countries` en GeoJSON, depuis `raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/`. Les scripts les attendent dans `build/`, sous leur nom d'origine.
-- **Relief ombré** — extrait du paquet PyPI `basemap-data` (`shadedrelief.jpg`)
+`make_field.py`, `make_texture.py`, `make_terrain.py`, `make_coast.py`,
+`make_cities.py`, `eqearth.py`, `bundle.py` (recolle `dist/index.html`),
+et **`check_mirror.mjs`** — vingt règles, voir piège n°19.
 
 Dépendances Python : `numpy`, `pillow`, `tifffile`, `imagecodecs`, `pyproj`.
 
@@ -172,65 +153,110 @@ Dépendances Python : `numpy`, `pillow`, `tifffile`, `imagecodecs`, `pyproj`.
 
 ## 4. Décisions déjà prises — ne pas rediscuter
 
-**Projection Equal Earth.** Celle que l'ONU a recommandée par résolution le
-4 septembre 2026, après la campagne *Correct The Map* de l'Union africaine :
-elle rétablit la taille réelle de l'Afrique. C'est le cœur conceptuel du
-projet. MapLibre GL a été envisagé et **écarté pour cette seule raison** — il
-ne fait que Mercator et le globe 3D, Equal Earth est un ticket ouvert chez eux
-jamais implémenté.
+**Projection Equal Earth.** Recommandée par l'ONU le 4 septembre 2026, après
+la campagne *Correct The Map* de l'Union africaine : elle rétablit la taille
+réelle de l'Afrique. C'est le cœur conceptuel du projet. MapLibre GL a été
+écarté pour cette seule raison.
 
-**Navigation par rotation libre de la sphère** (quaternion, façon boule de
-commande). Le point saisi reste sous le doigt partout, y compris aux pôles.
-Le nord ne reste pas en haut — c'est assumé, c'est le comportement d'un globe.
+**Navigation par rotation libre de la sphère** (quaternion). Le point saisi
+reste sous le doigt partout, y compris aux pôles. Le nord ne reste pas en
+haut — c'est le comportement d'un globe.
 
-**Cadrage « couvrir »** : le zoom minimum remplit l'écran, on ne voit jamais la
-silhouette de la projection ni le monde entier d'un coup.
+**Cadrage « couvrir »** : le zoom minimum remplit l'écran, on ne voit jamais
+la silhouette de la projection.
 
-**Aplats** plutôt que relief ombré : paliers d'altitude découpés par le shader
-dans un champ continu, bords anticrénelés par les dérivées d'écran.
+**Aplats** plutôt que relief ombré, bords anticrénelés par les dérivées
+d'écran.
 
-**Registre clair** : papier blanc, aplats de gris, traits de côte noirs.
-Un **registre sombre a été essayé puis abandonné** — océan noir et terres
-lustrées : spectaculaire, mais ça ne servait pas la lecture de la carte.
-Ne pas y revenir sans raison nouvelle.
+**Registre clair** : papier blanc, aplats de gris, traits de côte noirs. Un
+registre sombre a été essayé puis abandonné.
 
-**Taches irisées** : palette cosinus type interférence (film d'huile), pas un
-dégradé thermique. Composées en **multiplication** puisque le fond est clair —
-si le fond redevenait sombre il faudrait repasser en additif.
+**Taches irisées** : palette cosinus type interférence (film d'huile).
+Composées en **multiplication** puisque le fond est clair.
 
-**Étiquettes en gris uniquement** : un petit arc dessiné à la main, quatre
-bandes du noir au gris clair. Pas d'emoji — un emoji couleur deviendrait un
-pâté au tramage de l'e-ink, et le contraste était insuffisant.
+**Étiquettes en gris uniquement**, jamais d'emoji — un emoji couleur
+deviendrait un pâté au tramage de l'e-ink.
 
-**Le pourcentage est poétique**, la durée est exacte. Voir §6.
+**Le pourcentage est poétique**, la durée est exacte.
 
-**Le soleil n'est pas un curseur.** Les trois curseurs partagent une
-croyance finie ; le soleil, lui, reste une porte. Voir §6.
+**Pas de frontières, des villes.** Une frontière est une convention et elle
+ne dit pas où se tient quelqu'un ; une ville si.
 
-**Pas de frontières, des villes.** Une frontière est une convention et elle ne
-dit pas où se tient quelqu'un ; une ville si. La carte n'affiche donc aucune
-limite politique — elle nomme des lieux, gradués par palier de zoom (capitales
-dès le monde entier, le reste en s'approchant), et chaque étiquette d'arc porte
-une troisième ligne : *à 185 km d'Oulan-Oudé, Russie*. Les villes se placent
-dans ce que les étiquettes d'arc ont laissé libre : une ville qui gêne un arc
-disparaît, jamais l'inverse.
+**Plafond de zoom : ×32**, limite de la *donnée* (`coast.js` en 1:50 m).
 
-**Plafond de zoom : ×32.** Le zoom ne coûte aucun octet — rien n'est chargé,
-tout est recalculé. Le plafond est celui de la *donnée*, pas du moteur : au-delà
-de ×32 les sommets de `coast.js` (1:50 m, un point tous les 1 à 4 km)
-deviennent des polygones visibles. Monter plus haut demande Natural Earth
-1:10 m, +2,5 Mo.
+**Treize modules, dépendances à sens unique**, noms uniques.
 
-**Dix modules, dépendances à sens unique.** `index.html` avait atteint
-1 300 lignes où quatre natures de code partageaient une même portée : des
-maths pures, un état mutable, de la plomberie GPU et le mobilier de la
-page. Ce n'était pas la longueur le problème, c'était qu'aucune ligne ne
-disait ce qui dépendait de quoi. Voir le graphe en §2 — et la règle des
-noms uniques, dont dépend `build/bundle.py`.
+### Ce qui a changé en septembre 2026 — et qui remplace l'ancien
 
-**La tache s'efface quand on s'approche** (facteur 0,40 à plein zoom). Vue du
-monde, elle est un signal qu'on lit d'un continent à l'autre ; de près, on est
-*dans* le paysage et l'arc n'est plus qu'un indice. Voir piège n°10.
+**LE PIÉTON MARCHE.** Le réticule est une silhouette de piéton, et elle
+marche quand le monde défile sous elle. **La cadence suit la DISTANCE, pas
+le temps** : un pas vaut tant de pixels de sol glissé, donc le même geste
+de la main fait le même nombre de pas à ×1 comme à ×32. Une carte immobile
+ne le fait pas piétiner et ne coûte toujours rien. Voir `stride()` dans
+`view.js` et `walkerGait()` dans `ink.js`.
+
+**Le pied reste au sol, et de là vient le dandinement.** Jambes jointes, la
+figure est plus haute d'une unité ; plutôt que de laisser le pied
+s'enfoncer sous le point visé — le contraire de ce que la silhouette dit —
+on relève toute la figure de ce qu'il faut. Le balancement n'est pas un
+effet ajouté, c'est la conséquence du contact.
+
+**IL PIVOTE AUTOUR DU POINT VISÉ**, et prend l'envers de la direction
+choisie : on monte vers le nord, il se retrouve la tête en bas. La règle
+tient en une phrase — *sa tête pointe à l'opposé du déplacement*. L'angle
+est rattrapé par le plus court chemin, avec inertie (`TURN_RATE = 5`), et
+**il ne revient pas à l'endroit quand on s'arrête** : il garde le dernier
+cap.
+
+**La croix du réticule est remplacée par un point noir.** Les bras
+marquaient le point exact parce que la silhouette se tenait toujours
+au-dessus ; maintenant qu'elle pivote tout autour, ils lui passeraient au
+travers. L'emprise du réticule est devenue un carré. Un curseur
+**point** permet de lui donner une teinte (défaut : `encre`).
+
+**LA CHANCE N'EST PLUS UN LIEU DU MONDE, C'EST CE QUE LE PIÉTON PORTE.**
+Elle est multipliée par une **flaque** centrée sur le réticule, qui
+s'élargit à mesure qu'on croit en elle (8° à 30°). Au réticule la flaque
+vaut exactement 1 — le panneau lit donc toujours la chance pleine, et
+`history.js` n'a rien à savoir de tout ceci. On promène sa chance sur la
+Terre.
+
+**ET LA PORTE FUIT, dans la flaque et nulle part ailleurs.** Un arc peut
+s'allumer alors que le soleil est couché ou trop haut, parce qu'il n'a
+aucune raison de s'allumer. La fuite est en **wC²** : elle n'existe pas
+tant qu'on ne l'a pas voulue, et elle ne touche que la chance. La météo et
+la légende restent enfermées dans l'anneau. À `wC = 0`, la carte est
+identique au bit près à celle d'avant.
+
+**LA TACHE NE S'EFFACE PLUS EN S'APPROCHANT** — le facteur 0,40 du piège
+n°10 est supprimé. Le constat d'origine était juste (de près la couleur
+noyait le relief) mais il traitait le symptôme : ce qui saturait l'écran,
+c'était un aplat de couleur agrandi, pas la couleur. Trois octaves
+profondes (47, 19 et 8 km) et **des trous** règlent ça en donnant à la
+tache une structure à regarder.
+
+**LES TROUS.** Un seuil qui monte avec le zoom ne garde que ce qui dépasse,
+le reste redevient du papier — et **au-dessus du seuil la valeur est
+intacte** : on perd de la surface, pas de l'intensité. Même méthode que
+partout ailleurs (la chance est seuillée en poches, le relief en paliers),
+bords calculés par les dérivées d'écran.
+
+**Le nombre de tours de palette est un réglage et ne monte plus avec le
+zoom.** Lié à la finesse, il faisait boucler la palette — bleu, vert,
+jaune, orange, rose, puis cyan et ça recommence : un arc-en-ciel de trop
+par-dessus le sujet. La complexité de près vient des trous.
+
+**LA SOURCE EST UN CHAMP OBLIGATOIRE des légendes**, et `null` est une
+réponse. Citer une croyance sans dire d'où elle vient, sur un mur, sous un
+nom propre, c'est de l'appropriation avec une jolie police. Chaque phrase
+porte un **triangle avec un i** — le même pour toutes, sourcées ou non —
+qui ouvre une feuille disant `Source : <lien>` ou `Source : (sans
+source)`. Deux signes différents auraient trié les légendes avant même
+qu'on ait cliqué.
+
+**Les réglages sont rangés en quatre sous-registres repliables** — *la
+tache*, *le fond*, *le panneau*, *le temps*. Onze curseurs en colonne
+n'étaient plus une liste mais un tableau de bord.
 
 ---
 
@@ -241,412 +267,312 @@ monde, elle est un signal qu'on lit d'un continent à l'autre ; de près, on est
 
 2. **Texture pas encore chargée = canvas noir.** Lier des textures blanches
    1×1 dès le départ, et ne jamais conditionner le tracé à un compteur de
-   chargement — la petite texture arrive avant la grosse.
+   chargement.
 
 3. **`file://` ne marche pas.** Chrome refuse de charger une image locale dans
-   une texture WebGL. Il faut un serveur : `python3 -m http.server 8000`.
+   une texture WebGL. Il faut un serveur.
 
-4. **Précision float32 du bruit.** Une version injectait `Date.now()` converti
-   en heures (~45 000) dans les coordonnées du bruit : il ne restait que deux
-   décimales, le champ se cassait en blocs et la carte était tranchée par de
-   longues droites verticales. Le décalage doit rester **relatif au démarrage
-   et borné** (modulo 512).
+4. **Précision float32 du bruit.** Le décalage doit rester **relatif au
+   démarrage et borné** (modulo 512), sinon le champ se casse en blocs.
 
-5. **`earth.jpg` est une carte d'OMBRES, pas de reflets.** L'appliquer à pleine
-   amplitude réimprime tout le relief par-dessus les aplats — on ne voit plus
-   qu'elle. Elle ne sert qu'à creuser légèrement les versants (facteur 0,18).
+5. **`earth.jpg` est une carte d'OMBRES, pas de reflets.** Facteur 0,18.
 
-6. **Couture de la texture à l'antiméridien.** `u` saute de 1 à 0, ce qui fait
-   s'effondrer le mipmap le long de la couture. Solution : calculer le gradient
-   sur deux versions décalées d'un demi-tour, garder le plus petit, et
-   échantillonner avec `textureGrad`.
+6. **Couture de la texture à l'antiméridien.** Calculer le gradient sur deux
+   versions décalées d'un demi-tour, garder le plus petit, `textureGrad`.
 
-7. **Le JPEG couleur d'ETOPO n'est pas décodable en altitude** — l'ombrage
-   corrompt les teintes, le Sahara à 800 m a la même couleur que l'Himalaya à
-   6 000 m. Il faut le vrai GeoTIFF float32.
+7. **Le JPEG couleur d'ETOPO n'est pas décodable en altitude.** Il faut le
+   vrai GeoTIFF float32.
 
 8. **Limite de transfert de 400 Mo par fichier** vers l'environnement Claude.
-   Les 444 Mo d'ETOPO ont dû être découpés en huit morceaux puis recollés.
 
-9. **Le glyphe de l'arc se referme en pâté** si l'écart entre les bandes n'est
-   pas nettement supérieur à leur épaisseur. Quatre bandes espacées de 2,5 px
-   pour 1,25 px de trait — pas cinq bandes serrées.
+9. **Le glyphe de l'arc se referme en pâté** si l'écart entre les bandes
+   n'est pas nettement supérieur à leur épaisseur.
 
-10. **En zoomant, la tache noie le relief.** À ×4 on est déjà *dans* une seule
-    tache : l'écran devient un vitrail saturé et la carte disparaît. Deux
-    correctifs, pilotés par `uDetail` (nul au monde entier, plein à partir de
-    ×10) : l'intensité tombe à 0,40, et deux octaves de bruit fines entrent
-    pour donner du grain. Le grain **ne déplace pas** la tache, il la dépolit —
-    la structure, donc l'indice lu, reste celle du champ.
+10. **~~En zoomant, la tache noie le relief.~~** *Périmé — voir §4.* La
+    réponse n'était pas d'effacer la tache mais de lui donner une
+    structure : octaves profondes et trous.
 
-11. **Le bruit de base n'a rien de plus fin que ~400 km.** Les trois octaves
-    sont à 1 770, 830 et 405 km. Sans octaves fines, s'approcher ne montre rien
-    de nouveau : c'est un aplat de couleur qui grandit.
+11. **Le bruit de base n'a rien de plus fin que ~400 km.** D'où les octaves
+    ajoutées : 290, 113, puis 47, 19 et 8 km.
 
 12. **« de Oulan-Oudé ».** Une carte française qui n'élide pas n'est plus une
-    œuvre, c'est un export. Voir `de()` dans `src/ground.js`. Et pas
-    d'élision devant « y » : on dit « de York », « de Yinchuan ».
+    œuvre, c'est un export. Voir `de()` dans `src/ground.js`. Pas d'élision
+    devant « y ».
 
-13. **`data/` était dans le `.gitignore`.** Hérité de l'époque où ce dossier
-    contenait les sources lourdes. Le jour où le site y a emménagé, plus
-    rien n'est parti sur GitHub Pages : page blanche, aucun message. Le
-    `.gitignore` porte maintenant un avertissement en tête.
+13. **`data/` était dans le `.gitignore`.** Page blanche sur GitHub Pages,
+    aucun message.
 
-14. **Un module ES qui ne se charge pas échoue EN SILENCE.** Pas d'erreur
-    à l'écran, pas de repli, rien : du blanc. C'est un net recul par
-    rapport aux balises `<script>` classiques, où seule la partie
-    manquante disparaissait. Sur un tableau accroché à un mur, c'est la
-    pire des pannes. D'où la VEILLE en bas d'`index.html` : un script
-    classique, huit secondes, et si `window.__rainbow` n'est pas levé
-    elle écrit les trois causes probables. Ne pas la retirer.
+14. **Un module ES qui ne se charge pas échoue EN SILENCE.** Pas d'erreur à
+    l'écran, rien : du blanc. D'où la VEILLE en bas d'`index.html` : huit
+    secondes, et si `window.__rainbow` n'est pas levé elle écrit les trois
+    causes probables. **Ne pas la retirer.**
 
-15. **Le double-clic est passé de « dégradé » à « mort ».** Avant les
-    modules, ouvrir la page en `file://` donnait une carte sans textures.
-    Maintenant `file://` bloque les modules eux-mêmes : écran blanc. La
-    veille le dit, mais autant le savoir.
+15. **Le double-clic est passé de « dégradé » à « mort ».** `file://` bloque
+    les modules eux-mêmes : écran blanc.
 
-16. **Le cache du navigateur mélange deux versions.** Douze modules qui
-    s'importent : si le navigateur en reprend un seul de son cache pendant
-    qu'il recharge les autres, la page tourne avec un assemblage qui n'a
-    jamais existé. Symptôme observé : la veille se déclenchait sur une page
-    parfaitement saine, parce qu'elle venait du nouvel `index.html` et
-    attendait un drapeau posé par un `main.js` encore ancien. Une heure
-    perdue. D'où `serve.py` et son `no-store`.
+16. **Le cache du navigateur mélange deux versions.** D'où `serve.py` et son
+    `no-store`. **Ne jamais utiliser `python -m http.server`.**
 
-17. **Vérifier chez l'auteur, pas dans un bac à sable.** Le rendu validé
-    ailleurs ne prouve rien sur la machine où l'œuvre vit. Le navigateur
-    intégré atteint `localhost` de ce poste : s'en servir avant de dire
-    que c'est fait.
+17. **Vérifier chez l'auteur, pas dans un bac à sable.** Le navigateur
+    intégré atteint `localhost` de ce poste : s'en servir avant de dire que
+    c'est fait.
 
-18. **L'horloge simulée doit S'ACCUMULER.** Elle se déduisait du temps réel
-    écoulé multiplié par la vitesse. Tant que rien ne regardait en arrière
-    c'était sans conséquence ; depuis que le panneau trace les vingt-quatre
-    dernières heures, toucher au curseur du temps réécrivait tout le passé
-    d'un coup — à ×10 000, un cran en arrière ramenait la date de plusieurs
-    jours. `advanceClock(dt)` est appelé une fois par image dans `main.js`,
-    et nulle part ailleurs.
+18. **L'horloge simulée doit S'ACCUMULER.** `advanceClock(dt)` est appelé
+    une fois par image dans `main.js`, et nulle part ailleurs. Même règle
+    désormais pour `stride(dt)`, la foulée du piéton.
 
 19. **Le miroir shader / JavaScript est la SEULE duplication du projet.**
     Elle ne peut pas être supprimée : on ne fait pas tourner du GLSL au
-    réticule, ni du JavaScript par pixel. Elle est surveillée :
+    réticule, ni du JavaScript par pixel.
 
         node build/check_mirror.mjs
 
-    Le script lit les deux sources comme du texte et compare toutes les
-    constantes de la formule. À lancer après **toute** modification de
+    Vingt règles aujourd'hui. À lancer après **toute** modification de
     `src/sky.js` ou de `src/shader.js`. S'il dit « motif introuvable »,
     c'est que la formule a été réécrite : relire les deux fichiers, puis
-    corriger le motif dans le script — jamais l'inverse.
+    corriger le motif **dans le script — jamais l'inverse**.
 
-20. **Les étiquettes de la carte s'écrivaient sous le panneau.** Elles
-    étaient imprimées puis masquées : du bruit, et surtout une place
-    volée à une ville visible. L'emprise du panneau est mesurée dans
-    `rescale()` (une fois par redimensionnement, pas par image) et versée
-    dans la liste d'encombrement de `src/ink.js`.
+20. **Les étiquettes de la carte s'écrivaient sous le panneau.** L'emprise
+    est mesurée dans `measureRail()` — une fois par redimensionnement et à
+    chaque pli, pas par image — et versée dans `src/ink.js`.
+
+21. **PAS D'ACCENT GRAVE DANS `src/shader.js`.** Tout le GLSL vit dans un
+    gabarit de chaîne JavaScript : le premier backtick le referme, et le
+    fichier ne compile plus. Attrapé par `node --check`, jamais à l'œil.
+
+22. **Le panneau est redessiné soixante fois par seconde.** Tout nœud DOM
+    refabriqué à chaque image devient incliquable — le clic part sur un
+    nœud déjà remplacé. Voir `saidFor` dans `panel.js` : on ne réécrit la
+    phrase et son renvoi que quand le lieu change.
+
+23. **Volet du navigateur masqué = `requestAnimationFrame` gelé.** La page
+    reste figée sur ses tirets, `document.visibilityState` vaut `hidden`,
+    et aucune image ne passe. **Ce n'est pas une panne** — c'est le
+    symptôme n°1 des faux diagnostics de cette session. Demander
+    l'affichage (Ctrl+Shift+B) avant de chercher un bug.
+
+24. **Vérifier que le fichier envoyé est bien celui qu'on a édité.** Une
+    modification faite puis non recopiée dans l'envoi a produit un
+    `centreVec` manquant, donc un écran blanc, donc une demi-heure de
+    recherche à côté. Comparer les copies avant d'envoyer.
 
 ---
 
 ## 6. L'algorithme actuel
 
-**Une porte, puis une croyance.**
+**Une porte, puis une croyance — et la chance qu'on porte sur soi.**
 
 ```
-présence = SOLEIL × ( wMétéo·M + wLégende·L + wChance·C )
-                     avec wM + wL + wC = 1
+présence = Soleil × ( wM·Météo + wL·Légende )
+         + wC · Chance · flaque · max(Soleil, fuite · wC)
+           avec wM + wL + wC = 1
 ```
 
-**La porte, exacte et sans curseur.** Le soleil doit se tenir entre
-l'horizon et 42° ; au-delà, le centre de l'arc passe sous l'horizon. Porte
-fermée : zéro, et aucun réglage ne peut rien y faire. On ne croit pas en la
-hauteur du soleil, on la calcule — c'est ce qui empêche la pièce de devenir
-un jouet. `S = (1 − h/42)^1,3 × montée douce de 0° à 6,5°`, plafond ≈ 0,80.
+**La porte, exacte.** Le soleil doit se tenir entre l'horizon et 42° ;
+au-delà, le centre de l'arc passe sous l'horizon. `S = (1 − h/42)^1,3 ×
+montée douce de 0° à 6,5°`, plafond ≈ 0,80. Elle reste exacte au degré
+près, et **la météo comme la légende lui sont soumises sans recours**.
 
 **Une SOMME à l'intérieur, pas un produit.** Avec un produit, un seul zéro
-éteindrait tout : le spectateur qui ne croit qu'aux légendes ne verrait
-rien nulle part. Avec une somme pondérée, il voit une carte allumée à ses
-hauts lieux, et c'est ce que la pièce a à dire.
+éteindrait tout.
 
 **Les trois parts.**
 
-- **Météo** — `1 − exp(−pluie × trouée/1,2 × 6)`. Le bruit fractal et la
-  climatologie grossière d'avant, ramenés entre 0 et 1. *À remplacer par
+- **Météo** — `1 − exp(−pluie × trouée/1,2 × 6)`. *À remplacer par
   Open-Meteo, voir §7.*
-- **Légende** — un plancher de 0,09 partout, relevé par le haut lieu le
-  plus proche : `max(plancher, force × exp(−corde²/rayon²))`. Un **maximum**
-  et non une somme, deux traditions voisines ne s'additionnent pas.
-  Les points sont dans `src/legends.js`, versés au shader comme un tableau
-  d'uniformes (48 places réservées).
-- **Chance** — un second bruit, plus lent (`×0,62`, ~2 850 km) et avec sa
-  propre horloge, seuillé serré à `smoothstep(0,46 · 0,76)` : des poches,
-  pas un voile.
+- **Légende** — plancher de 0,09 partout, relevé par le haut lieu le plus
+  proche : `max(plancher, force × exp(−corde²/rayon²))`. Un **maximum**,
+  pas une somme.
+- **Chance** — un second bruit, plus lent (`×0,62`), seuillé serré à
+  `smoothstep(0,46 · 0,76)`, **puis multiplié par la flaque**.
 
-`GAIN = 1,8` ramène le plein au plein, puis `field = t^1,15 × 0,98`.
+**LA FLAQUE** — `LUCK_NEAR = 8°`, `LUCK_FAR = 30°`, gaussienne sur la corde
+au réticule, même forme que les hauts lieux. Vaut 1 au réticule, toujours.
+
+**LA FUITE** — `SPILL_AMP = 0,42`, `SPILL_DEG = 18°`. Pleine au bord de la
+fenêtre, éteinte dix-huit degrés plus loin. Coïncidence commode : ces
+bornes tombent sur −17,6° et 60°, exactement le cadre que l'héliodon se
+donnait déjà.
+
+`GAIN = 1,8`, puis `field = t^1,15 × 0,98 × uTache`, puis les trous.
 
 **Une croyance FINIE, en simplexe.** Pousser un curseur pousse
-**physiquement** les deux autres, au prorata de ce qu'ils valaient : les
-poignées bougent et la somme reste 100 %. La première version gardait les
-poignées immobiles et ne redistribuait que le pourcentage affiché —
-l'arbitrage était juste, mais invisible. Voir `pushBelief` dans
-`src/panel.js`.
-
-**Quand la légende porte le chiffre, la légende parle** : la phrase de
-l'étiquette devient la croyance du lieu — « K'uychi, on ne montre pas
-l'arc du doigt » — au lieu d'un résumé. Voir `phraseFor` dans `zones.js`.
+**physiquement** les deux autres. Voir `pushBelief` dans `src/panel.js`.
 
 ### Le piéton
 
-Le réticule **est** une silhouette de piéton, debout sur le point visé,
-pieds au sol. Le point visé n'est pas une coordonnée : c'est un endroit où
-quelqu'un se tiendrait — un arc-en-ciel n'existe pas *à un endroit*, il
-existe *pour quelqu'un*. La même figure, aux mêmes coordonnées, apparaît
-à la ligne « Position » du panneau : `WALKER_LIMBS` dans `src/ink.js` et
-le `<svg class="walker">` d'`index.html`. **Changer l'un, changer
-l'autre.**
-
-Deux garde-fous : les bras du réticule (gauche, droite, bas — le haut est
-occupé par la figure) marquent le point *exact*, qu'une silhouette ne sait
-pas désigner ; et le glyphe d'un haut lieu **visé** se décale de 16 px à
-droite, sinon les deux dessins se superposent. Proportions de pictogramme
-et non de bonhomme : tête au cinquième de la hauteur, jamais au quart —
-le halo blanc l'épaissit encore et la figure devient un poupon.
+Voir §4. La même figure au repos est dans le panneau (`<svg class="walker">`
+d'`index.html`) — **elle ne marche pas**, et ses coordonnées sont exactement
+la pose de repos de `walkerGait(π/2)`. Changer l'un, changer l'autre.
 
 ### Le panneau
 
-Quatre registres dans une colonne à droite, et **tout y décrit le
-réticule** — le centre exact de l'écran. Le panneau ne choisit pas un
-lieu, il décrit celui qu'on regarde ; les pastilles des hauts lieux ne
-sélectionnent rien, elles y **amènent** le réticule.
-
 | Registre | Ce qu'il fait |
 |---|---|
-| ESTIMATEUR | position, heure, **héliodon** (hauteur du soleil) et **présence** |
+| ESTIMATEUR | position, heure, héliodon, présence |
 | CROYANCE | les trois curseurs en simplexe |
-| LÉGENDES | les pastilles, la foi au réticule, et ce qu'on dit du lieu |
-| RÉGLAGES | l'allure — mémorisé dans `localStorage` |
+| LÉGENDES | les pastilles, ce qu'on dit du lieu, **et d'où ça vient** |
+| RÉGLAGES | quatre sous-registres — mémorisé dans `localStorage` |
 
-**Les quatre registres se replient sur leur bandeau**, et l'état est
-mémorisé. À l'usine, ESTIMATEUR et CROYANCE sont ouverts, LÉGENDES et
-RÉGLAGES fermés : les deux premiers se lisent, les deux autres
-s'appellent. Un bandeau replié continue de dire l'essentiel — la foi du
-lieu reste lisible sans déplier les vingt pastilles. Replier libère aussi
-de la place sur la carte : l'emprise versée dans `ink.js` est l'union des
-boîtes, pas la colonne, et `measureRail()` la reprend à chaque pli.
+**Les réglages, par sous-registre :**
 
-**La clé de stockage porte un numéro** (`estimateur.reglages.2`). Changer
-une valeur par défaut dans `index.html` ne sert à rien si la page relit
-l'ancienne : quand un défaut doit s'imposer, on incrémente.
+| groupe | curseurs |
+|---|---|
+| la tache | intensité · couleur · franges · trous · finesse · dégradé |
+| le fond | terres · mer |
+| le panneau | transparence · contraste · texte · icônes · point |
+| le temps | vitesse |
 
-**Le passé est recalculé, pas mémorisé.** `src/history.js` reconstruit à
-chaque image les vingt-quatre dernières heures simulées sous le réticule :
-le ciel est une fonction pure du lieu et de l'instant, donc son passé se
-calcule aussi bien qu'il s'observe. C'est le même principe que la carte, et
-c'est ce qui permet de déplacer le réticule sans perdre l'histoire du lieu
-— un tampon aurait montré vingt-quatre heures d'un endroit où l'on n'est
-plus. 320 points, espacés selon l'axe et non selon le temps.
+`view.look` porte : `sat`, `tache`, `grey`, `icon`, `sea`, `land`, `fine`,
+`holes`, `franges`, `dot`.
 
-**L'axe du temps est logarithmique**, emprunté aux moniteurs de débit : la
-dernière minute occupe la moitié de la largeur, la dernière journée
-l'autre moitié. Sans quoi, à ×100 000, la dernière heure serait un cheveu
-contre le bord droit.
+**La clé de stockage porte un numéro** (`estimateur.reglages.2`). Quand un
+défaut doit s'imposer, on incrémente. Elle n'a pas été incrémentée en
+septembre : les nouveaux curseurs prennent leur valeur d'usine, les anciens
+réglages de l'auteur survivent.
 
-**Les poids sont appliqués au dessin**, pas à l'échantillonnage : bouger un
-curseur repondère toute l'histoire d'un coup, sans rien recalculer.
+**Le passé est recalculé, pas mémorisé** — `src/history.js`, 320 points,
+axe du temps **logarithmique**. La flaque n'y apparaît pas : on est au
+réticule, elle y vaut 1.
 
-**L'allure vit dans `view.look`** — saturation, force de la tache,
-encodage en gris, taille des glyphes. Ce ne sont pas des données : deux
-réglages différents décrivent le même ciel. Le shader lit `uSat`,
-`uTache`, `uGrey` ; `ink.js` lit `view.look.icon`.
+**Les poids sont appliqués au dessin**, pas à l'échantillonnage. C'est
+aussi pourquoi `spill` est rangé brut dans les échantillons.
 
-**Le dégradé de gris est un ENCODAGE, pas une teinte en moins.** En
-couleur, la teinte suffit à séparer la tache du fond ; en gris elle entre
-en concurrence avec le relief, lui aussi gris et lui aussi lisse. La force
-passe donc par la densité : six paliers — le même langage que les aplats
-du relief, et pas de trait d'iso-valeur, la marche se voit toute seule —
-plus une **trame ordonnée de Bayer 8×8** à la résolution de l'affichage.
-Des points et non des hachures : une hachure impose une direction, et sur
-une carte toute direction finit par avoir l'air de signifier quelque
-chose. La part de cases noircies vaut exactement l'intensité. C'est
-littéralement ce que fera le tramage de l'e-ink.
+**Le dégradé de gris est un ENCODAGE, pas une teinte en moins** : six
+paliers plus une **trame de Bayer 8×8** à la résolution de l'affichage.
+C'est littéralement ce que fera le tramage de l'e-ink. En dégradé,
+*couleur* et *franges* s'éteignent.
 
-### L'ancien assemblage, pour mémoire
+### La profondeur d'encre des aplats
 
-Trois conditions devaient se rencontrer au même endroit.
-
-**La géométrie du soleil — exacte.** Le soleil doit se tenir entre l'horizon et
-**42°**. Au-delà, le centre de l'arc, situé à l'opposé du soleil, passe sous
-l'horizon. Cette contrainte dessine un anneau qui fait deux fois le tour de la
-Terre chaque jour, à l'aube et au crépuscule.
-
-**Des gouttes — simulée.** Bruit fractal cohérent sur la sphère, qui dérive
-avec le temps. *À remplacer par Open-Meteo.*
-
-**Une trouée — approximée.** Du soleil direct malgré l'averse. Climatologie
-grossière : ZCIT, rails dépressionnaires, prime aux littoraux. *À remplacer.*
-
-### Les paliers d'altitude
-
-Cuits dans `field.png` par `make_field.py` — le shader découpe des paliers
-réguliers, c'est le script qui distord la valeur pour qu'ils tombent pile sur
-ces altitudes. Changer l'hypsométrie = modifier ces deux listes et régénérer.
-
-```python
-LAND = [0, 100, 300, 700, 1200, 2000, 3000, 4200, 5600]   # mètres
-SEA  = [0, 200, 1000, 2500, 3500, 4500, 5500, 7000]
-```
-
-Le trait de côte vient de Natural Earth, **pas du signe de l'altitude** :
-sinon les polders passeraient sous l'eau et la Caspienne deviendrait une terre.
-
-### Les étiquettes
-
-Une zone porte **de une à cinq** étiquettes selon sa taille à l'écran, **huit
-maximum** à l'écran, jamais de chevauchement, les quatre coins de l'interface
-interdits. Les zones sont suivies d'une passe à l'autre : elles apparaissent et
-disparaissent en fondu plutôt que de clignoter.
-
-Ce ne sont pas cinq mesures du même endroit mais **cinq observateurs
-différents** — celui qui est sur la crête voit l'arc, celui du fond de la
-vallée non. C'est le sujet même du projet : un arc-en-ciel n'existe pas *à un
-endroit*, il existe *pour un observateur*.
-
-Chaque étiquette porte :
-
-- **un pourcentage** — composite et volontairement poétique : ce que la carte
-  affiche, le dégagement de l'horizon, l'accessibilité du lieu, et une part de
-  **chance** qui oscille sans raison, propre à chaque point. Il est fait pour
-  osciller et déplacer le regard d'une zone à l'autre.
-- **une durée** — exacte, elle ne dépend que du soleil : temps restant avant
-  qu'il ne monte au-dessus de 42° ou ne touche l'horizon.
-- **une phrase** qui dit ce qui porte le chiffre : *le soleil perce*, *averse
-  en cours*, *l'averse s'éloigne*, *soleil rasant*, *horizon ouvert*, *depuis
-  la crête*, *au hasard*, *un pressentiment*, *rien ne le justifie*,
-  *imminent*, et — sur une zone forte mais déserte — ***personne pour voir***.
+Le papier ne bouge pas, c'est le palier le plus profond qu'on charge.
+**Le milieu du curseur est le tirage d'origine.** Tirer toute la gamme vers
+le blanc rapprocherait les paliers, et la marche entre deux altitudes —
+qui est toute la lecture du relief — se perdrait. `INK_MAX` : 2,4 pour les
+terres, 4,0 pour la mer (sa gamme est deux fois plus courte).
 
 ---
 
 ## 7. Prochaine étape : brancher la vraie météo
 
 **L'obstacle** n'est pas la donnée, c'est sa forme. La carte calcule un champ
-continu sur tout le globe ; Open-Meteo répond par points.
-
-**La solution** : un petit travail périodique fabrique une image, la page lit
-l'image.
+continu ; Open-Meteo répond par points.
 
 ```
 Open-Meteo ──► script ──► weather.png (quelques Ko) ──► la page ──► le shader
 ```
 
-**Le budget tient**, parce qu'un appel rend 48 heures de prévision d'un coup.
-On n'interroge donc pas chaque heure mais deux fois par jour.
+- grille **5°** = 2 592 points · trois variables · deux passages par jour =
+  **5 200 appels**, sous le plafond gratuit de 10 000/jour
+- image : 72 × 36 cases, 48 pas de temps en damier, trois canaux
+- **GitHub Actions**, `cron` deux fois par jour, le script recommite le PNG
+- une ligne du shader : `fbm(...)` devient `texture(uWeather, ...)`
 
-- grille **5°** sur tout le globe = 2 592 points
-- trois variables : précipitations, couverture nuageuse, rayonnement direct
-- deux passages par jour = **5 200 appels**, sous le plafond gratuit de 10 000/jour
-- image résultante : 72 × 36 cases, 48 pas de temps en damier, trois canaux
+**Deux points d'attention :** 5° font 550 km, garder le bruit fractal comme
+texture haute fréquence par-dessus ; la résolution doit rester une constante
+unique. Open-Meteo est en **CC-BY 4.0** — crédit obligatoire.
 
-**Où ça tourne : GitHub Actions.** Un `cron` deux fois par jour, le script
-recommite le PNG dans le dépôt, Pages le sert. Aucun serveur, aucun coût.
-
-**Ce que ça change dans le code** : une ligne du shader — `fbm(...)` devient
-`texture(uWeather, ...)`.
-
-**Deux points d'attention :**
-
-- 5° font 550 km. Garder le bruit fractal actuel comme **texture haute
-  fréquence par-dessus la vraie donnée** : le grand mouvement est vrai, le
-  détail est inventé mais organique. **Prévoir de pouvoir monter en précision
-  plus tard** (2,5° = compte payant) — la résolution doit rester une constante
-  unique dans le script.
-- Open-Meteo est en **CC-BY 4.0** : une ligne de crédit sera nécessaire sur la
-  page, et probablement sur le tableau.
-
-**Et le curseur change de nature** : il n'accélérera plus un faux temps mais
-fera défiler la prévision réelle sur 48 heures.
-
-**La recette** — c'est-à-dire le dosage entre averse, trouée et angle du
-soleil — reste à fixer. Aujourd'hui les coefficients sont inventés au jugé, ce
-qui n'a aucune importance tant que la pluie est fausse. Méthode de validation
-prévue : chercher un endroit où il y a eu un arc-en-ciel un jour donné,
-remonter la météo de ce moment, vérifier que la carte l'avait vu.
+**Et le curseur change de nature** : il fera défiler la prévision réelle sur
+48 heures.
 
 ---
 
 ## 8. Ce qui reste, par ordre
 
 **A — Esthétique web** (en cours)
-Densité et intensité des taches · nombre de cycles dans l'irisation · format
-cible 4:3 pour coller au 10,3" · retirer `earth.jpg` et la touche `r` une fois
-le choix arrêté (−3,9 Mo).
 
-*Ouvert depuis les curseurs de croyance :*
-- La liste de `src/legends.js` est un premier jet de vingt entrées. Les
-  traditions vivantes — terre d'Arnhem, Aotearoa, Dinétah, Cusco, Wallmapu —
-  méritent d'être relues par quelqu'un qui les connaît mieux qu'une ligne.
-- Faut-il une seconde famille de points, non mythologiques : les lieux où
-  l'arc est physiquement chez lui (Mosi-oa-Tunya, Hilo, Niagara) ? C'est
-  une autre catégorie, elle brouillerait peut-être le mot « légende ».
-- Le glyphe à la baguette n'a pas encore été jugé au tramage e-ink.
+*Jamais fait, validé mais non écrit :*
+- **La feuille du bas pour le 9:16.** Sur smartphone le panneau mange la
+  carte. Parti retenu : le panneau devient une feuille du bas repliée à une
+  seule ligne (position + présence), qu'on tire pour déplier par-dessus la
+  carte. Le mécanisme de pli existe déjà. Fichiers : `style.css` (media
+  query) et `src/panel.js` (l'emprise + le geste). `index.html` ne bouge
+  pas.
 
-*Ouvert depuis l'intégration du panneau :*
-- `#box-est` fait 33 vh : les deux graphes sont justes en hauteur sur un
-  écran court. À revoir sur le 10,3" réel, qui sera en 4:3.
-- Le noir de la trame de Bayer est à 0,20. Faut-il descendre à 0,12 ?
-- La transparence par défaut (0,77) a été relevée : à 0,56 les noms de
-  villes traversaient les boîtes. À réévaluer sur l'écran du tableau.
-- Les vingt pastilles occupent beaucoup de place. Faut-il n'afficher que
-  les plus proches, ou les laisser toutes — c'est aussi un index de
-  l'œuvre ?
+*À juger à l'écran :*
+- Figer les défauts de **trous**, **finesse** et **franges**.
+- Retirer `earth.jpg` et la touche `r` une fois le choix arrêté (−3,9 Mo).
+- Le noir de la trame de Bayer est à 0,20. Descendre à 0,12 ?
+- `#box-est` fait 33 vh. À revoir sur le 10,3″ réel, qui sera en 4:3.
+- Les vingt pastilles occupent beaucoup de place. Index de l'œuvre, ou
+  outil de navigation ?
 
-*Ouvert depuis le test des villes :*
-- À ×32, les cinq observateurs d'une même zone disent presque la même chose
-  (« 89 % · Tchita », « 88 % · Tchita »…). Le grain n'est appliqué que dans le
-  shader, pas dans `index()`. S'il l'était aussi côté JS, les cinq chiffres
-  divergeraient et les étiquettes cesseraient de se répéter. À trancher : le
-  grain est-il de la matière (shader seul) ou de la donnée (les deux) ?
-- `coast.js` tient mieux que prévu à ×32. Le 1:10 m n'est pas urgent.
-- Palier 5 des villes (> 50 000 hab.) = 1 723 entrées, 40 % du fichier.
-  `MAX_TIER = 4` dans `make_cities.py` ramène `cities.js` à ~65 Ko.
-- Faut-il nommer le pays sur la troisième ligne, ou la ville seule suffit-elle ?
+*Question ouverte, devenue plus pressante :*
+- **Le grain est-il de la matière (shader seul) ou de la donnée (les deux) ?**
+  Il n'existe que dans le shader, et il vient d'être triplé : le chiffre
+  sous le réticule décrit encore moins bien le pixel à ×32. À ×32 les cinq
+  observateurs d'une même zone disent presque la même chose ; s'il était
+  aussi dans `index()`, les cinq chiffres divergeraient.
+
+**A bis — Les légendes** — voir `LEGENDES.md`, qui tient le détail.
+
+État : **10 entrées sourcées sur 20**. Wikipédia s'est révélée utile *comme
+index de sources*, pas comme source.
+
+Six phrases ont une source qui dit **autre chose qu'elles** — laissées
+intactes, `src: null`, à trancher :
+- **Amazonie** : Valadeau et al. (2010) documente chez les Yanesha l'arc
+  comme **esprit malin** — fausses couches, maladies de peau, on ferme la
+  bouche en le voyant. Bien plus fort que le serpent générique actuel.
+- **Mānoa** : Ānuenue est messagère des dieux Kāne et Kanaloa, pas du
+  passage des esprits.
+- **Plaine slave** : le motif de l'arc qui boit l'eau est **letton**
+  (Šmits 1936). Le point devrait remonter vers 25° E / 57° N.
+- **Cusco** : l'interdit de pointer du doigt reste introuvable côté
+  académique. L'*amaru* et Illapa, eux, sont sourcés.
+- **Connemara** : le chaudron est de la culture populaire moderne, sans
+  référence savante — y compris chez Wikipédia. **Highlands** le redouble.
+- **Aotearoa** : la phrase tient finalement (Best 1982), c'est Te Ara qui
+  était muet.
+
+Plus huit pistes sourcées qui combleraient les trous de la liste (Ashanti,
+Fang, Albanie, Malaisie, Philippines, Nicaragua, Mésopotamie, Muisca).
 
 **B — Données réelles** — voir §7.
 
 **C — Interaction du tableau**
-Joystick : navigation par sauts, réticule central comme curseur (les flèches du
-clavier préparent déjà ça) · bouton : déposer un indice ou un emoji · où vivent
-ces dépôts — partagés entre spectateurs, ou locaux au tableau ?
+Joystick : navigation par sauts · bouton : déposer un indice · où vivent
+ces dépôts.
 
 **D — Pipeline e-ink**
-Rendu serveur → PNG 1872×1404 en 16 gris · **le tramage peut remettre en cause
-tout le A** : les taches irisées deviendront des densités de trame · cadence de
-rafraîchissement.
+Rendu serveur → PNG 1872×1404 en 16 gris · le tramage peut remettre en
+cause tout le A.
 
-**E — Matériel**
-Écran, board, alimentation, joystick, intégration dans l'aluminium.
+**E — Matériel — tranché en septembre 2026**
 
-**Contrainte à garder en tête** : un e-ink 10" met ~0,5 à 1 s en rafraîchissement
-partiel, 2 à 3 s en complet. Pas de glissement fluide possible — la navigation
-du tableau devra se faire par sauts. Ce n'est pas un défaut : ça impose un
-rythme contemplatif qui convient à un tableau.
+- **Raspberry Pi 4 minimum.** Le Zero, le Zero 2 W et le Pi 3 sont en
+  VideoCore IV, OpenGL ES 2.0 : le shader est en WebGL 2, il ne compilera
+  pas. Le Pi 4 est conforme ES 3.1 (certifié Khronos), le Pi 5
+  confortablement. **Attention** : les fiches produit annoncent la
+  compatibilité Zero — c'est vrai pour le HAT, qui ne fait que recevoir un
+  bitmap, pas pour le calcul.
+- **Écran : 10,3″ monochrome 16 gris**, 1872×1404, contrôleur IT8951,
+  USB/SPI/I80. **GC16 en moins d'une seconde**, partiel supporté, **mode A2
+  à ~7 fps en 2 niveaux**. 1,2 W en rafraîchissement, 0,1 W en veille.
+  C'est du 4:3, ce que le projet visait déjà.
+- **Le 13,3″ Spectra 6 couleur est écarté** : 19 s de rafraîchissement
+  complet, aucun partiel, et six encres fixes qui détruiraient l'irisation.
+  C'est un écran d'affichage d'images, pas d'interaction.
+- **Idée d'interaction née de là** : se déplacer en **A2** (le piéton, le
+  réticule, les traits de côte sont déjà du trait noir) et **se poser en
+  GC16** quand le joystick est relâché. La trame de Bayer parle déjà le
+  1 bit.
+- Les « 180 s entre deux rafraîchissements » des fiches Waveshare sont du
+  texte de gabarit recopié sur toute la gamme, à côté d'une démo à 7 fps.
+  Précaution de durée de vie, pas limite technique. À vérifier sur pièce.
 
 ---
 
 ## 9. Manipulations
 
-**Tester en local** — le double-clic ne marche pas (voir piège n°3), et les
-modules ES exigent eux aussi un serveur :
+**Tester en local** — le double-clic ne marche pas (pièges n°3 et 15) :
 
 ```bash
 cd "C:\00 - CREATIONS\RAINBOW ESTIMATEUR\GIT\rainbow"
 python serve.py
 ```
 
-**Pas `python -m http.server`** : il laisse le navigateur mettre les modules
-en cache, et il suffit qu'un seul des douze soit repris de l'ancienne
-version pendant que les autres sont rechargés pour que la page mélange deux
-états. Voir piège n°16. `serve.py` répond `no-store` et corrige au passage
-les types MIME sous Windows.
-
-puis `http://localhost:8000`
+puis `http://localhost:8000`. **Pas `python -m http.server`** (piège n°16).
 
 **Vérifier le miroir** — après toute retouche à `src/sky.js` ou
 `src/shader.js` :
@@ -655,33 +581,42 @@ puis `http://localhost:8000`
 node build/check_mirror.mjs
 ```
 
-**Mettre en ligne (GitHub Pages)** : dépôt public, glisser les fichiers du site
-à la **racine** (pas le dossier), puis *Settings → Pages → Deploy from a branch
-→ main → / (root)*.
+**Navigation** : glisser · molette · double-clic (×2) · flèches · `r`
+(aplats ↔ relief ombré) · `0` (recentrer) · `f` (plein écran) · `?`
+(explication) · Échap (fermer une feuille).
 
-**Régénérer les données** :
-
-```bash
-pip install numpy pillow tifffile imagecodecs pyproj
-python build/make_field.py     # field.png     (~1 min, demande etopo.tif)
-python build/make_terrain.py   # terrain.js    (demande etopo.tif)
-python build/make_texture.py   # earth.jpg + mask.png
-python build/make_coast.py     # coast.js
-python build/make_cities.py    # data/cities.js
-python build/bundle.py         # dist/index.html, le recollage
-```
-
-**Navigation dans la page** : glisser (rotation libre) · molette ou pincement
-(zoom vers le curseur) · double-clic (×2) · flèches (par pas) · curseur du bas
-(vitesse du temps simulé, 0 fige) · `r` (aplats ↔ relief ombré) · `0`
-(recentrer) · `f` (plein écran).
+**Régénérer les données** : voir les scripts de `build/`, dans l'ordre
+`make_field`, `make_terrain`, `make_texture`, `make_coast`, `make_cities`,
+`bundle`.
 
 ---
 
-## 10. Sources et crédits
+## 10. Méthode de travail avec Claude
+
+- Les fichiers sont modifiés **sur place, dans le dépôt**. Pas de zip. Il
+  n'y a plus qu'à commiter et pousser.
+- **Réponses courtes.** On discute avant de coder quand le sujet est
+  ouvert.
+- Claude **nomme le fichier avant d'y toucher** et ne relit pas tout le
+  projet à chaque modification — l'architecture et la table du §2 sont
+  faites pour ça.
+- **Jamais de fichier binaire qui transite par Claude** : le transfert y
+  insère un manifeste et corrompt les images.
+- Après toute retouche à `src/sky.js` ou `src/shader.js` :
+  `node build/check_mirror.mjs`.
+- Pour vérifier : l'auteur lance `python serve.py`, Claude regarde
+  `http://localhost:8000` dans le navigateur intégré. **Si le volet est
+  masqué, `requestAnimationFrame` ne tourne pas et la page reste figée sur
+  ses tirets — ce n'est pas une panne** (piège n°23).
+
+---
+
+## 11. Sources et crédits
 
 - Projection **Equal Earth** — Šavrič, Patterson & Jenny (2018)
 - Altitudes et bathymétrie — **ETOPO 2022**, NOAA NCEI
 - Traits de côte, lacs, relief ombré — **Natural Earth** (domaine public)
 - Météo à venir — **Open-Meteo**, CC-BY 4.0 (crédit obligatoire)
 - Typographie — **Fragment Mono** (Google Fonts)
+- Les sources des hauts lieux sont dans `src/legends.js`, entrée par
+  entrée, et leur état dans `LEGENDES.md`

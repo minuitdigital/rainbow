@@ -49,6 +49,7 @@
 
 import { DEG, RAD, wrap180, geoVec } from './projection.js';
 import { LEGENDS, LEGEND_FLOOR } from './legends.js';
+import { wxRain, wxClear } from './weather.js';
 
 /** Au-delà, le centre de l'arc passe sous l'horizon. */
 export const SUN_MAX = 42;
@@ -155,10 +156,26 @@ const smooth01 = (t, a, b) => {
 };
 
 // ============================================================== LA MÉTÉO
-// Ce qui est vrai — ou le sera, quand Open-Meteo remplacera le bruit.
+//  Ce qui est vrai — et depuis septembre 2026, ce qui est VRAIMENT vrai.
+//
+//  DEUX SOURCES, choisies par le dernier paramètre `slot` :
+//
+//      slot === null   le bruit fractal. C'est le mode « dev » : un temps
+//                      inventé qu'on accélère pour voir la mécanique.
+//      slot un nombre  la grille Open-Meteo, lue au pas de temps donné.
+//
+//  Ce module ne sait PAS dans quel mode la page se trouve, et c'est
+//  voulu : il est au-dessus de view.js dans l'ordre de dépendance, il n'a
+//  donc pas le droit de le lui demander. Ce sont les appelants qui
+//  savent — et `slotAt()` dans view.js leur donne la réponse.
 
 /** La pluie en un point, telle que le shader la voit. */
-export function rainAt(lon, lat, drift) {
+export function rainAt(lon, lat, drift, slot) {
+  // LA VRAIE PLUIE EST CELLE DU VOISINAGE, dilatée d'une case par le
+  // script qui fabrique la grille : on ne voit pas d'arc DANS l'averse,
+  // on est dessous et le ciel est gris. On le voit à côté.
+  if (slot != null) return wxRain(lon, lat, slot);
+
   const p = lat * DEG, lo = lon * DEG, cl = Math.cos(p);
   const raw = fbm(cl * Math.cos(lo) * FIELD_FREQ + drift,
                   cl * Math.sin(lo) * FIELD_FREQ,
@@ -167,24 +184,40 @@ export function rainAt(lon, lat, drift) {
 }
 
 /**
- * La trouée : du soleil direct malgré l'averse. Climatologie grossière —
- * zone de convergence intertropicale, rails dépressionnaires.
+ * La trouée : du soleil direct malgré l'averse.
  *
- * Le shader multiplie en plus par le masque littoral, que ce miroir n'a
- * pas : la lecture sous le réticule est donc légèrement plus généreuse
- * que le pixel en pleine mer. C'était déjà vrai avant, c'est assumé.
+ * EN MÉTÉO, c'est une mesure : `direct_radiation` rapporté à ce qu'un
+ * ciel parfaitement clair donnerait à cette hauteur de soleil. Elle dit
+ * littéralement « des rayons non interceptés arrivent ici », ce qui est
+ * la condition physique exacte d'un arc-en-ciel.
+ *
+ * EN DEV, c'est une climatologie grossière et inventée — zone de
+ * convergence intertropicale, rails dépressionnaires. C'était joli, et
+ * c'était faux : il ne fait pas toujours beau à 48° de latitude.
+ *
+ * La remise à l'échelle 0,14 + 1,66 × clarté garde exactement la course
+ * de l'ancienne formule, plancher compris : même sous une couverture
+ * totale il reste un peu de trouée, parce qu'une carte où quelque chose
+ * vaut zéro absolu cesse de respirer.
+ *
+ * Le shader multiplie EN PLUS par le masque littoral dans la branche du
+ * bruit, que ce miroir n'a pas : la lecture sous le réticule est donc
+ * légèrement plus généreuse que le pixel en pleine mer. C'était déjà vrai
+ * avant, c'est assumé — et en météo la question ne se pose plus, le
+ * masque disparaît des deux côtés.
  */
-export function gapAt(lat, sun) {
+export function gapAt(lon, lat, sun, slot) {
+  if (slot != null) return 0.14 + 1.66 * wxClear(lon, lat, slot);
   const a = (lat - sun.decl * 0.45) / 9.5;
   const b = (Math.abs(lat) - 48) / 15;
   return 0.14 + 0.92 * Math.exp(-a * a) + 0.74 * Math.exp(-b * b);
 }
 
 /** MÉTÉO, ramenée entre 0 et 1. */
-export function meteoAt(lon, lat, sun, drift) {
-  const rain = rainAt(lon, lat, drift);
+export function meteoAt(lon, lat, sun, drift, slot) {
+  const rain = rainAt(lon, lat, drift, slot);
   if (rain <= 0) return 0;
-  return 1 - Math.exp(-rain * (gapAt(lat, sun) / 1.2) * 6);
+  return 1 - Math.exp(-rain * (gapAt(lon, lat, sun, slot) / 1.2) * 6);
 }
 
 // ============================================================ LA LÉGENDE
@@ -293,7 +326,7 @@ export function spillAt(h) {
  * dépolit la tache sans la déplacer — c'est de la matière, pas de la
  * donnée — donc la structure lue ici reste celle du champ.
  */
-export function rainbowIndex(lon, lat, sun, drift, driftC, w, here) {
+export function rainbowIndex(lon, lat, sun, drift, driftC, w, here, slot) {
   const h = sunElev(lon, lat, sun);
   const S = sunGate(h);
 
@@ -305,7 +338,8 @@ export function rainbowIndex(lon, lat, sun, drift, driftC, w, here) {
 
   const g = geoVec(lon, lat);
   let sum = w.c * chanceAt(lon, lat, driftC) * luckAt(g, here, w.c) * gateC;
-  if (S > 0) sum += S * (w.m * meteoAt(lon, lat, sun, drift) + w.l * legendAtVec(g));
+  if (S > 0) sum += S * (w.m * meteoAt(lon, lat, sun, drift, slot)
+                       + w.l * legendAtVec(g));
 
   const t = sum * GAIN;
   return t > 1 ? 1 : t;
@@ -319,7 +353,7 @@ export function rainbowIndex(lon, lat, sun, drift, driftC, w, here) {
  * l'étiquette doit dire. Sans quoi une tache de pleine nuit annoncerait
  * « averse en cours » là où il n'y a que de la chance.
  */
-export function ingredients(lon, lat, sun, drift, driftC, here, w) {
+export function ingredients(lon, lat, sun, drift, driftC, here, w, slot) {
   const h = sunElev(lon, lat, sun), S = sunGate(h);
   const wc = w ? w.c : 0;
   const g = geoVec(lon, lat);
@@ -328,7 +362,7 @@ export function ingredients(lon, lat, sun, drift, driftC, here, w) {
     gate:    S,
     gateC:   Math.max(S, spillAt(h) * wc),
     luck:    luckAt(g, here, wc),
-    meteo:   S > 0 ? meteoAt(lon, lat, sun, drift) : 0,
+    meteo:   S > 0 ? meteoAt(lon, lat, sun, drift, slot) : 0,
     legende: S > 0 ? legendAtVec(g) : 0,
     chance:  chanceAt(lon, lat, driftC) * luckAt(g, here, wc)
   };

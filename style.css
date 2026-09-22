@@ -220,6 +220,10 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   align-items: center;
   gap: 8px;
 }
+/* Un curseur dont la sortie est un MOT et non un nombre court. Le rail
+   cède la place, la colonne de droite s'élargit — « maintenant » et
+   « ×100 000 » ne tiennent pas dans 44 px. */
+.dial.wide { grid-template-columns: 88px 1fr 74px; }
 .dial label { color: var(--ink-soft); letter-spacing: .05em; }
 .dial label.off { opacity: .35; }
 .dial output {
@@ -228,6 +232,92 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   font-variant-numeric: tabular-nums;
 }
 .dial input:disabled { opacity: .35; cursor: default; }
+
+/* --- une jauge : un nom à gauche, un chiffre à droite. Pas de curseur, il
+   n'y a rien à régler — c'est une lecture, comme l'héliodon. Les lignes
+   `deep` détaillent celle qui les précède et se tiennent en retrait, pour
+   qu'on voie d'un coup d'œil qu'elles s'additionnent. */
+.gauge {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--ink-soft);
+  letter-spacing: .05em;
+}
+.gauge em {
+  font-style: normal;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.gauge em { margin-left: auto; }
+.gauge.deep { color: var(--ink-faint); }
+.gauge.deep span { padding-left: 11px; }
+.gauge.deep em { color: var(--ink-soft); }
+
+/* --- un choix entre deux : DEUX CASES ET NON UNE À COCHER. Avec une
+   seule, il faut se souvenir de ce que « coché » voulait dire ; avec
+   deux, on lit ce qu'on a choisi. La première colonne fait la même
+   largeur que celle des curseurs, pour que les libellés s'alignent. */
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-soft);
+  letter-spacing: .05em;
+}
+.choice > span { width: 88px; flex: none; }
+.choice label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* Éteint quand le choix n'est pas disponible — la case « météo » tant que
+   data/weather.png n'est pas à côté de la page. */
+.choice label.off { color: var(--ink-faint); cursor: default; }
+.choice b { font-weight: normal; }
+
+/* Carré comme la case à cocher : rien n'est arrondi dans cette page, pas
+   même les poignées des curseurs. */
+.choice input[type="radio"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px; height: 11px;
+  margin: 0;
+  flex: none;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  cursor: pointer;
+}
+.choice input[type="radio"]:checked { background: var(--ink); }
+.choice input[type="radio"]:disabled { border-color: var(--ink-faint); cursor: default; }
+.kbd .choice input[type="radio"]:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
+
+/* L'appel de note, au bout de la ligne. Il ne doit pas peser plus que le
+   chiffre qu'il explique — même discrétion que le triangle des légendes. */
+.ask {
+  flex: none;
+  margin-left: auto;
+  padding: 0 2px;
+  font: inherit;
+  line-height: 1;
+  color: var(--ink-faint);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.gauge .ask { margin-left: 6px; }
+.ask:hover { color: var(--ink); }
+.ask:focus-visible { outline: 0; }
+.kbd .ask:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
+
+/* La note dit d'abord ce que le chiffre mesure, puis ce qui le fait
+   monter. C'est la seconde ligne qui sert : sans elle on optimise au
+   hasard. */
+#note-pourquoi { margin: 14px 0 0; color: var(--ink-soft); }
 
 /* La case à cocher : un carré plein, du même dessin que les poignées. */
 .dial input[type="checkbox"] {
@@ -439,5 +529,6 @@ input[type="range"]::-moz-range-thumb {
   .rail { width: 100%; }
   #box-est { height: 44vh; }
   .dial { grid-template-columns: 78px 1fr 42px; }
+  .dial.wide { grid-template-columns: 78px 1fr 72px; }
   .sheet-inner { padding: 26px 20px 28px; }
 }

@@ -103,7 +103,17 @@ const RULES = [
 
   ['la météo',
     /1\.0 - exp\(-rain \* \(gap \/ ([\d.]+)\) \* ([\d.]+)\)/,
-    /1 - Math\.exp\(-rain \* \(gapAt\(lat, sun\) \/ ([\d.]+)\) \* ([\d.]+)\)/],
+    /1 - Math\.exp\(-rain \* \(gapAt\(lon, lat, sun, slot\) \/ ([\d.]+)\) \* ([\d.]+)\)/],
+
+  // LA BRANCHE MÉTÉO. Depuis qu'Open-Meteo remplace le bruit, la trouée a
+  // DEUX formules selon le mode, et il faut que les deux tiennent le
+  // miroir. Celle-ci remet la clarté mesurée sur la course exacte de
+  // l'ancienne climatologie — même plancher, même amplitude — pour que
+  // basculer de « dev » à « météo » ne change pas l'échelle de la carte,
+  // seulement ce qu'elle raconte.
+  ['la trouée mesurée',
+    /gap = ([\d.]+) \+ ([\d.]+) \* w\.g;/,
+    /if \(slot != null\) return ([\d.]+) \+ ([\d.]+) \* wxClear\(lon, lat, slot\);/],
 
   ['les trois octaves',
     /return ([\d.]+) \* vnoise\(p\) \+ ([\d.]+) \* vnoise\(p \* ([\d.]+)\) \+ ([\d.]+) \* vnoise\(p \* ([\d.]+)\);/,

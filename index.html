@@ -255,9 +255,91 @@
                   aria-controls="corps-r-temps" aria-label="D&#233;plier">+</button>
         </div>
         <div class="dials" id="corps-r-temps" hidden>
-          <div class="dial">
-            <label for="s-time">vitesse</label>
+
+          <!-- D'O&#217; VIENT L'HEURE, et donc d'o&#249; vient la pluie. Les deux
+               vont ensemble : un temps invent&#233; ne peut pas aller chercher
+               une pr&#233;vision, et une vraie pr&#233;vision ne se laisse pas
+               acc&#233;l&#233;rer dix mille fois.
+
+               DEUX CASES ET NON UNE : avec une seule &#224; cocher, il faut se
+               rappeler ce que « coch&#233; » voulait dire. L&#224;, on lit ce qu'on
+               a choisi. « m&#233;t&#233;o » reste &#233;teint tant que data/weather.png
+               n'est pas &#224; c&#244;t&#233; de la page — une case qui pr&#233;tendrait
+               brancher des donn&#233;es absentes mentirait. -->
+          <div class="choice">
+            <span>horloge</span>
+            <label><input type="radio" name="clk" id="clk-dev" checked><b>dev</b></label>
+            <label class="off" id="l-meteo"><input type="radio" name="clk" id="clk-meteo" disabled><b>m&#233;t&#233;o</b></label>
+            <button type="button" class="ask" data-note="clock"
+                    aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
+          </div>
+
+          <!-- LA COLONNE DE DROITE EST PLUS LARGE ICI, et pour les deux
+               significations du rail : « maintenant » d&#233;borde d'une case
+               de 44 px, et « &#215;100 000 » aussi. C'est le seul curseur de
+               la page dont la sortie soit un mot. -->
+          <div class="dial wide">
+            <label for="s-time" id="l-time">vitesse</label>
             <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">&#8212;</output>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================== LA PERFORMANCE -->
+      <!-- CE QUE LA PAGE CO&#219;TE, et sur quelle machine. Repli&#233; par d&#233;faut
+           comme les autres : c'est un instrument d'atelier, pas une
+           mesure du ciel, et le spectateur n'a rien &#224; en faire. Il ne
+           s'ouvre que si on va le chercher.
+
+           DEUX CHRONOM&#200;TRES, et il faut les deux. Le JavaScript se mesure
+           &#224; la montre ; le shader, non — drawArrays rend la main avant que
+           la carte graphique ait commenc&#233;. Une page &#224; douze images par
+           seconde dont le JavaScript ne co&#251;te qu'une milliseconde, c'est
+           le processeur graphique qui sature, et rien d'autre.
+
+           CHAQUE LIGNE PORTE SON « ? ». Un chiffre en millisecondes ne dit
+           rien tout seul : il faut savoir ce qu'il mesure, et surtout ce
+           qui le fait monter. Sans &#231;a on optimise au hasard. -->
+      <div class="sub">
+        <div class="head quiet">
+          <span>performance</span>
+          <button type="button" id="pli-r-perf" aria-expanded="false"
+                  aria-controls="corps-r-perf" aria-label="D&#233;plier">+</button>
+        </div>
+        <div class="dials" id="corps-r-perf" hidden>
+
+          <div class="gauge"><span>images/s</span><em id="g-fps">&#8212;</em>
+            <button type="button" class="ask" data-note="fps" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+          <div class="gauge"><span>shader</span><em id="g-gpu">&#8212;</em>
+            <button type="button" class="ask" data-note="gpu" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+          <div class="gauge"><span>javascript</span><em id="g-ms">&#8212;</em>
+            <button type="button" class="ask" data-note="js" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+          <div class="gauge deep"><span>carte</span><em id="g-map">&#8212;</em>
+            <button type="button" class="ask" data-note="map" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+          <div class="gauge deep"><span>encre</span><em id="g-ink">&#8212;</em>
+            <button type="button" class="ask" data-note="ink" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+          <div class="gauge deep"><span>panneau</span><em id="g-panel">&#8212;</em>
+            <button type="button" class="ask" data-note="panel" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+          <div class="gauge"><span>pixels</span><em id="g-px">&#8212;</em>
+            <button type="button" class="ask" data-note="px" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+          <!-- LE MODE DE CALCUL, manuel et m&#233;moris&#233;. Une d&#233;tection
+               automatique aurait chang&#233; le rendu sans le dire, et sur une
+               oeuvre on ne veut pas d'un tableau qui se r&#232;gle dans notre
+               dos. Deux cases, pour la m&#234;me raison qu'&#224; l'horloge : on
+               doit LIRE ce qu'on a choisi, pas s'en souvenir. -->
+          <div class="choice">
+            <span>machine</span>
+            <label><input type="radio" name="rig" id="rig-laptop" checked><b>laptop</b></label>
+            <label><input type="radio" name="rig" id="rig-mini"><b>mini</b></label>
+            <button type="button" class="ask" data-note="rig"
+                    aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
           </div>
         </div>
       </div>
@@ -356,8 +438,24 @@
       surface réelle.<br>
       Altitudes et bathymétrie — <b>ETOPO 2022</b>, NOAA NCEI.<br>
       Traits de côte, lacs, lieux habités — <b>Natural Earth</b>.<br>
-      Les précipitations sont pour l'instant <b>simulées</b> par un bruit
-      fractal. Elles seront remplacées par de vraies prévisions.</p>
+      Pluie et rayonnement direct —
+      <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Weather
+      data by Open-Meteo.com</a>, sous licence CC-BY 4.0.</p>
+
+    <h2>Le temps qu'il fait</h2>
+    <p>Le réglage <b>horloge</b> dit d'où vient la pluie. En <b>météo</b>, la
+      carte suit l'heure réelle et lit une prévision relevée une fois par
+      jour sur toute la Terre, à un degré de côté ; le curseur du bas cesse
+      alors d'être une vitesse pour devenir un <i>quand</i>, d'hier à
+      après-demain. En <b>dev</b>, la pluie redevient un bruit fractal qu'on
+      peut accélérer jusqu'à voir tourner les saisons.</p>
+    <p>Ce que la carte appelle la <b>trouée</b> n'est pas une figure de
+      style : c'est le rayonnement <i>direct</i> reçu au sol, rapporté à ce
+      qu'un ciel parfaitement clair donnerait à cette hauteur de soleil. Il
+      dit littéralement si des rayons non interceptés arrivent jusqu'à vous
+      — ce qui est la condition même d'un arc-en-ciel. Et la pluie retenue
+      est celle du <i>voisinage</i> : on ne voit pas d'arc sous l'averse, on
+      le voit à côté d'elle.</p>
   </div>
 </div>
 
@@ -371,6 +469,20 @@
     <h1 id="src-nom">—</h1>
     <p class="lead" id="src-dit">—</p>
     <p id="src-qui">—</p>
+  </div>
+</div>
+
+<!-- LA NOTE. Troisi&#232;me feuille, m&#234;me m&#233;canique que les deux autres : on y
+     lit ce qu'un chiffre mesure et surtout CE QUI LE FAIT MONTER. Un temps
+     en millisecondes ne dit rien tout seul ; sans savoir d'o&#249; il vient, on
+     optimise au hasard. Le texte vit dans src/panel.js, avec le registre
+     qu'il explique. -->
+<div class="sheet" id="note-sheet" hidden>
+  <div class="sheet-inner narrow" role="dialog" aria-modal="true" aria-labelledby="note-nom">
+    <button class="sheet-close" id="note-close" aria-label="Fermer">&#215;</button>
+    <h1 id="note-nom">&#8212;</h1>
+    <p class="lead" id="note-quoi">&#8212;</p>
+    <p id="note-pourquoi">&#8212;</p>
   </div>
 </div>
 

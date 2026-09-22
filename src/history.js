@@ -18,7 +18,7 @@
 //  cheveu contre le bord droit.
 // =========================================================================
 
-import { dateAt, driftAt, driftChanceAt, elapsedHours } from './view.js';
+import { dateAt, driftAt, driftChanceAt, elapsedHours, slotAt } from './view.js';
 import { solar, sunElev, sunGate, spillAt, meteoAt, chanceAt, legendAt } from './sky.js';
 
 /** La profondeur de champ, en heures simulées. */
@@ -67,7 +67,11 @@ function skyAt(lon, lat, h, leg) {
     h: e,
     gate: sunGate(e),
     spill: spillAt(e),
-    m: meteoAt(lon, lat, sun, driftAt(h)),
+    // CHAQUE ÉCHANTILLON A SON PROPRE PAS DE TEMPS. C'est tout l'intérêt
+    // de télécharger quatre jours : la courbe des vingt-quatre heures
+    // passées montre la VRAIE météo qu'il a fait, heure par heure, et non
+    // la météo d'à présent étalée en arrière.
+    m: meteoAt(lon, lat, sun, driftAt(h), slotAt(h)),
     l: leg,
     c: chanceAt(lon, lat, driftChanceAt(h))
   };

@@ -24,10 +24,12 @@
 // =========================================================================
 
 import { view, measure, centre, centreVec, coast, anchorTo, simDate, elapsedHours,
-         advanceClock, stride, drift, driftChance, beliefWeights } from './view.js';
+         advanceClock, stride, drift, driftChance, beliefWeights,
+         beatFrame, rig, slotNow, wxOn } from './view.js';
+import { initWeather, keepFresh } from './weather.js';
 import { solar } from './sky.js';
 import { scan } from './zones.js';
-import { initMap, paint } from './map.js';
+import { initMap, paint, uploadWeather } from './map.js';
 import { initInk, rescale, trace } from './ink.js';
 import { initPanel, refreshPanel } from './panel.js';
 import { bind } from './chrome.js';
@@ -93,32 +95,67 @@ function frame(now) {
   // déplacement, elle ne le décide pas.
   if (stride(dt)) animating = true;
 
-  if (view.speed > 0) animating = true;          // le temps avance
+  // LE TEMPS AVANCE — mais pas à la même cadence selon d'où il vient.
+  //
+  // En dev, le curseur multiplie le temps par mille ou par cent mille : la
+  // carte doit alors suivre image par image, sinon le soleil saute.
+  //
+  // En météo, une seconde vaut une seconde. Le soleil avance de quatre
+  // centièmes de degré en dix secondes, et redessiner soixante fois par
+  // seconde pour ça ferait chauffer un Raspberry Pi toute l'année sans que
+  // personne ne voie la différence. La minuterie posée au démarrage réveille
+  // la boucle de loin en loin ; entre deux, la carte dort pour de bon.
+  if (view.clock === 'dev' && view.speed > 0) animating = true;
 
   if (dirty || animating) {
     dirty = false;
     const when = simDate();
     const sun = solar(when);
 
-    // Les zones ne sont ré-examinées que cinq fois par seconde. Le tracé,
-    // lui, suit chaque image : les points sont rangés en coordonnées
-    // géographiques, pas en pixels.
+    // Les zones ne sont ré-examinées que quelques fois par seconde — la
+    // machine dit combien. Le tracé, lui, suit chaque image : les points
+    // sont rangés en coordonnées géographiques, pas en pixels.
     //
     // `centreVec` est le centre de la flaque de chance : le balayage doit
     // savoir où se tient le piéton, puisque sa chance le suit.
-    if (now - lastScan > 200) {
+    if (now - lastScan > rig().scanMs) {
       lastScan = now;
       scan(sun, drift(), driftChance(), elapsedHours(), beliefWeights(), centreVec());
     }
 
+    // LES TROIS CHRONOMÈTRES. Ils ne mesurent que le JavaScript — le
+    // shader, lui, est encore en train de travailler quand `paint` rend la
+    // main, et c'est le chronomètre du pilote qui le relève (voir map.js).
+    // Le coût des `performance.now()` eux-mêmes est de l'ordre du dixième
+    // de microseconde : quatre par image, c'est sous le bruit.
     const c = centre();
-    paint(glCv, sun);
+    const t0 = performance.now();
+    paint(glCv, sun, slotNow());
+    const t1 = performance.now();
     trace(c);
+    const t2 = performance.now();
     refreshPanel(sun, c, when);
+    const t3 = performance.now();
+
+    beatFrame(now, t3 - t0, t1 - t0, t2 - t1, t3 - t2);
+
+    // La fraîcheur se regarde ICI, dans la boucle, et pas sur une
+    // minuterie : une page qui se réveille après trois jours de veille
+    // aurait vu passer douze réveils pour rien. L'appel ne fait rien
+    // pendant six heures, puis une requête.
+    keepFresh();
   }
 
   if (animating) rafId = requestAnimationFrame(frame);
 }
+
+/**
+ * LE BATTEMENT LENT du mode météo. Dix secondes : le soleil a bougé de
+ * quatre centièmes de degré, ce qui est déjà plus fin que ce que la carte
+ * sait montrer. Entre deux battements la boucle d'images est à l'arrêt
+ * complet — c'est l'état normal d'un tableau sur un mur.
+ */
+setInterval(() => { if (wxOn()) invalidate(); }, 10000);
 
 // ------------------------------------------------------------ le démarrage
 // En dernier, et pas par coquetterie : les déclarations ci-dessus vivent
@@ -140,8 +177,24 @@ if (!initMap(glCv, invalidate)) {
   initInk(inkCv);
   // Le panneau avant la main : les réglages mémorisés doivent être posés
   // (vitesse, allure, croyance) avant la première image.
-  initPanel(invalidate);
+  // Deux fonctions et non une : le panneau redessine la plupart du temps,
+  // mais changer de machine change le nombre de pixels réels et demande de
+  // retailler les deux calques.
+  initPanel(invalidate, resize);
   bind(inkCv, invalidate);
   window.addEventListener('resize', resize);
   resize();
+
+  // LA MÉTÉO ARRIVE QUAND ELLE ARRIVE, et le plus souvent jamais du
+  // premier coup : il faut aller chercher un fichier, le décoder, le
+  // verser au processeur graphique. On ne conditionne donc rien à sa
+  // présence — même règle que les textures, piège n°2. Quand elle tombe,
+  // on la verse, on allume la case du panneau et on redessine.
+  initWeather(() => {
+    if (uploadWeather()) {
+      document.getElementById('clk-meteo').disabled = false;
+      document.getElementById('l-meteo').classList.remove('off');
+      invalidate();
+    }
+  });
 }

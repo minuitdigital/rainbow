@@ -17,6 +17,7 @@ import {
   inverseEE, flatten, geoVec, matMul, matVec, matT, identity,
   orthonormalize, between, rodrigues
 } from './projection.js';
+import { hasWeather, weatherSlot } from './weather.js';
 
 // Le zoom ne coûte aucun octet : rien n'est chargé, tout est recalculé.
 // Le plafond est celui de la DONNÉE, pas du moteur — au-delà de ×32 les
@@ -75,8 +76,120 @@ export const view = {
    *           cercle des teintes
    */
   look: { sat: 1.5, tache: 1, grey: 0, icon: 15,
-          sea: 1, land: 1, fine: 1, holes: 0.5, franges: 1.35, dot: 0 }
+          sea: 1, land: 1, fine: 1, holes: 0.5, franges: 1.35, dot: 0 },
+
+  /**
+   * LA MACHINE. `laptop` ou `mini` — voir RIGS juste dessous. Ce n'est pas
+   * une allure, c'est un aveu : la page dit de quel calculateur elle
+   * dispose, et se règle en conséquence.
+   */
+  rig: 'laptop',
+
+  /**
+   * D'OÙ VIENT L'HEURE, et donc d'où vient la pluie. `dev` invente un
+   * temps que le curseur accélère et tire la pluie d'un bruit fractal ;
+   * `meteo` suivra le temps réel et la vraie prévision. Les deux vont
+   * ensemble : un temps inventé ne peut pas aller chercher une prévision,
+   * et une prévision ne se laisse pas accélérer dix mille fois.
+   */
+  clock: 'dev',
+
+  /**
+   * LE DÉCALAGE, en heures, et seulement en mode météo. Le curseur du bas
+   * cesse alors d'être une vitesse pour devenir un « quand » : de -24 h,
+   * hier, à +48 h, après-demain. Zéro est maintenant.
+   */
+  when: 0
 };
+
+// ============================================================== LA MACHINE
+//  Le tableau tournera sur un Raspberry Pi, pas sur l'écran d'atelier. Le
+//  même programme doit donc savoir se tenir des deux côtés — et il n'y a
+//  pas de réglage unique qui convienne aux deux, parce que le rapport
+//  entre le coût par pixel et le coût par point n'est pas le même.
+//
+//  Trois nombres seulement, et ce sont les trois qui comptent :
+//
+//      dpr      combien de pixels réels pour un pixel de page. C'est le
+//               levier le plus brutal de toute la page : passer de 2 à 1
+//               divise par QUATRE le travail du processeur graphique.
+//      probe    le pas du balayage des zones, en pixels. Le coût monte
+//               comme le carré : 30 -> 44 fait moitié moins d'appels.
+//      scanMs   l'intervalle entre deux balayages.
+//
+//  Le choix est MANUEL et mémorisé. Une détection automatique aurait paru
+//  élégante ; elle aurait surtout changé le rendu sans le dire, et sur une
+//  oeuvre on ne veut pas d'un tableau qui se règle tout seul dans notre dos.
+export const RIGS = {
+  laptop: { dpr: 2, probe: 30, scanMs: 200 },
+  mini:   { dpr: 1, probe: 44, scanMs: 320 }
+};
+
+export const rig = () => RIGS[view.rig] || RIGS.laptop;
+
+// =============================================================== LA CADENCE
+//  Ce que coûte une image, mesuré et non supposé.
+//
+//  DEUX CHRONOMÈTRES, et il faut les deux. `performance.now()` autour de
+//  `paint()` ne mesure PAS le processeur graphique : `drawArrays` rend la
+//  main aussitôt, le shader travaille encore après. Un tableau saturé
+//  afficherait 0,1 ms en toute bonne foi. D'où le second chronomètre,
+//  celui du pilote graphique lui-même — quand le navigateur veut bien le
+//  donner. Ensemble ils disent OÙ ça coince ; l'un sans l'autre ment.
+//
+//  Les moyennes sont glissantes sur une seconde : un chiffre qui saute à
+//  chaque image ne se lit pas, et on cherche une tendance, pas un instant.
+export const beat = {
+  fps: 0,          // images par seconde, moyenne glissante
+  ms: 0,           // temps passé dans le JavaScript, par image
+  map: 0,          // dont la carte  (envoi des uniformes seulement)
+  ink: 0,          // dont l'encre   (le calque 2D, tout compris)
+  panel: 0,        // dont le panneau
+  gpu: null,       // le vrai temps du shader, ou null si non mesurable
+  idle: true       // aucune image depuis un moment : la carte ne coûte rien
+};
+
+/** Pondération de la moyenne glissante. Plus bas = plus lisse, plus lent. */
+const SMOOTH = 0.12;
+
+const glide = (was, now) => was ? was + (now - was) * SMOOTH : now;
+
+let lastBeat = 0;
+
+/**
+ * Appelé une fois par image, à la fin de `frame`, avec le détail des
+ * temps. `total` est le temps JavaScript de toute l'image ; `at` est
+ * l'horodatage que requestAnimationFrame a donné.
+ */
+export function beatFrame(at, total, map, ink, panel) {
+  if (lastBeat) {
+    const gap = at - lastBeat;
+    // Un écart de plus d'une demi-seconde n'est pas une image lente :
+    // c'est une reprise après repos, ou un volet qui redevient visible.
+    // La compter écraserait la moyenne pour plusieurs secondes.
+    if (gap > 0 && gap < 500) beat.fps = glide(beat.fps, 1000 / gap);
+  }
+  lastBeat = at;
+  beat.idle = false;
+  beat.ms    = glide(beat.ms, total);
+  beat.map   = glide(beat.map, map);
+  beat.ink   = glide(beat.ink, ink);
+  beat.panel = glide(beat.panel, panel);
+}
+
+/**
+ * LE REPOS EST UN ÉTAT, PAS UNE PANNE. La boucle s'arrête quand rien ne
+ * bouge — c'est ce qui rend la pièce supportable sur un mur des années
+ * durant. Le compteur doit donc le DIRE plutôt que d'afficher une cadence
+ * figée qui ferait croire à un gel.
+ */
+export function beatIdle() {
+  if (lastBeat && performance.now() - lastBeat > 400) beat.idle = true;
+  return beat.idle;
+}
+
+/** Les pixels réellement calculés par le shader, par image. */
+export const pixelCount = () => view.W * view.dpr * view.H * view.dpr;
 
 /** Les trois parts ramenées à une somme de 1. */
 export function beliefWeights() {
@@ -101,7 +214,10 @@ export const sy = y => -y * scale() + view.H / 2;
  * une carte qui déborde est un lieu.
  */
 export function measure(cssW, cssH) {
-  view.dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Le plafond vient de la MACHINE et non d'une constante : c'est le seul
+  // réglage qui divise par quatre le travail du processeur graphique d'un
+  // seul coup, et c'est tout l'objet du mode « mini ».
+  view.dpr = Math.min(window.devicePixelRatio || 1, rig().dpr);
   view.W = cssW;
   view.H = cssH;
   view.baseScale = Math.max(cssW / (2 * XMAX), cssH / (2 * YMAX));
@@ -207,15 +323,46 @@ let simH = 0;
 
 /** Appelé une fois par image, avec le temps réel écoulé en secondes. */
 export function advanceClock(dt) {
-  if (view.speed > 0) simH += dt / 3600 * view.speed;
+  if (view.clock === 'dev' && view.speed > 0) simH += dt / 3600 * view.speed;
 }
 
-export const elapsedHours = () => simH;
+/**
+ * EN MÉTÉO, L'HORLOGE N'ACCUMULE RIEN — elle EST l'heure réelle, plus le
+ * décalage du curseur.
+ *
+ * Ce n'est pas une entorse au piège n°18 mais sa conséquence. Le piège
+ * disait : une horloge qui se DÉDUIT d'une multiplication réécrit tout le
+ * passé dès qu'on touche au curseur. Ici il n'y a pas de multiplication :
+ * une seconde vaut une seconde, et lire Date.now() est exact par
+ * construction. Mieux : c'est la seule façon de ne pas dériver quand la
+ * carte ne se redessine que toutes les dix secondes — ce qu'elle fait en
+ * météo, puisque le soleil avance de quatre centièmes de degré pendant
+ * ce temps-là et qu'un tableau sur un mur n'a pas à chauffer pour ça.
+ */
+export const elapsedHours = () =>
+  view.clock === 'meteo' ? (Date.now() - T0_MS) / 3600000 + view.when : simH;
 
 /** La date simulée à une heure quelconque — le passé se visite. */
 export const dateAt = h => new Date(T0_MS + h * 3600000);
 
-export const simDate = () => dateAt(simH);
+/**
+ * UNE SEULE SOURCE D'HEURE, et c'est `elapsedHours`.
+ *
+ * Cette ligne a dit `dateAt(simH)` pendant une demi-journée après
+ * l'arrivée du mode météo, et c'était faux : `simH` est l'horloge
+ * ACCUMULÉE du mode dev, celle que le curseur multiplie par quatre mille.
+ * En météo elle continue de porter ce que le temps accéléré avait
+ * engrangé avant le basculement, tandis que `elapsedHours` rend l'heure
+ * vraie.
+ *
+ * Le panneau et le shader lisaient donc une heure, `recall` et le
+ * balayage des zones en lisaient une autre. Le symptôme était joliment
+ * retors : l'héliodon affichait un soleil à 44° — la bonne hauteur pour
+ * l'heure réelle — juste au-dessus d'une pendule qui annonçait six heures
+ * plus tard. Deux horloges dans la même boîte, et toutes les deux
+ * sincères.
+ */
+export const simDate = () => dateAt(elapsedHours());
 
 /**
  * Le décalage du bruit DOIT rester petit. En float32, ajouter ~45 000 aux
@@ -231,8 +378,26 @@ export const driftAt = h => (h * 0.03) % 512;
  */
 export const driftChanceAt = h => (h * 0.011) % 512;
 
-export const drift = () => driftAt(simH);
-export const driftChance = () => driftChanceAt(simH);
+export const drift = () => driftAt(elapsedHours());
+export const driftChance = () => driftChanceAt(elapsedHours());
+
+// ---------------------------------------------------- OÙ L'ON EN EST
+//  La grille météo est-elle en service, et à quel pas de temps la lire.
+//
+//  `slotAt` rend NULL en mode dev, ou quand le fichier n'est pas encore
+//  arrivé. C'est cette valeur nulle qui dit à sky.js de retomber sur son
+//  bruit fractal — sky.js n'a pas le droit d'interroger view.js, il est
+//  au-dessus dans l'ordre de dépendance.
+
+/** La vraie météo est-elle branchée ? C'est ce qui allume la case. */
+export const wxOn = () => view.clock === 'meteo' && hasWeather();
+
+/** Le pas de temps de la grille pour une heure simulée donnée, ou null. */
+export const slotAt = h =>
+  wxOn() ? weatherSlot(T0_MS + h * 3600000) : null;
+
+/** Le pas de temps de l'instant affiché. */
+export const slotNow = () => slotAt(elapsedHours());
 
 // ------------------------------------------------------------- LA MARCHE
 //  Le piéton du réticule marche quand le monde défile sous lui.

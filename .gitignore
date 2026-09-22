@@ -7,6 +7,22 @@
 #
 # Les sources lourdes vivent désormais dans build/, à côté des scripts
 # qui les consomment. Voir REPRISE.md §3 pour où les retrouver.
+#
+# data/weather.png EST L'EXCEPTION, et pour une raison qui n'a rien à voir
+# avec les précédentes : il n'est pas ignoré parce qu'il serait lourd, mais
+# parce qu'il est FABRIQUÉ À CHAQUE PUBLICATION.
+#
+# Il change entièrement tous les jours, et git ne sait pas compresser la
+# différence entre deux PNG : il en garderait chaque version en entier,
+# soit environ 250 Mo par an, indéfiniment. Le robot de .github/workflows/
+# le fabrique, le publie sur GitHub Pages et l'oublie — le dépôt ne le voit
+# jamais passer. Voir REPRISE.md §7.
+#
+# Sur ton poste, `python build/make_weather.py` l'écrit dans data/ pour
+# que la carte ait sa météo en local. C'est cette copie-là qui est ignorée.
+
+data/weather.png
+data/weather.json
 
 etopo.tif
 etopo1.jpg

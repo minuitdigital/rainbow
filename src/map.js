@@ -13,15 +13,65 @@ import { view, scale, drift, driftChance, detail, fine, holes,
          beliefWeights, centreVec } from './view.js';
 import { VERTEX, FRAGMENT, MAX_LEGENDS } from './shader.js';
 import { LEGEND_POINTS } from './sky.js';
+import { weatherPixels } from './weather.js';
 
 let gl = null;
 const U = {};
+
+// ====================================================== LE CHRONOMÈTRE GPU
+//  `performance.now()` autour de `drawArrays` ne mesure RIEN : l'appel rend
+//  la main aussitôt, la carte graphique travaille encore après. Le seul
+//  chiffre honnête vient du pilote lui-même, par une requête posée autour
+//  du tracé et relue quelques images plus tard.
+//
+//  L'extension n'est pas toujours là — retirée des navigateurs pendant des
+//  années pour cause de fuite d'information par le temps, puis rendue en
+//  WebGL 2. Absente, on rend `null` et le panneau écrit un tiret plutôt
+//  qu'un chiffre inventé.
+//
+//  UNE SEULE REQUÊTE EN VOL. Une par image saturerait le pilote et
+//  fausserait précisément ce qu'on cherche à mesurer ; on en pose une, on
+//  attend qu'elle revienne, on en repose une. À soixante images par seconde
+//  on en relève encore plus de dix — largement assez pour une moyenne.
+let timerExt = null, timerQuery = null, timerBusy = false, gpuLast = null;
+
+/** Le dernier temps de shader mesuré, en millisecondes. Null si inconnu. */
+export const gpuMs = () => gpuLast;
+
+function timerStart() {
+  if (!timerExt || timerBusy) return false;
+  if (!timerQuery) timerQuery = gl.createQuery();
+  gl.beginQuery(timerExt.TIME_ELAPSED_EXT, timerQuery);
+  return true;
+}
+
+/**
+ * La requête posée deux images plus tôt est-elle revenue ? On ne bloque
+ * JAMAIS en attendant : `QUERY_RESULT_AVAILABLE` est une lecture non
+ * bloquante, et tant qu'elle dit non on garde l'ancienne valeur. Lire le
+ * résultat de force ici viderait le tuyau graphique à chaque image et
+ * coûterait plus cher que ce qu'on mesure.
+ *
+ * `GPU_DISJOINT_EXT` signale que le pilote a été interrompu pendant la
+ * mesure — changement de fréquence, préemption par une autre fenêtre. Le
+ * chiffre est alors faux, et il se jette.
+ */
+function timerRead() {
+  if (!timerBusy || !timerQuery) return;
+  if (!gl.getQueryParameter(timerQuery, gl.QUERY_RESULT_AVAILABLE)) return;
+  if (!gl.getParameter(timerExt.GPU_DISJOINT_EXT)) {
+    const ms = gl.getQueryParameter(timerQuery, gl.QUERY_RESULT) / 1e6;
+    gpuLast = gpuLast == null ? ms : gpuLast + (ms - gpuLast) * 0.12;
+  }
+  timerBusy = false;
+}
 
 const UNIFORMS = ['uRes', 'uScale', 'uMode', 'uRot', 'uDecl', 'uSublon',
                   'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uHoles', 'uFranges',
                   'uBelief', 'uHere',
                   'uSat', 'uTache', 'uGrey', 'uSea', 'uLand',
-                  'uLegN', 'uLegP', 'uLegQ', 'uEarth', 'uField', 'uMask'];
+                  'uLegN', 'uLegP', 'uLegQ', 'uEarth', 'uField', 'uMask',
+                  'uWx', 'uWxOn', 'uSlot', 'uWxN'];
 
 /**
  * Les textures arrivent quand elles arrivent. On lie donc des textures
@@ -87,6 +137,9 @@ export function initMap(canvas, onReady) {
   gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
   if (!gl) return false;
 
+  // Facultative, et c'est très bien ainsi : le tableau doit marcher sans.
+  timerExt = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+
   const prog = gl.createProgram();
   gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERTEX));
   gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAGMENT));
@@ -106,8 +159,10 @@ export function initMap(canvas, onReady) {
   gl.uniform1i(U.uEarth, 0);
   gl.uniform1i(U.uField, 1);
   gl.uniform1i(U.uMask, 2);
+  gl.uniform1i(U.uWx, 3);
 
   placeholder(0); placeholder(1); placeholder(2);
+  emptyWeather();
   uploadLegends();
 
   const load = (src, unit, mip) => {
@@ -123,6 +178,77 @@ export function initMap(canvas, onReady) {
   load('data/mask.png', 2, false);
   load('data/earth.jpg', 0, true);
 
+  return true;
+}
+
+// ================================================== LA GRILLE MÉTÉO
+//  Une texture EN COUCHES : un pas de temps par couche. Le fichier est un
+//  atlas vertical, donc chaque couche y est déjà contiguë — on verse le
+//  tableau d'un seul bloc, sans découper ni recopier quoi que ce soit.
+//  C'est la raison d'être de ce format, et elle ne se voit qu'ici.
+
+let wxTex = null, wxLayers = 0;
+
+/** Le nombre de pas de temps versés. Le shader en a besoin pour borner. */
+export const weatherLayers = () => wxLayers;
+
+function bindWeather() {
+  gl.activeTexture(gl.TEXTURE0 + 3);
+  if (!wxTex) wxTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D_ARRAY, wxTex);
+}
+
+/**
+ * Une couche blanche de 1×1 dès le départ. Un sampler2DArray laissé sans
+ * texture rend un résultat indéfini — sur certains pilotes du noir, sur
+ * d'autres un plantage de compilation au premier tracé. Même précaution
+ * que le piège n°2, pour la même raison.
+ */
+function emptyWeather() {
+  bindWeather();
+  gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, 1, 1, 1, 0,
+                gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+}
+
+/**
+ * Appelé quand la grille arrive, et à chaque relevé suivant. Rend false
+ * si la carte graphique ne veut pas d'autant de couches — la page retombe
+ * alors sur son bruit, ce qui est laid mais vivant.
+ */
+export function uploadWeather() {
+  const w = weatherPixels();
+  if (!w || !gl) return false;
+
+  const max = gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS);
+  if (w.nt > max) {
+    console.warn('météo : %d couches demandées, %d disponibles', w.nt, max);
+    return false;
+  }
+
+  bindWeather();
+  // Pas de retournement : le fichier est déjà rangé sud en premier, et le
+  // shader lit v = (lat + 90) / 180. UNPACK_FLIP_Y ne s'applique de toute
+  // façon pas à un versement depuis un tableau d'octets.
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, w.nx, w.ny, w.nt, 0,
+                gl.RGBA, gl.UNSIGNED_BYTE,
+                new Uint8Array(w.px.buffer, w.px.byteOffset, w.px.length));
+
+  // LA LONGITUDE S'ENROULE, la latitude non : sans REPEAT en S, une bande
+  // d'un demi-degré à l'antiméridien irait chercher la couleur du bord au
+  // lieu de celle d'en face. Aucun mipmap — la grille est déjà bien plus
+  // grossière que l'écran, en fabriquer des versions plus floues n'aurait
+  // aucun sens.
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+  wxLayers = w.nt;
   return true;
 }
 
@@ -149,7 +275,12 @@ function uploadLegends() {
                  LEGEND_POINTS.length - MAX_LEGENDS);
 }
 
-export function paint(canvas, sun) {
+export function paint(canvas, sun, slot) {
+  // On relève AVANT de poser la suivante : la requête lue ici est celle
+  // d'une image précédente, déjà digérée par le pilote.
+  timerRead();
+  const timed = timerStart();
+
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(1, 1, 1, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
@@ -176,5 +307,15 @@ export function paint(canvas, sun) {
   gl.uniform1f(U.uGrey, view.look.grey);
   gl.uniform1f(U.uSea, view.look.sea);
   gl.uniform1f(U.uLand, view.look.land);
+
+  // La grille n'est en service que si elle est arrivée ET versée. Un slot
+  // nul veut dire « mode dev » : le shader reprend son bruit fractal.
+  const wxOk = slot != null && wxLayers > 0;
+  gl.uniform1f(U.uWxOn, wxOk ? 1 : 0);
+  gl.uniform1f(U.uSlot, wxOk ? slot : 0);
+  gl.uniform1f(U.uWxN, wxLayers || 1);
+
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  if (timed) { gl.endQuery(timerExt.TIME_ELAPSED_EXT); timerBusy = true; }
 }
