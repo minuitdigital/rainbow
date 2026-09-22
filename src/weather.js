@@ -68,7 +68,7 @@ let grid = null;
 let onArrival = () => {};
 
 /** Où en est le téléchargement. Posé par initWeather également. */
-let onLoading = () => {};
+let note = () => {};
 
 let checking = false, checkedAt = 0;
 
@@ -123,6 +123,24 @@ export function weatherAge(ms) {
 /** Le dernier pas de temps couvert, en heures depuis maintenant. */
 export function weatherReach(ms) {
   return grid ? (grid.t0 + (grid.nt - 1) * grid.stepMs - ms) / 3600000 : null;
+}
+
+/** La raison du dernier échec, ou null quand tout va bien. */
+let trouble = null;
+
+/**
+ * Ce que la page tient, pour le registre DONNÉES. `grid` est null s'il n'y
+ * a rien, et `trouble` porte alors la raison — une absence sans motif
+ * n'apprend rien à personne.
+ */
+export function weatherInfo() {
+  return {
+    grid: grid && { t0: grid.t0, nt: grid.nt, nx: grid.nx, ny: grid.ny,
+                    made: grid.made, stepMs: grid.stepMs },
+    trouble,
+    checkedAt,
+    nextCheck: checkedAt ? checkedAt + REFRESH_MS : 0
+  };
 }
 
 // ---------------------------------------------------------- la lecture
@@ -198,7 +216,7 @@ async function decode(url) {
     if (done) break;
     chunks.push(value);
     got += value.length;
-    onLoading('météo', got, total, false);
+    note('météo', { got, total });
   }
 
   const blob = new Blob(chunks);
@@ -245,22 +263,26 @@ async function pull() {
     // disponible sans rien dire, et l'on croit regarder demain. Si le
     // robot n'a pas tourné depuis deux jours, autant que ce soit écrit
     // quelque part pour qui va chercher.
-    const reach = weatherReach(Date.now());
-    if (reach != null && reach < 0)
-      console.warn('météo : relevé périmé de %d h — le robot n’a pas tourné',
-                   Math.round(-reach));
-
+    // À L'ÉCRAN, ET PAS SEULEMENT DANS LA CONSOLE. Un relevé dépassé ne
+    // se voit pas : la carte affiche son dernier pas disponible sans rien
+    // dire, et l'on croit regarder demain.
+    trouble = null;
+    note('météo', null);
     onArrival();
   } catch (e) {
     // Pas de fichier, pas de réseau, fichier malformé : la page continue
-    // avec son bruit fractal. On le dit dans la console pour qui cherche,
-    // et nulle part ailleurs.
+    // avec son bruit fractal, et RIEN NE CASSE. Mais la carte ne montre
+    // alors plus la vraie pluie, et c'est une différence que le spectateur
+    // a le droit de connaître — d'où la ligne rouge, qui reste.
+    //
+    // Si une grille est déjà en mémoire, on se tait : un relevé plus
+    // récent qui n'arrive pas n'enlève rien à celui qu'on a déjà.
+    trouble = /404/.test(e.message) ? 'aucun relevé publié'
+            : /NetworkError|Failed to fetch/i.test(e.message) ? 'serveur injoignable'
+            : e.message;
     if (!grid) console.info('météo : pas de grille (%s)', e.message);
+    note('météo', null);
   } finally {
-    // QUOI QU'IL ARRIVE, l'indicateur s'efface. Un 404 — le cas normal
-    // tant que le robot n'a pas fait son premier relevé — ne doit pas
-    // laisser « météo » suspendu à l'écran pour toujours.
-    onLoading('météo', 0, 0, true);
     checking = false;
     checkedAt = Date.now();
   }
@@ -277,7 +299,7 @@ async function pull() {
  */
 export function initWeather(arrived, loading) {
   onArrival = arrived || (() => {});
-  onLoading = loading || (() => {});
+  note = loading || (() => {});
   pull();
 }
 

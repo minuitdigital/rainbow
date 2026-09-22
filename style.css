@@ -182,6 +182,28 @@ body.idle .rail { opacity: .62; }
 .sub > .dials { padding-top: 8px; }
 .sub > .dials[hidden] { display: none; }
 
+/* --- DEUX NIVEAUX DANS LES RÉGLAGES, et il faut les distinguer à l'œil,
+   sinon on a treize bandeaux identiques et l'on ne range rien du tout.
+
+   Premier niveau — graphisme, données, performance : un vrai bandeau,
+   d'un bord à l'autre, en capitales espacées. C'est une famille.
+
+   Second niveau — la tache, le fond, le temps : un titre en retrait, sans
+   fond ni filet. C'est un rayon dans la famille, pas une famille. */
+.sub > .body { padding: 8px 10px 4px; }
+.sub .sub > .head,
+.sub .sub > .dials ~ .head {
+  margin: 0;
+  padding: 4px 0 2px;
+  background: none;
+  border-top: 0;
+  border-bottom: 0;
+  letter-spacing: .1em;
+}
+.sub .sub > .head > span:first-child { color: var(--ink-soft); }
+/* Le dernier rayon d'une famille n'a pas à pousser la suivante. */
+.sub .sub:last-child > .dials { padding-bottom: 2px; }
+
 canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height: 42px; }
 
 /* --- la lecture du lieu et de l'heure : une ligne à elle */
@@ -255,6 +277,23 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
 .gauge.deep { color: var(--ink-faint); }
 .gauge.deep span { padding-left: 11px; }
 .gauge.deep em { color: var(--ink-soft); }
+
+/* CE QUI MANQUE SE VOIT. La seule couleur franche d'une page qui n'a que
+   du gris, et elle ne sert qu'à ça : dire qu'une donnée n'est pas là.
+   Sur le tableau au mur, le registre sera replié et la couleur avec. */
+.gauge.bad, .gauge.bad em { color: #b4231f; }
+
+/* Ce qui est en route respire ; ce qui est arrivé ne bouge plus. */
+.gauge.live em { color: var(--ink-soft); animation: breathe 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .gauge.live em { animation: none; } }
+
+/* Un filet, pas une ligne de texte : il sépare les fichiers du relevé. */
+.gauge.rule {
+  margin: 3px 0;
+  border-top: 1px solid var(--rule);
+  height: 0;
+  overflow: hidden;
+}
 
 /* --- un choix entre deux : DEUX CASES ET NON UNE À COCHER. Avec une
    seule, il faut se souvenir de ce que « coché » voulait dire ; avec
@@ -439,6 +478,11 @@ input[type="range"]::-moz-range-thumb {
   0%, 100% { opacity: 1; }
   50%      { opacity: .45; }
 }
+/* CE QUI MANQUE NE RESPIRE PAS. Un téléchargement en route pulse, parce
+   qu'il va finir ; un constat reste immobile, parce qu'il ne bougera pas
+   tout seul. Faire clignoter un état stable en ferait une alarme, et ce
+   n'en est pas une : la carte marche, elle montre autre chose. */
+.loading.stuck { animation: none; }
 /* Une respiration n'est pas une information : qui ne veut pas de mouvement
    garde le texte, qui est tout ce qui compte. */
 @media (prefers-reduced-motion: reduce) {

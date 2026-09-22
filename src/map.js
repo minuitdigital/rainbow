@@ -133,7 +133,7 @@ function compile(type, src) {
  * Rend false si WebGL 2 manque — la page affiche alors son repli.
  * onReady est appelé chaque fois qu'une texture finit d'arriver.
  */
-export function initMap(canvas, onReady, onLoading = () => {}) {
+export function initMap(canvas, onReady, note = () => {}) {
   gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
   if (!gl) return false;
 
@@ -193,7 +193,7 @@ export function initMap(canvas, onReady, onLoading = () => {}) {
         if (done) break;
         chunks.push(value);
         got += value.length;
-        onLoading(nom, got, total, false);
+        note(nom, { got, total });
       }
 
       url = URL.createObjectURL(new Blob(chunks));
@@ -206,13 +206,17 @@ export function initMap(canvas, onReady, onLoading = () => {}) {
         img.onerror = ko;
         img.src = url;
       });
+      // Arrivee, et versee. La ligne s'efface.
+      note(nom, null);
     } catch (e) {
-      // Une texture manquante n'arrête rien : le blanc 1x1 tient la place
-      // (piège n°2), et la carte existe quand même.
+      // Une texture manquante n'arrete rien : le blanc 1x1 tient la place
+      // (piege n°2), et la carte existe quand meme. Mais elle n'est plus
+      // la meme carte — sans le relief, plus d'aplats d'altitude — et
+      // c'est exactement ce que la ligne rouge doit dire.
       console.warn('%s n a pas pu etre charge (%s)', src, e.message);
+      note(nom, { err: 'introuvable' });
     } finally {
       if (url) URL.revokeObjectURL(url);
-      onLoading(nom, 0, 0, true);
       onReady();
     }
   };

@@ -135,232 +135,280 @@
 
   <!-- ===================================================== LES RÉGLAGES -->
   <!-- Ils ne disent rien du ciel : ils disent comment on le regarde. D'où
-       la boîte à part, le titre discret, et le repli par défaut. -->
+       la boîte à part, le titre discret, et le repli par défaut.
+
+       TROIS FAMILLES, et elles répondent à trois questions différentes :
+
+           GRAPHISME     comment la carte est peinte
+           DONNÉES       ce qu'elle peint, d'où ça vient, et de quand
+           PERFORMANCE   ce que ça coûte
+
+       Onze curseurs en colonne, ce n'est plus une liste, c'est un tableau
+       de bord — on ne trouve plus rien. Rangés par famille, puis par ce
+       sur quoi ils agissent, chaque niveau se repliant.
+
+       Le pli suit partout la même mécanique, à ceci près que c'est le
+       `.sub` qui porte la classe `folded` et non la boîte entière. -->
   <section class="box">
     <div class="head quiet">
       <span>réglages</span>
       <button type="button" id="pli-reg" aria-expanded="false" aria-controls="corps-reg"
               aria-label="Déplier">+</button>
     </div>
-    <!-- QUATRE SOUS-REGISTRES. Onze curseurs en colonne, ça n'est plus une
-         liste, c'est un tableau de bord — on ne trouve plus rien. Ils sont
-         donc rangés par CE SUR QUOI ILS AGISSENT, et chacun se replie :
-         la tache, le fond, le panneau, le temps.
-
-         Le pli suit la même mécanique que les registres du dessus, à ceci
-         près que c'est le `.sub` qui porte la classe `folded` et non la
-         boîte entière. -->
     <div class="body" id="corps-reg" hidden>
 
-      <!-- ============================================ LA TACHE -->
+      <!-- ######################################## GRAPHISME ########## -->
+      <!-- COMMENT ON REGARDE, et rien d'autre. Deux réglages différents
+           décrivent le même ciel. -->
       <div class="sub">
-        <div class="head quiet">
-          <span>la tache</span>
-          <button type="button" id="pli-r-tache" aria-expanded="true"
-                  aria-controls="corps-r-tache" aria-label="Replier">&#8722;</button>
+        <div class="head"><span>graphisme</span>
+          <button type="button" id="pli-gfx" aria-expanded="true"
+                  aria-controls="corps-gfx" aria-label="Replier">&#8722;</button>
         </div>
-        <div class="dials" id="corps-r-tache">
-          <div class="dial">
-            <label for="s-tache">intensit&#233;</label>
-            <input id="s-tache" type="range" min="0" max="100" value="54"><output id="o-tache">&#8212;</output>
+        <div class="body" id="corps-gfx">
+
+  <!-- ============================================ LA TACHE -->
+        <div class="sub">
+          <div class="head quiet">
+            <span>la tache</span>
+            <button type="button" id="pli-r-tache" aria-expanded="true"
+                    aria-controls="corps-r-tache" aria-label="Replier">&#8722;</button>
           </div>
-          <div class="dial">
-            <label for="s-colour" id="l-colour">couleur</label>
-            <input id="s-colour" type="range" min="0" max="100" value="83"><output id="o-colour">&#8212;</output>
+          <div class="dials" id="corps-r-tache">
+            <div class="dial">
+              <label for="s-tache">intensit&#233;</label>
+              <input id="s-tache" type="range" min="0" max="100" value="54"><output id="o-tache">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-colour" id="l-colour">couleur</label>
+              <input id="s-colour" type="range" min="0" max="100" value="83"><output id="o-colour">&#8212;</output>
+            </div>
+            <!-- Combien de fois la palette fait le tour. Au-del&#224; de deux, on
+                 voit un arc-en-ciel par-dessus le sujet. -->
+            <div class="dial">
+              <label for="s-franges" id="l-franges">franges</label>
+              <input id="s-franges" type="range" min="0" max="100" value="33"><output id="o-franges">&#8212;</output>
+            </div>
+            <!-- Les deux suivants ne disent rien au monde entier : ils ne
+                 pilotent que ce que le zoom r&#233;v&#232;le. -->
+            <div class="dial">
+              <label for="s-trous" id="l-trous">trous</label>
+              <input id="s-trous" type="range" min="0" max="100" value="50"><output id="o-trous">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-fine" id="l-fine">finesse</label>
+              <input id="s-fine" type="range" min="0" max="100" value="50"><output id="o-fine">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-grey" id="l-grey">d&#233;grad&#233;</label>
+              <input id="s-grey" type="checkbox">
+              <output id="o-grey">&#8212;</output>
+            </div>
           </div>
-          <!-- Combien de fois la palette fait le tour. Au-del&#224; de deux, on
-               voit un arc-en-ciel par-dessus le sujet. -->
-          <div class="dial">
-            <label for="s-franges" id="l-franges">franges</label>
-            <input id="s-franges" type="range" min="0" max="100" value="33"><output id="o-franges">&#8212;</output>
+        </div>
+
+  <!-- ============================================= LE FOND -->
+        <!-- La profondeur d'encre des aplats. Le papier ne bouge pas : c'est
+             le palier le plus profond qu'on charge ou qu'on all&#232;ge. 50 % est
+             le tirage d'origine. -->
+        <div class="sub">
+          <div class="head quiet">
+            <span>le fond</span>
+            <button type="button" id="pli-r-fond" aria-expanded="false"
+                    aria-controls="corps-r-fond" aria-label="D&#233;plier">+</button>
           </div>
-          <!-- Les deux suivants ne disent rien au monde entier : ils ne
-               pilotent que ce que le zoom r&#233;v&#232;le. -->
-          <div class="dial">
-            <label for="s-trous" id="l-trous">trous</label>
-            <input id="s-trous" type="range" min="0" max="100" value="50"><output id="o-trous">&#8212;</output>
+          <div class="dials" id="corps-r-fond" hidden>
+            <div class="dial">
+              <label for="s-terres">terres</label>
+              <input id="s-terres" type="range" min="0" max="100" value="50"><output id="o-terres">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-mer">mer</label>
+              <input id="s-mer" type="range" min="0" max="100" value="50"><output id="o-mer">&#8212;</output>
+            </div>
           </div>
-          <div class="dial">
-            <label for="s-fine" id="l-fine">finesse</label>
-            <input id="s-fine" type="range" min="0" max="100" value="50"><output id="o-fine">&#8212;</output>
+        </div>
+
+  <!-- ========================================== LE PANNEAU -->
+        <div class="sub">
+          <div class="head quiet">
+            <span>le panneau</span>
+            <button type="button" id="pli-r-panneau" aria-expanded="false"
+                    aria-controls="corps-r-panneau" aria-label="D&#233;plier">+</button>
           </div>
-          <div class="dial">
-            <label for="s-grey" id="l-grey">d&#233;grad&#233;</label>
-            <input id="s-grey" type="checkbox">
-            <output id="o-grey">&#8212;</output>
+          <div class="dials" id="corps-r-panneau" hidden>
+            <div class="dial">
+              <label for="s-alpha">transparence</label>
+              <input id="s-alpha" type="range" min="0" max="100" value="80"><output id="o-alpha">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-contrast">contraste</label>
+              <input id="s-contrast" type="range" min="0" max="100" value="62"><output id="o-contrast">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-text">texte</label>
+              <input id="s-text" type="range" min="0" max="100" value="20"><output id="o-text">&#8212;</output>
+            </div>
+            <div class="dial">
+              <label for="s-icon">ic&#244;nes</label>
+              <input id="s-icon" type="range" min="0" max="100" value="32"><output id="o-icon">&#8212;</output>
+            </div>
+            <!-- Le point du r&#233;ticule. Tout &#224; gauche il reste de l'encre ;
+                 ensuite il parcourt le cercle des teintes. -->
+            <div class="dial">
+              <label for="s-point">point</label>
+              <input id="s-point" type="range" min="0" max="100" value="0"><output id="o-point">&#8212;</output>
+            </div>
           </div>
+        </div>
+
         </div>
       </div>
 
-      <!-- ============================================= LE FOND -->
-      <!-- La profondeur d'encre des aplats. Le papier ne bouge pas : c'est
-           le palier le plus profond qu'on charge ou qu'on all&#232;ge. 50 % est
-           le tirage d'origine. -->
+      <!-- ######################################### DONNÉES ########### -->
+      <!-- CE QUE LA CARTE PEINT : d'où vient l'heure, d'où vient la
+           pluie, et ce que la page a effectivement sous la main. Le temps
+           est ici et non dans le graphisme parce qu'il ne change pas
+           l'allure — il change le SUJET. -->
       <div class="sub">
-        <div class="head quiet">
-          <span>le fond</span>
-          <button type="button" id="pli-r-fond" aria-expanded="false"
-                  aria-controls="corps-r-fond" aria-label="D&#233;plier">+</button>
+        <div class="head"><span>données</span>
+          <button type="button" id="pli-dat" aria-expanded="true"
+                  aria-controls="corps-dat" aria-label="Replier">&#8722;</button>
         </div>
-        <div class="dials" id="corps-r-fond" hidden>
-          <div class="dial">
-            <label for="s-terres">terres</label>
-            <input id="s-terres" type="range" min="0" max="100" value="50"><output id="o-terres">&#8212;</output>
+        <div class="body" id="corps-dat">
+
+  <!-- ============================================ LE TEMPS -->
+        <div class="sub">
+          <div class="head quiet">
+            <span>le temps</span>
+            <button type="button" id="pli-r-temps" aria-expanded="false"
+                    aria-controls="corps-r-temps" aria-label="D&#233;plier">+</button>
           </div>
-          <div class="dial">
-            <label for="s-mer">mer</label>
-            <input id="s-mer" type="range" min="0" max="100" value="50"><output id="o-mer">&#8212;</output>
+          <div class="dials" id="corps-r-temps" hidden>
+
+            <!-- D'O&#217; VIENT L'HEURE, et donc d'o&#249; vient la pluie. Les deux
+                 vont ensemble : un temps invent&#233; ne peut pas aller chercher
+                 une pr&#233;vision, et une vraie pr&#233;vision ne se laisse pas
+                 acc&#233;l&#233;rer dix mille fois.
+
+                 DEUX CASES ET NON UNE : avec une seule &#224; cocher, il faut se
+                 rappeler ce que « coch&#233; » voulait dire. L&#224;, on lit ce qu'on
+                 a choisi. « m&#233;t&#233;o » reste &#233;teint tant que data/weather.png
+                 n'est pas &#224; c&#244;t&#233; de la page — une case qui pr&#233;tendrait
+                 brancher des donn&#233;es absentes mentirait. -->
+            <div class="choice">
+              <span>horloge</span>
+              <label><input type="radio" name="clk" id="clk-dev" checked><b>dev</b></label>
+              <label class="off" id="l-meteo"><input type="radio" name="clk" id="clk-meteo" disabled><b>m&#233;t&#233;o</b></label>
+              <button type="button" class="ask" data-note="clock"
+                      aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
+            </div>
+
+            <!-- LA COLONNE DE DROITE EST PLUS LARGE ICI, et pour les deux
+                 significations du rail : « maintenant » d&#233;borde d'une case
+                 de 44 px, et « &#215;100 000 » aussi. C'est le seul curseur de
+                 la page dont la sortie soit un mot. -->
+            <div class="dial wide">
+              <label for="s-time" id="l-time">vitesse</label>
+              <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">&#8212;</output>
+            </div>
           </div>
+        </div>
+
+          <!-- L'ÉTAT DE CE QUE LA PAGE A SOUS LA MAIN, en permanence.
+               Un indicateur qui disparaît quand tout va bien ne dit rien :
+               il dit seulement qu'il a fini de regarder. Celui-ci reste,
+               et il répond aux trois questions qu'on se pose quand la
+               carte paraît bizarre — qu'est-ce qui est arrivé, de quand
+               date la météo, et d'où tout ça vient.
+
+               Les tailles ne sont pas mesurées à la main : le navigateur
+               les tient déjà dans performance.getEntriesByType, avec les
+               durées, et les modules chargés par import y figurent aussi.
+
+               Sa minuterie s'arrête quand on le replie — sur le tableau
+               du mur, il ne coûtera plus rien. -->
+          <div class="sub">
+            <div class="head quiet"><span>l'état</span>
+              <button type="button" id="pli-data" aria-expanded="true"
+                      aria-controls="corps-data" aria-label="Replier">&#8722;</button>
+            </div>
+            <div class="dials" id="corps-data">
+              <div id="data-list">
+                <div class="gauge"><span>en attente</span><em>&#8212;</em></div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <!-- ========================================== LE PANNEAU -->
+      <!-- ####################################### PERFORMANCE ######### -->
       <div class="sub">
-        <div class="head quiet">
-          <span>le panneau</span>
-          <button type="button" id="pli-r-panneau" aria-expanded="false"
-                  aria-controls="corps-r-panneau" aria-label="D&#233;plier">+</button>
+        <div class="head"><span>performance</span>
+          <button type="button" id="pli-cost" aria-expanded="false"
+                  aria-controls="corps-cost" aria-label="Déplier">+</button>
         </div>
-        <div class="dials" id="corps-r-panneau" hidden>
-          <div class="dial">
-            <label for="s-alpha">transparence</label>
-            <input id="s-alpha" type="range" min="0" max="100" value="80"><output id="o-alpha">&#8212;</output>
-          </div>
-          <div class="dial">
-            <label for="s-contrast">contraste</label>
-            <input id="s-contrast" type="range" min="0" max="100" value="62"><output id="o-contrast">&#8212;</output>
-          </div>
-          <div class="dial">
-            <label for="s-text">texte</label>
-            <input id="s-text" type="range" min="0" max="100" value="20"><output id="o-text">&#8212;</output>
-          </div>
-          <div class="dial">
-            <label for="s-icon">ic&#244;nes</label>
-            <input id="s-icon" type="range" min="0" max="100" value="32"><output id="o-icon">&#8212;</output>
-          </div>
-          <!-- Le point du r&#233;ticule. Tout &#224; gauche il reste de l'encre ;
-               ensuite il parcourt le cercle des teintes. -->
-          <div class="dial">
-            <label for="s-point">point</label>
-            <input id="s-point" type="range" min="0" max="100" value="0"><output id="o-point">&#8212;</output>
-          </div>
+        <div class="body" id="corps-cost" hidden>
+
+  <!-- ======================================== LA PERFORMANCE -->
+        <!-- CE QUE LA PAGE CO&#219;TE, et sur quelle machine. Repli&#233; par d&#233;faut
+             comme les autres : c'est un instrument d'atelier, pas une
+             mesure du ciel, et le spectateur n'a rien &#224; en faire. Il ne
+             s'ouvre que si on va le chercher.
+
+             DEUX CHRONOM&#200;TRES, et il faut les deux. Le JavaScript se mesure
+             &#224; la montre ; le shader, non — drawArrays rend la main avant que
+             la carte graphique ait commenc&#233;. Une page &#224; douze images par
+             seconde dont le JavaScript ne co&#251;te qu'une milliseconde, c'est
+             le processeur graphique qui sature, et rien d'autre.
+
+             CHAQUE LIGNE PORTE SON « ? ». Un chiffre en millisecondes ne dit
+             rien tout seul : il faut savoir ce qu'il mesure, et surtout ce
+             qui le fait monter. Sans &#231;a on optimise au hasard. -->
+        <div class="dials" id="corps-r-perf">
+
+            <div class="gauge"><span>images/s</span><em id="g-fps">&#8212;</em>
+              <button type="button" class="ask" data-note="fps" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+            <div class="gauge"><span>shader</span><em id="g-gpu">&#8212;</em>
+              <button type="button" class="ask" data-note="gpu" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+            <div class="gauge"><span>javascript</span><em id="g-ms">&#8212;</em>
+              <button type="button" class="ask" data-note="js" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+            <div class="gauge deep"><span>carte</span><em id="g-map">&#8212;</em>
+              <button type="button" class="ask" data-note="map" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+            <div class="gauge deep"><span>encre</span><em id="g-ink">&#8212;</em>
+              <button type="button" class="ask" data-note="ink" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+            <div class="gauge deep"><span>panneau</span><em id="g-panel">&#8212;</em>
+              <button type="button" class="ask" data-note="panel" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+            <div class="gauge"><span>pixels</span><em id="g-px">&#8212;</em>
+              <button type="button" class="ask" data-note="px" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
+
+            <!-- LE MODE DE CALCUL, manuel et m&#233;moris&#233;. Une d&#233;tection
+                 automatique aurait chang&#233; le rendu sans le dire, et sur une
+                 oeuvre on ne veut pas d'un tableau qui se r&#232;gle dans notre
+                 dos. Deux cases, pour la m&#234;me raison qu'&#224; l'horloge : on
+                 doit LIRE ce qu'on a choisi, pas s'en souvenir. -->
+            <div class="choice">
+              <span>machine</span>
+              <label><input type="radio" name="rig" id="rig-laptop" checked><b>laptop</b></label>
+              <label><input type="radio" name="rig" id="rig-mini"><b>mini</b></label>
+              <button type="button" class="ask" data-note="rig"
+                      aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
+            </div>
         </div>
-      </div>
 
-      <!-- ============================================ LE TEMPS -->
-      <div class="sub">
-        <div class="head quiet">
-          <span>le temps</span>
-          <button type="button" id="pli-r-temps" aria-expanded="false"
-                  aria-controls="corps-r-temps" aria-label="D&#233;plier">+</button>
-        </div>
-        <div class="dials" id="corps-r-temps" hidden>
-
-          <!-- D'O&#217; VIENT L'HEURE, et donc d'o&#249; vient la pluie. Les deux
-               vont ensemble : un temps invent&#233; ne peut pas aller chercher
-               une pr&#233;vision, et une vraie pr&#233;vision ne se laisse pas
-               acc&#233;l&#233;rer dix mille fois.
-
-               DEUX CASES ET NON UNE : avec une seule &#224; cocher, il faut se
-               rappeler ce que « coch&#233; » voulait dire. L&#224;, on lit ce qu'on
-               a choisi. « m&#233;t&#233;o » reste &#233;teint tant que data/weather.png
-               n'est pas &#224; c&#244;t&#233; de la page — une case qui pr&#233;tendrait
-               brancher des donn&#233;es absentes mentirait. -->
-          <div class="choice">
-            <span>horloge</span>
-            <label><input type="radio" name="clk" id="clk-dev" checked><b>dev</b></label>
-            <label class="off" id="l-meteo"><input type="radio" name="clk" id="clk-meteo" disabled><b>m&#233;t&#233;o</b></label>
-            <button type="button" class="ask" data-note="clock"
-                    aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
-          </div>
-
-          <!-- LA COLONNE DE DROITE EST PLUS LARGE ICI, et pour les deux
-               significations du rail : « maintenant » d&#233;borde d'une case
-               de 44 px, et « &#215;100 000 » aussi. C'est le seul curseur de
-               la page dont la sortie soit un mot. -->
-          <div class="dial wide">
-            <label for="s-time" id="l-time">vitesse</label>
-            <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">&#8212;</output>
-          </div>
-        </div>
-      </div>
-
-      <!-- ======================================== LA PERFORMANCE -->
-      <!-- CE QUE LA PAGE CO&#219;TE, et sur quelle machine. Repli&#233; par d&#233;faut
-           comme les autres : c'est un instrument d'atelier, pas une
-           mesure du ciel, et le spectateur n'a rien &#224; en faire. Il ne
-           s'ouvre que si on va le chercher.
-
-           DEUX CHRONOM&#200;TRES, et il faut les deux. Le JavaScript se mesure
-           &#224; la montre ; le shader, non — drawArrays rend la main avant que
-           la carte graphique ait commenc&#233;. Une page &#224; douze images par
-           seconde dont le JavaScript ne co&#251;te qu'une milliseconde, c'est
-           le processeur graphique qui sature, et rien d'autre.
-
-           CHAQUE LIGNE PORTE SON « ? ». Un chiffre en millisecondes ne dit
-           rien tout seul : il faut savoir ce qu'il mesure, et surtout ce
-           qui le fait monter. Sans &#231;a on optimise au hasard. -->
-      <div class="sub">
-        <div class="head quiet">
-          <span>performance</span>
-          <button type="button" id="pli-r-perf" aria-expanded="false"
-                  aria-controls="corps-r-perf" aria-label="D&#233;plier">+</button>
-        </div>
-        <div class="dials" id="corps-r-perf" hidden>
-
-          <div class="gauge"><span>images/s</span><em id="g-fps">&#8212;</em>
-            <button type="button" class="ask" data-note="fps" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
-
-          <div class="gauge"><span>shader</span><em id="g-gpu">&#8212;</em>
-            <button type="button" class="ask" data-note="gpu" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
-
-          <div class="gauge"><span>javascript</span><em id="g-ms">&#8212;</em>
-            <button type="button" class="ask" data-note="js" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
-
-          <div class="gauge deep"><span>carte</span><em id="g-map">&#8212;</em>
-            <button type="button" class="ask" data-note="map" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
-
-          <div class="gauge deep"><span>encre</span><em id="g-ink">&#8212;</em>
-            <button type="button" class="ask" data-note="ink" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
-
-          <div class="gauge deep"><span>panneau</span><em id="g-panel">&#8212;</em>
-            <button type="button" class="ask" data-note="panel" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
-
-          <div class="gauge"><span>pixels</span><em id="g-px">&#8212;</em>
-            <button type="button" class="ask" data-note="px" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
-
-          <!-- LE MODE DE CALCUL, manuel et m&#233;moris&#233;. Une d&#233;tection
-               automatique aurait chang&#233; le rendu sans le dire, et sur une
-               oeuvre on ne veut pas d'un tableau qui se r&#232;gle dans notre
-               dos. Deux cases, pour la m&#234;me raison qu'&#224; l'horloge : on
-               doit LIRE ce qu'on a choisi, pas s'en souvenir. -->
-          <div class="choice">
-            <span>machine</span>
-            <label><input type="radio" name="rig" id="rig-laptop" checked><b>laptop</b></label>
-            <label><input type="radio" name="rig" id="rig-mini"><b>mini</b></label>
-            <button type="button" class="ask" data-note="rig"
-                    aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
-          </div>
         </div>
       </div>
 
     </div>
   </section>
 
-  <!-- CE QUI EST ENCORE EN ROUTE. Sous les registres, en rouge, et &#231;a
-       dispara&#238;t quand tout est arriv&#233;.
-
-       La page tire huit m&#233;gaoctets de relief avant de montrer quoi que ce
-       soit. En local &#231;a ne se voit pas ; en ligne, sur une connexion
-       ordinaire, c'est plusieurs secondes de carte blanche sans que rien
-       n'explique pourquoi — et une carte blanche qui se remplit ressemble
-       beaucoup &#224; une carte cass&#233;e.
-
-       Le texte est &#201;CRIT ICI et non pos&#233; par le JavaScript : il doit
-       appara&#238;tre d&#232;s le premier octet, avant m&#234;me que les modules soient
-       charg&#233;s. C'est le seul moment o&#249; l'on ne peut rien afficher
-       autrement. -->
-  <div class="loading" id="loading">chargement des donn&#233;es&#8230;</div>
 
 </div>
 

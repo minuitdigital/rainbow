@@ -185,6 +185,29 @@ export function beatIdle() {
   return beat.idle;
 }
 
+// ======================================================== LE CHARGEMENT
+//  CE QUI EST EN ROUTE, ET CE QUI MANQUE. L'état vit ici et non dans
+//  main.js, pour une raison que la panne du 22 septembre a rendue
+//  évidente : c'est une donnée que DEUX modules produisent (map et
+//  weather) et qu'un TROISIÈME affiche (panel). La faire transiter par
+//  une variable de main.js obligeait à écrire dans le document depuis
+//  l'assembleur — et le jour où cet élément a disparu de la page, une
+//  exception a tué le chargement du relief qu'elle était censée décrire.
+//
+//  Ici, personne ne touche au document : on range, et le panneau lit.
+//
+//      loadState.set(nom, { got, total })   en route
+//      loadState.set(nom, null)             arrivé
+//      loadState.set(nom, { err })          manquant, avec la raison
+
+/** nom → { got, total } en cours, { err } en panne, ou absent si arrivé. */
+export const loadState = new Map();
+
+export function noteLoad(nom, what) {
+  if (what === null) loadState.delete(nom);
+  else loadState.set(nom, what);
+}
+
 /** Les pixels réellement calculés par le shader, par image. */
 export const pixelCount = () => view.W * view.dpr * view.H * view.dpr;
 

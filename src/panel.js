@@ -24,11 +24,11 @@
 // =========================================================================
 
 import { view, beliefWeights, anchorTo,
-         beat, beatIdle, pixelCount } from './view.js';
+         beat, beatIdle, pixelCount, loadState } from './view.js';
 import { GAIN, SUN_MAX, SPILL_DEG, openFor, nearestLegend,
          LEGEND_POINTS } from './sky.js';
 import { past, recall, posOf, AGE_MAX } from './history.js';
-import { weatherReach } from './weather.js';
+import { weatherReach, weatherInfo } from './weather.js';
 import { gpuMs } from './map.js';
 import { measureRail } from './ink.js';
 
@@ -90,19 +90,29 @@ function showBelief() {
 // tout seul fait du bruit — la croyance du lieu se dit dans le corps du
 // registre, où on est venu la chercher.
 
-// Les quatre registres, puis les quatre sous-registres des réglages :
-// onze curseurs en colonne ne se lisent plus, ils se subissent. Rangés
-// par ce sur quoi ils agissent, et repliés sauf celui qu'on travaille.
+// Les quatre registres, puis les réglages sur DEUX niveaux : trois
+// familles — graphisme, données, performance — et sous chacune ce sur quoi
+// les curseurs agissent. Onze curseurs en colonne ne se lisent plus, ils
+// se subissent ; rangés par famille, on retrouve ce qu'on cherche.
+//
+// L'ordre compte : un parent replié cache ses enfants, mais leur propre
+// état de pli est conservé et retrouvé tel quel à la réouverture.
 const FOLDS = [
   ['pli-est',        'corps-est',        true ],
   ['pli-croy',       'corps-croy',       true ],
   ['pli-leg',        'corps-leg',        false],
   ['pli-reg',        'corps-reg',        false],
+
+  ['pli-gfx',        'corps-gfx',        true ],
   ['pli-r-tache',    'corps-r-tache',    true ],
   ['pli-r-fond',     'corps-r-fond',     false],
   ['pli-r-panneau',  'corps-r-panneau',  false],
-  ['pli-r-temps',    'corps-r-temps',    false],
-  ['pli-r-perf',     'corps-r-perf',     false]
+
+  ['pli-dat',        'corps-dat',        true ],
+  ['pli-r-temps',    'corps-r-temps',    true ],
+  ['pli-data',       'corps-data',       true ],
+
+  ['pli-cost',       'corps-cost',       false]
 ];
 
 /** id du corps → est-il replié ? */
@@ -359,6 +369,140 @@ function showBeat() {
   byId('g-ink').textContent   = ms(beat.ink);
   byId('g-panel').textContent = ms(beat.panel);
   byId('g-px').textContent    = (pixelCount() / 1e6).toFixed(2) + ' Mpx';
+}
+
+// ============================================================== LES DONNÉES
+//  L'ÉTAT DE CE QUE LA PAGE A SOUS LA MAIN, en permanence.
+//
+//  Un indicateur qui disparaît quand tout va bien ne dit rien : il dit
+//  seulement qu'il a fini de regarder. Celui-ci reste, et il répond aux
+//  trois questions qu'on se pose vraiment quand la carte paraît bizarre —
+//  qu'est-ce qui est arrivé, de quand date la météo, et d'où tout ça vient.
+//
+//  LES TAILLES NE SONT PAS MESURÉES À LA MAIN. Le navigateur les tient
+//  déjà dans `performance.getEntriesByType('resource')`, avec les durées
+//  de transfert, et les modules chargés par `import` y figurent aussi.
+//  Rien à instrumenter, et le chiffre est celui du réseau, pas le nôtre.
+
+/** Les fichiers qui portent le monde, et le nom qu'on leur donne ici. */
+const DATA_FILES = [
+  ['data/field.png',   'relief'],
+  ['data/coast.js',    'côtes'],
+  ['data/cities.js',   'villes'],
+  ['data/terrain.js',  'terrain'],
+  ['data/mask.png',    'masque'],
+  ['data/weather.png', 'météo']
+];
+
+const ko = o => o >= 1048576 ? (o / 1048576).toFixed(1) + ' Mo'
+                             : Math.round(o / 1024) + ' Ko';
+
+const HH = ms => {
+  const d = new Date(ms);
+  return `${HHMM(d.getUTCDate())}/${HHMM(d.getUTCMonth() + 1)} ` +
+         `${HHMM(d.getUTCHours())}h`;
+};
+
+/** Une ligne du registre. `mood` : '' normal, 'deep' détail, 'bad' manquant. */
+function dataRow(nom, val, mood) {
+  const row = document.createElement('div');
+  row.className = 'gauge' + (mood ? ' ' + mood : '');
+  const a = document.createElement('span');
+  a.textContent = nom;
+  const b = document.createElement('em');
+  b.textContent = val;
+  row.append(a, b);
+  return row;
+}
+
+/**
+ * Reconstruit la liste. Appelée une fois par seconde au plus — voir la
+ * minuterie d'`initPanel`, qui s'arrête quand le registre est replié.
+ *
+ * On refabrique les nœuds ici, à rebours du piège n°22 : rien n'y est
+ * cliquable, et une fois par seconde n'est pas soixante fois.
+ */
+function showData() {
+  const box = byId('data-list');
+  const seen = new Map();
+  for (const e of performance.getEntriesByType('resource'))
+    seen.set(e.name.split('?')[0], e);
+
+  const rows = [];
+  let manque = 0;
+
+  for (const [path, nom] of DATA_FILES) {
+    // D'ABORD CE QUI EST EN ROUTE. `performance` ne connaît une ressource
+    // qu'une fois qu'elle est arrivée : pendant les secondes où les huit
+    // mégaoctets de relief descendent, elle n'en dit rien du tout. C'est
+    // map.js et weather.js qui comptent les octets au passage.
+    const live = loadState.get(nom);
+    if (live && live.err) {
+      rows.push(dataRow(nom, live.err, 'bad'));
+      manque++;
+      continue;
+    }
+    if (live) {
+      rows.push(dataRow(nom, live.total
+        ? `${ko(live.got)} / ${ko(live.total)}`
+        : ko(live.got) + '…', 'live'));
+      continue;
+    }
+
+    // L'entrée peut être indexée par URL absolue selon le serveur.
+    const hit = [...seen.entries()].find(([u]) => u.endsWith('/' + path));
+    if (!hit) {
+      // La météo absente n'est pas une anomalie tant que le robot n'a pas
+      // publié : c'est le relevé, juste dessous, qui l'explique.
+      rows.push(dataRow(nom, nom === 'météo' ? 'absente' : 'en attente',
+                        nom === 'météo' ? 'deep' : 'deep'));
+      continue;
+    }
+    const e = hit[1];
+    // transferSize vaut zéro quand le navigateur a servi depuis son cache :
+    // la taille décodée reste juste, et c'est elle qui intéresse.
+    const size = e.transferSize || e.encodedBodySize || e.decodedBodySize || 0;
+    rows.push(dataRow(nom, size ? ko(size) : 'en cache', ''));
+  }
+
+  // ---- le relevé météo, et sa fraîcheur
+  const w = weatherInfo();
+  const now = Date.now();
+  rows.push(dataRow('—', '', 'rule'));
+
+  if (w.grid) {
+    const fin = w.grid.t0 + (w.grid.nt - 1) * w.grid.stepMs;
+    const reste = (fin - now) / 3600000;
+    rows.push(dataRow('relevé', HH(w.grid.t0) + ' UTC', 'deep'));
+    rows.push(dataRow('couvre', `${w.grid.nt} pas · ` +
+      (reste >= 0 ? `+${Math.round(reste)} h devant` : 'DÉPASSÉ'),
+      reste >= 0 ? 'deep' : 'bad'));
+    rows.push(dataRow('maille', `${w.grid.nx}×${w.grid.ny}`, 'deep'));
+  } else {
+    rows.push(dataRow('relevé', w.trouble || 'en attente',
+                      w.trouble ? 'bad' : 'deep'));
+    rows.push(dataRow('la pluie est', 'simulée', 'bad'));
+  }
+
+  if (w.nextCheck) {
+    const dans = Math.max(0, (w.nextCheck - now) / 3600000);
+    rows.push(dataRow('prochain test',
+      dans >= 1 ? `dans ${Math.round(dans)} h` : `dans ${Math.round(dans * 60)} min`,
+      'deep'));
+  }
+
+  // ---- d'où la page est servie. « github.io » ou « localhost » répond à
+  // la question « est-ce que je regarde le site en ligne ou ma copie ? »,
+  // qu'on se pose plus souvent qu'on ne croit.
+  rows.push(dataRow('servi par',
+    location.protocol === 'file:' ? 'un fichier local'
+      : (location.host || 'inconnu'), 'deep'));
+
+  if (manque)
+    rows.unshift(dataRow('attention', manque > 1 ? `${manque} fichiers absents`
+                                                 : '1 fichier absent', 'bad'));
+
+  box.replaceChildren(...rows);
 }
 
 // ================================================================= LA NOTE
@@ -1031,6 +1175,19 @@ export function initPanel(invalidate, resize) {
     const b = e.target.closest('.ask');
     if (b) openNote(b.dataset.note);
   });
+
+  // LE REGISTRE DES DONNÉES bat à sa propre cadence : une fois par
+  // seconde, et SEULEMENT s'il est ouvert. La boucle d'images, elle, peut
+  // dormir des heures — c'est tout l'intérêt de la pièce — et l'état des
+  // données doit rester vrai pendant ce temps. Replié sur le tableau du
+  // mur, il ne coûte plus rien du tout.
+  // La minuterie s'arrête dès que le registre est replié — À N'IMPORTE
+  // QUEL niveau. Replier « données », ou « réglages » tout entier, suffit
+  // à l'éteindre : sur le tableau du mur, elle ne coûtera plus rien.
+  const dataSeen = () => !folded['corps-data'] && !folded['corps-dat']
+                       && !folded['corps-reg'];
+  showData();
+  setInterval(() => { if (dataSeen()) showData(); }, 1000);
 
   const note = byId('note-sheet');
   byId('note-close').addEventListener('click', closeNote);

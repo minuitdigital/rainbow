@@ -10,10 +10,10 @@
 #  fichier statique, une fois par jour, et c'est tout.
 #
 #  CE SCRIPT NE TOURNE JAMAIS SUR LE TABLEAU. Il tourne une fois par jour
-#  sur un robot GitHub, qui recommite l'image dans le dépôt. Tout ce qui
-#  est cher — les soixante-cinq requêtes, la hauteur du soleil en six
-#  millions de points, la dilatation des averses — est payé là, une fois,
-#  par une machine qui n'a que ça à faire.
+#  sur un robot GitHub, qui publie l'image avec le site. Tout ce qui est
+#  cher — les vingt et une requêtes, la hauteur du soleil en quatre cent
+#  mille points, la dilatation des averses — est payé là, une fois, par
+#  une machine qui n'a que ça à faire.
 #
 #  ----------------------------------------------------------------------
 #  POURQUOI CES DEUX VARIABLES, ET PAS LA COUVERTURE NUAGEUSE
@@ -68,8 +68,8 @@ OUT_JSON = ROOT / "data" / "weather.json"
 
 # --------------------------------------------------------------- la grille
 #
-# TROIS DEGRÉS, soit 333 km. Ce n'est pas un choix esthétique : c'est le
-# plafond de ce qu'Open-Meteo laisse prendre.
+# QUATRE DEGRÉS, soit 444 km. Ce n'est pas un choix esthétique : c'est le
+# plafond de ce qu'Open-Meteo laisse prendre en une passe.
 #
 # LA LEÇON QUI A COÛTÉ UNE SOIRÉE. Leur formule affichée — poids = nLieux
 # x (nJours/14) x (nVariables/10) — laisse croire qu'un point coûte 0,057
@@ -79,11 +79,17 @@ OUT_JSON = ROOT / "data" / "weather.json"
 # appels/minute. Le plancher d'un appel par lieu ne se voit nulle part
 # dans la documentation ; il se découvre en se prenant des 429.
 #
-#     10 000 appels/jour  ->  10 000 points au maximum
-#     600 appels/minute   ->  600 points par minute, incompressible
+# ET IL Y A UN SECOND PLAFOND, celui qui a fait échouer le relevé de 3° :
+# 5 000 appels par HEURE. 7 200 points ne peuvent donc pas tenir dans une
+# heure, quelle que soit la pause — les 429 tombent en rafale au bout de
+# 5 000, c'est-à-dire aux trois quarts du travail.
 #
-# 3° donne 7 200 points : 72 % du quota quotidien, douze minutes de
-# relevé. 2,5° en demanderait 10 368, soit plus que le quota entier.
+#     10 000 appels/jour   ->  le quota quotidien
+#      5 000 appels/heure  ->  C'EST LUI QUI BORNE LA MAILLE
+#        600 appels/minute ->  le rythme, incompressible
+#
+# 4° donne 4 050 points : 81 % du plafond horaire, 40 % du quotidien, et
+# sept minutes de relevé. C'est le plus fin qui tienne en une seule passe.
 #
 # La finesse manquante est reprise par le bruit fractal, qui continue de
 # jouer par-dessus la grille comme texture haute fréquence — c'était déjà
@@ -93,11 +99,11 @@ OUT_JSON = ROOT / "data" / "weather.json"
 # la NOAA (GFS, 0,25° natif) donnent tout ce qu'il faut sans quota par
 # point, au prix d'une bibliothèque de décodage. Cela ne toucherait QUE ce
 # fichier : le format de sortie et tout le reste du projet n'en savent rien.
-STEP_DEG = 3.0
+STEP_DEG = 4.0
 
 NX = int(round(360 / STEP_DEG))
 NY = int(round(180 / STEP_DEG))
-# Centres de case, et non coins : à 3°, -178,5 ... 178,5 et -88,5 ... 88,5.
+# Centres de case, et non coins : à 4°, -178 ... 178 et -88 ... 88.
 LONS = np.arange(NX) * STEP_DEG - 180 + STEP_DEG / 2
 LATS = np.arange(NY) * STEP_DEG - 90 + STEP_DEG / 2
 
@@ -164,7 +170,9 @@ def fetch(lats, lons, tries=4):
            f"&hourly={HOURLY}&past_days={PAST_DAYS}"
            f"&forecast_days={FORECAST_DAYS}&timezone=UTC")
 
-    for attempt in range(tries):
+    attempt = 0
+    waited = 0
+    while True:
         try:
             with urllib.request.urlopen(url, timeout=120) as r:
                 data = json.load(r)
@@ -181,26 +189,41 @@ def fetch(lats, lons, tries=4):
                 return (fetch(lats[:h], lons[:h], tries)
                         + fetch(lats[h:], lons[h:], tries))
             if e.code == 429:
-                print("    quota minuté atteint, pause d'une minute",
+                # ATTENDRE N'EST PAS ÉCHOUER. Un quota qui se recharge n'est
+                # pas une panne, et compter ces pauses comme des tentatives
+                # faisait abandonner le relevé au bout de quatre minutes —
+                # alors qu'il suffisait de patienter. On attend donc aussi
+                # longtemps qu'il le faut, en allongeant la pause : soixante
+                # secondes si c'est la limite minutée, plusieurs minutes si
+                # c'est l'horaire.
+                waited += 1
+                pause = min(60 * waited, 600)
+                print(f"    quota atteint, pause de {pause // 60} min "
+                      f"({waited}{'re' if waited == 1 else 'e'} fois)",
                       file=sys.stderr)
-                time.sleep(60)
+                if waited > 12:
+                    raise RuntimeError(
+                        "quota épuisé : la maille est trop fine pour le "
+                        "plafond horaire. Élargis STEP_DEG.")
+                time.sleep(pause)
                 continue
-            if attempt == tries - 1:
+
+            attempt += 1
+            if attempt >= tries:
                 raise
-            wait = 15 * (attempt + 1)
+            wait = 15 * attempt
             print(f"    hoquet HTTP {e.code}, nouvelle tentative dans {wait} s",
                   file=sys.stderr)
             time.sleep(wait)
 
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
-            if attempt == tries - 1:
+            attempt += 1
+            if attempt >= tries:
                 raise
-            wait = 15 * (attempt + 1)
+            wait = 15 * attempt
             print(f"    hoquet ({e}), nouvelle tentative dans {wait} s",
                   file=sys.stderr)
             time.sleep(wait)
-
-    raise RuntimeError("lot abandonné après plusieurs tentatives")
 
 
 def gather():
@@ -414,8 +437,9 @@ def main():
     print(f"  {chunks} requêtes de {CHUNK} points, {PAUSE_S:.0f} s entre chacune")
     print(f"  quota : {n:.0f} appels sur les 10 000 du jour "
           f"({n / 100:.0f} %), environ {minutes:.0f} min")
-    if n > 10000:
-        print("\n  ATTENTION : au-delà du quota quotidien. Élargis la maille.",
+    if n > 5000:
+        print(f"\n  ATTENTION : {n} points dépassent le plafond HORAIRE de "
+              f"5 000.\n  Le relevé s'arrêtera en route. Élargis STEP_DEG.",
               file=sys.stderr)
     print()
 

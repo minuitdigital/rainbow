@@ -26,7 +26,7 @@
 
 import { view, measure, centre, centreVec, coast, anchorTo, simDate, elapsedHours,
          advanceClock, stride, drift, driftChance, beliefWeights,
-         beatFrame, rig, slotNow, wxOn } from './view.js';
+         beatFrame, rig, slotNow, wxOn, noteLoad } from './view.js';
 import { initWeather, keepFresh } from './weather.js';
 import { solar } from './sky.js';
 import { scan } from './zones.js';
@@ -37,39 +37,6 @@ import { bind } from './chrome.js';
 
 const glCv = document.getElementById('gl');
 const inkCv = document.getElementById('ink');
-
-// ------------------------------------------------- ce qui est encore en route
-//  Huit mégaoctets de relief, et un demi pour la météo. En local on ne les
-//  voit pas passer ; en ligne, c'est plusieurs secondes de carte blanche —
-//  et une carte blanche qui se remplit ressemble beaucoup à une carte
-//  cassée. Le texte de départ est écrit dans index.html pour paraître dès
-//  le premier octet ; à partir d'ici, c'est le compte réel.
-//
-//  Il s'efface dès que plus rien n'est en route, et ne revient qu'au
-//  prochain relevé météo, six heures plus tard.
-
-const loadBox = document.getElementById('loading');
-
-/** nom → octets reçus, et total quand le serveur le dit. */
-const inFlight = new Map();
-
-const mo = o => (o / 1048576).toFixed(1);
-
-function onLoading(nom, got, total, done) {
-  if (done) inFlight.delete(nom);
-  else inFlight.set(nom, { got, total });
-
-  if (!inFlight.size) { loadBox.hidden = true; return; }
-
-  const parts = [];
-  for (const [n, { got: g, total: t }] of inFlight) {
-    // Sans content-length — compression au vol, serveur bavard — on ne
-    // sait pas où l'on va : on dit ce qui est arrivé, et rien de plus.
-    parts.push(t ? `${n} ${mo(g)}/${mo(t)} Mo` : `${n} ${mo(g)} Mo`);
-  }
-  loadBox.textContent = parts.join('  ·  ');
-  loadBox.hidden = false;
-}
 
 // --------------------------------------------------------------- la mesure
 
@@ -202,7 +169,7 @@ window.__rainbow = true;
 
 const fallback = document.getElementById('fallback');
 
-if (!initMap(glCv, invalidate, onLoading)) {
+if (!initMap(glCv, invalidate, noteLoad)) {
   fallback.innerHTML = 'Cette carte est calculée par le processeur graphique.'
                      + '<br>WebGL 2 n\'est pas disponible dans ce navigateur.';
   fallback.hidden = false;
@@ -229,5 +196,5 @@ if (!initMap(glCv, invalidate, onLoading)) {
       document.getElementById('l-meteo').classList.remove('off');
       invalidate();
     }
-  }, onLoading);
+  }, noteLoad);
 }
