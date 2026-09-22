@@ -1,18 +1,21 @@
 # =========================================================================
-#  ATTENTION — CE FICHIER N'EST PAS CELUI QUI TOURNE.
+#  CE FICHIER EXISTE EN DEUX EXEMPLAIRES, et c'est voulu.
 #
-#  Le robot vit dans .github/workflows/meteo.yml. Celui-ci en est la
-#  SOURCE, et il existe pour une raison precise : le pont entre Claude et
-#  l'ordinateur de l'auteur refuse d'ecrire dans .github/workflows/ — une
-#  protection, pas une panne, puisqu'un fichier pose la s'execute sur les
-#  serveurs de GitHub.
+#      .github/workflows/meteo.yml   celui que GitHub execute
+#      build/meteo.workflow.yml      la copie que Claude peut ecrire
 #
-#  Apres toute modification ici, une ligne dans le terminal du depot :
+#  Le pont entre Claude et l'ordinateur de l'auteur refuse d'ecrire dans
+#  .github/workflows/ : un fichier pose la s'execute sur les serveurs de
+#  GitHub, et c'est une protection saine contre un assistant qui
+#  installerait un robot a l'insu de son auteur.
+#
+#  Apres toute modification de la copie, une ligne dans le terminal du
+#  depot — ou le meme geste a la souris :
 #
 #      copy build\meteo.workflow.yml .github\workflows\meteo.yml
 #
-#  Puis commiter les deux. Si les deux fichiers divergent, c'est celui de
-#  .github/ qui fait foi — et celui-ci qui ment.
+#  Puis commiter les deux. En cas de divergence, c'est .github/ qui fait
+#  foi : c'est lui qui tourne.
 # =========================================================================
 
 # =========================================================================
@@ -60,11 +63,22 @@ name: site et météo
 
 on:
   schedule:
-    # 04h10 UTC. Les modèles globaux tournent à 00 h UTC et leurs sorties
-    # arrivent vers 03-04 h ; plus tôt, on irait chercher celles de la
-    # veille. L'heure exacte importe peu par ailleurs : le relevé couvre
-    # quatre jours, il y a largement de quoi tenir.
+    # TROIS PASSAGES, ET UN SEUL TRAVAILLE.
+    #
+    # 04h10 UTC d'abord : les modèles globaux tournent à 00 h et leurs
+    # sorties arrivent vers 03-04 h ; plus tôt, on irait chercher celles de
+    # la veille.
+    #
+    # Les deux autres sont des RATTRAPAGES. Le quota d'Open-Meteo est
+    # quotidien et partagé — le robot tourne sur des adresses qui servent à
+    # des milliers d'autres — si bien qu'un relevé peut buter sur le
+    # plafond au dernier lot, après neuf minutes de travail. Le script
+    # vérifie d'abord si un relevé frais existe déjà (`--si-besoin`) et
+    # repart aussitôt si c'est le cas : ces passages ne coûtent donc rien
+    # les jours où le premier a réussi.
     - cron: '10 4 * * *'
+    - cron: '10 11 * * *'
+    - cron: '10 18 * * *'
   push:
     branches: [main]
   workflow_dispatch:
@@ -126,11 +140,20 @@ jobs:
       #
       # Le cache garde alors le relevé de la veille, et le registre
       # DONNÉES de la page dira lui-même qu'il est dépassé.
+      # `--si-besoin` sur les passages programmés : ne relever que s'il
+      # n'y a pas déjà un relevé de moins de vingt heures dans le cache.
+      # Un lancement à la main, lui, relève toujours — c'est qu'on l'a
+      # demandé.
       - name: Relever la météo mondiale
         if: github.event_name != 'push'
         continue-on-error: true
         id: releve
-        run: python build/make_weather.py
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            python build/make_weather.py --si-besoin
+          else
+            python build/make_weather.py
+          fi
 
       # Le journal doit le dire franchement, sinon un robot vert cacherait
       # un relevé manquant pendant des semaines.

@@ -176,6 +176,15 @@ def fetch(lats, lons, tries=4):
         try:
             with urllib.request.urlopen(url, timeout=120) as r:
                 data = json.load(r)
+            # OPEN-METEO RÉPOND PARFOIS 200 AVEC UNE ERREUR DEDANS.
+            # {"error": true, "reason": "..."} arrive avec un code 200 et
+            # passerait ici pour une réponse valide — jusqu'à ce que
+            # `site["hourly"]` lève un KeyError six cents lignes plus loin,
+            # sans dire pourquoi. On la reconnaît tout de suite.
+            if isinstance(data, dict) and data.get("error"):
+                raise RuntimeError("Open-Meteo refuse : "
+                                   + str(data.get("reason", "sans raison")))
+
             # Un lot d'un seul point rend un objet et non une liste. On ne
             # devrait jamais tomber dessus — mais la découpe récursive
             # ci-dessous peut très bien y descendre.
@@ -257,8 +266,20 @@ def gather():
 
         data = fetch(flat_lat[a:b], flat_lon[a:b])
 
+        if len(data) != b - a:
+            print(f"    {len(data)} sites reçus pour {b - a} demandés",
+                  file=sys.stderr)
+
         for i, site in enumerate(data):
-            h = site["hourly"]
+            # Un lot plus long que demandé déborderait le tableau. Mieux
+            # vaut jeter le surplus que planter sur un IndexError.
+            if a + i >= total:
+                break
+            h = site.get("hourly")
+            if not h or "time" not in h:
+                print(f"    point {a + i} sans données horaires, ignoré",
+                      file=sys.stderr)
+                continue
             if t0 is None:
                 t0 = h["time"][0]
             n = min(NHOURS, len(h["time"]))
@@ -427,7 +448,43 @@ def write(cube, t0_iso):
     print(f"{OUT_JSON.relative_to(ROOT)}  t0 = {t0_iso}, {NT} pas de {STEP_H} h")
 
 
+# ------------------------------------------------- ne pas relever pour rien
+#
+# LE QUOTA EST QUOTIDIEN, ET IL EST PARTAGÉ. Le robot tourne sur les
+# machines de GitHub, dont les adresses servent à des milliers d'autres :
+# Open-Meteo voit un compteur déjà entamé, et nos 4 050 appels peuvent
+# franchir le plafond au dernier lot — après neuf minutes de travail perdu.
+#
+# La parade n'est pas de demander moins, c'est de POUVOIR RÉESSAYER. Le
+# robot passe donc plusieurs fois dans la journée, et cette fonction fait
+# que seul le premier passage utile consomme quelque chose : si un relevé
+# frais est déjà là, on repart sans rien demander.
+
+def already_fresh(max_age_h=20):
+    """Un relevé de moins de vingt heures existe-t-il déjà ?
+
+    Vingt et non vingt-quatre : il faut que le passage du lendemain matin
+    trouve celui de la veille périmé, sans quoi un relevé pris à 4 h 10
+    bloquerait celui du jour suivant à la même heure.
+    """
+    try:
+        meta = json.loads(OUT_JSON.read_text(encoding="utf-8"))
+        made = datetime.fromisoformat(meta["made"].replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - made).total_seconds() / 3600
+        return age < max_age_h, age
+    except Exception:
+        return False, None
+
+
 def main():
+    # Passé par le robot à ses passages de rattrapage. À la main, on relève
+    # toujours : c'est qu'on l'a demandé.
+    if "--si-besoin" in sys.argv:
+        fresh, age = already_fresh()
+        if fresh:
+            print(f"Relevé déjà frais ({age:.1f} h) — rien à faire.")
+            return
+
     n = NX * NY
     chunks = (n + CHUNK - 1) // CHUNK
     minutes = n * WEIGHT_PER_POINT / RATE_PER_MIN * 1.15
@@ -451,6 +508,21 @@ def main():
     write(encode(rain, direct, t0), t0)
 
 
+def guarded():
+    """POURQUOI ÇA A ÉCHOUÉ DOIT TENIR SUR UNE LIGNE.
+
+    Sur un robot GitHub, personne ne lit le journal : on voit une coche
+    rouge, et c'est tout. `::error::` place le message dans les annotations
+    du passage, visibles d'un coup d'oeil depuis la liste des exécutions.
+    """
+    try:
+        main()
+    except Exception as e:
+        print(f"::error::relevé météo interrompu : {type(e).__name__} — {e}",
+              file=sys.stderr)
+        raise
+
+
 if __name__ == "__main__":
     # UNE MAILLE PLUS GROSSIÈRE POUR VÉRIFIER LA CHAÎNE. Douze minutes
     # pour découvrir qu'on s'est trompé d'un signe, c'est douze minutes de
@@ -466,4 +538,4 @@ if __name__ == "__main__":
         LATS = np.arange(NY) * STEP_DEG - 90 + STEP_DEG / 2
         PAUSE_S = CHUNK * WEIGHT_PER_POINT / RATE_PER_MIN * 60 * 1.15
         print(f"[maille d'essai : {STEP_DEG}°]\n")
-    main()
+    guarded()
