@@ -1,84 +1,101 @@
 # Estimateur d'arcs-en-ciel
 
-Une carte du monde en projection Equal Earth, sans frontières — seulement le
-relief, les côtes et les fonds marins, en aplats de gris sur papier blanc. Des
-taches irisées y marquent les endroits où un arc-en-ciel est sur le point
-d'apparaître, et un petit arc gravé signale les plus probables.
+Une carte du monde où s'allument les endroits sur le point de voir
+paraître un arc-en-ciel.
 
-Projet plus poétique que scientifique : une carte qui cherche, en temps réel,
-les quelques points du globe où le ciel s'apprête à se plier.
+C'est une œuvre, pas un produit : un tableau d'aluminium brossé qui porte
+un écran, des curseurs et des boutons sous la main du spectateur. Ce dépôt
+en contient la carte, qui tourne aussi dans un navigateur :
+<https://minuitdigital.github.io/rainbow/>
 
-## Navigation
+Le sujet est poétique avant d'être scientifique. Mais le calcul repose
+sur de vraies prévisions météo. La carte estime, elle ne prédit pas.
 
-| Entrée | Effet |
+## La carte
+
+Projection **Equal Earth** : chaque pays y garde sa surface réelle. Pas de
+frontières, des villes. Le relief et les fonds marins en aplats de gris,
+sur papier blanc.
+
+Là où un arc peut paraître, une **tache** irisée s'allume. Sa teinte ne
+code rien ; c'est son intensité qui dit la force.
+
+## Le calcul
+
+**La porte.** Le soleil doit se tenir entre l'horizon et 42°. Au-delà, le
+centre de l'arc passe sous l'horizon et il n'y a rien à voir. Cette seule
+contrainte dessine un anneau qui fait le tour de la Terre deux fois par
+jour, à l'aube et au crépuscule. C'est la seule partie exacte du calcul.
+
+**La croyance.** La porte ouverte, trois raisons d'y croire se partagent
+le reste, et leur somme fait toujours 100 % :
+
+- **météo** — la pluie du voisinage, et la **trouée** : le rayonnement
+  direct qui arrive au sol. On ne voit pas d'arc sous l'averse, on le voit
+  à côté d'elle, quand le soleil passe.
+- **légende** — la foi attachée au lieu. Partout on y croit un peu ; vingt
+  **hauts lieux** beaucoup.
+- **chance** — ce que le spectateur porte sur lui. Elle ne vaut qu'autour
+  du **piéton**, dans une **flaque** qui s'élargit à mesure qu'on y croit.
+  Là seulement, la porte fuit : un arc peut s'allumer sans aucune raison.
+
+Le chiffre que la carte peint s'appelle la **présence**, de 0 à 1.
+
+## La météo
+
+Le **relevé** vient d'Open-Meteo : pluie et rayonnement direct, sur une
+maille de 4°, 96 heures au pas de 3 heures, d'hier à après-demain. Un robot
+le relève trois fois par jour et le publie comme un fichier image. La page
+ne fait aucun appel à un service : elle lit ce fichier.
+
+## Les hauts lieux
+
+Vingt endroits où l'on croit beaucoup à l'arc-en-ciel. Chacun dit sa
+croyance quand on s'approche, et chacun dit d'où elle vient. Quand rien
+n'est établi, la carte l'écrit : « sans source ».
+
+## Les étiquettes
+
+Une tache porte de une à cinq étiquettes. Ce sont cinq observateurs, pas
+cinq mesures : un arc-en-ciel n'existe pas *à un endroit*, il existe *pour
+quelqu'un*.
+
+Chaque étiquette porte un pourcentage, volontairement poétique ; une durée,
+exacte — le temps avant que le soleil ne sorte de la porte ; une phrase,
+qui dit ce qui porte le chiffre ; et la ville la plus proche, dans un rayon
+de 300 km. Au-delà, rien n'est écrit : au milieu du Pacifique, il n'y a
+personne, et c'est une information.
+
+## Se déplacer
+
+| | |
 |---|---|
-| glisser | tourner le globe, librement, sans butée |
-| molette / pincement | zoom vers le curseur |
-| double-clic | zoom ×2 (maj : ×0,5), jusqu'à ×32 |
+| glisser | tourner le globe, sans butée |
+| molette | zoom vers le curseur, jusqu'à ×32 |
+| double-clic | zoom ×2 |
 | flèches | déplacement par pas |
-| curseur du bas | vitesse du temps simulé — 0 fige tout |
-| `r` | aplats ↔ relief ombré |
 | `0` | recentrer |
 | `f` | plein écran |
+| `?` | l'explication |
+| Échap | fermer une feuille |
 
-## L'algorithme
+## Ouvrir la page chez soi
 
-Trois conditions doivent se rencontrer au même endroit.
+Un double-clic sur `index.html` ne suffit pas : il faut un serveur.
 
-**La géométrie du soleil.** Il doit se tenir entre l'horizon et **42°** de
-hauteur. Au-delà, le centre de l'arc — qui se trouve à l'opposé du soleil —
-passe sous l'horizon et il n'y a plus rien à voir. Cette contrainte dessine un
-anneau qui fait deux fois le tour de la Terre chaque jour, à l'aube et au
-crépuscule. C'est la seule partie du calcul qui soit exacte aujourd'hui.
+```bash
+python serve.py
+```
 
-**Des gouttes.** De la pluie en train de tomber, ou qui vient de cesser.
-Actuellement simulée par un bruit fractal cohérent sur la sphère, qui dérive
-avec le temps.
+puis <http://localhost:8000>. Pas `python -m http.server`, dont le cache
+mélange les versions.
 
-**Une trouée.** Du soleil direct malgré l'averse — un ciel dégagé dans le dos
-de l'observateur. C'est l'ingrédient rare, celui qui fait le tri. Approché ici
-par une climatologie grossière : zone de convergence intertropicale, rails
-dépressionnaires, prime aux littoraux.
+## Sources et crédits
 
-L'indice affiché est le produit des trois. Reste à remplacer les deux derniers
-par de vraies données météo horaires.
-
-Un détail qui compte : un arc-en-ciel n'existe pas *à un endroit*, il existe
-*pour un observateur*. Deux personnes côte à côte n'en voient pas le même. Les
-taches ne marquent donc pas un phénomène, mais un point de vue possible.
-
-## Les lieux
-
-La carte ne montre aucune frontière. Une frontière est une convention, et elle
-ne dit pas où se tient quelqu'un ; une ville si. Les lieux habités apparaissent
-donc par paliers — les capitales dès le monde entier, les autres à mesure qu'on
-s'approche — en gris clair, sous les étiquettes d'arc : une ville qui gênerait
-un arc disparaît, jamais l'inverse.
-
-C'est ce qui permet la phrase que la carte cherchait : *à 185 km d'Oulan-Oudé*.
-
-## Les annotations
-
-Une zone porte de une à cinq étiquettes selon sa taille à l'écran : une seule
-vue de loin, jusqu'à cinq quand on a zoomé dedans. Ce ne sont pas cinq mesures
-du même endroit mais cinq observateurs différents, et ils n'ont pas la même
-chance — celui qui est sur la crête voit l'arc, celui du fond de la vallée non.
-
-Chaque étiquette porte un pourcentage, une durée, une phrase et un lieu.
-
-Le **pourcentage** mêle ce que la carte affiche, le dégagement de l'horizon,
-l'accessibilité du lieu — peut-on seulement être là ? — et une part de chance
-qui oscille sans raison, propre à chaque point. C'est une valeur poétique,
-faite pour osciller et déplacer le regard d'une zone à l'autre.
-
-La **durée** est exacte. Elle ne dépend que du soleil : c'est le temps qu'il
-reste avant qu'il ne monte au-dessus de 42° ou ne touche l'horizon. Une à deux
-heures sous les tropiques, bien davantage près des pôles où il rase le sol.
-
-La **phrase** dit ce qui porte le chiffre — *le soleil perce*, *l'averse
-s'éloigne*, *depuis la crête*, *au hasard*. Et quand la zone est forte mais
-déserte : *personne pour voir*.
-
-Le **lieu** est la ville la plus proche, dans un rayon de 300 km. Au-delà il
-n'y a rien d'écrit : au milieu du Pacifique, il n'y a personne, et c'est une
-information.
+- Projection **Equal Earth** — Šavrič, Patterson & Jenny (2018)
+- Altitudes et bathymétrie — **ETOPO 2022**, NOAA NCEI
+- Traits de côte, lacs, lieux habités — **Natural Earth**
+- Pluie et rayonnement direct — [Weather data by Open-Meteo.com](https://open-meteo.com/),
+  licence CC-BY 4.0
+- Typographie — **Fragment Mono**
+- Les sources des hauts lieux sont dans `src/legends.js`, lieu par lieu
