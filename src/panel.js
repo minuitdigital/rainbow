@@ -227,7 +227,10 @@ const KNOBS = {
   's-text':     { fmt: t => tween(9, 14, t).toFixed(0) + ' px',
                   apply: t => root.style.setProperty('--ui-pt', tween(9, 14, t).toFixed(1) + 'px') },
 
-  's-icon':     { fmt: t => Math.round(tween(9, 28, t)) + ' px',
+  // ICÔNES, sur la plaque : la taille de toutes les icônes de la carte —
+  // hauts lieux, repères, le piéton et son point. On affiche la position
+  // du bouton, 0 à 100 %.
+  's-icon':     { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.icon = tween(9, 28, t); repaint(); } },
 
   // LE POINT DU RÉTICULE. Zéro le laisse à l'encre — c'est le réglage
@@ -1141,7 +1144,7 @@ function closeSrc() {
 // passera. Chaque entrée pose l'état et remet le curseur de la page à sa
 // place — la page reste le miroir exact du métal.
 //
-//     boutons rotatifs 0–100 %     plaque.meteo(55), plaque.sensibilite(86)…
+//     boutons rotatifs 0–100 %     plaque.meteo(55), plaque.icones(32)…
 //     interrupteurs                plaque.couloir(true)
 //     boutons poussoirs            plaque.maison()
 //     Temps                        plaque.temps('hier' | 'maintenant' | 'demain')
@@ -1280,6 +1283,7 @@ export const plaque = {
   contrasteMer:   p => turnKnob('s-mer', p),
   irisation:      p => turnKnob('s-franges', p),
   sensibilite:    p => turnKnob('s-seuil', p),
+  icones:         p => turnKnob('s-icon', p),
   couloir:        on => { byId('s-porte').checked = !!on; showPorte(); },
   couleur:        on => { byId('s-couleur').checked = !!on; showCouleur(); }
 };

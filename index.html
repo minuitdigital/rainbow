@@ -10,11 +10,9 @@
 </head>
 <body>
 
-<!-- Trois calques superposés : la carte, calculée par le processeur
-     graphique ; les repères, qui tournent en teinte (style.css) ; et
-     l'encre, tracée en 2D par-dessus — le piéton se tient sur ses repères. -->
+<!-- Deux calques superposés : la carte, calculée par le processeur
+     graphique, et l'encre, tracée en 2D par-dessus. -->
 <canvas id="gl" class="layer"></canvas>
-<canvas id="rep" class="layer"></canvas>
 <canvas id="ink" class="layer"></canvas>
 
 <!-- =====================================================================
@@ -236,6 +234,12 @@
             <label for="s-seuil">Sensibilité</label>
             <input id="s-seuil" type="range" min="0" max="100" value="86"><output id="o-seuil">&#8212;</output>
           </div>
+          <!-- La taille de toutes les icônes de la carte : hauts lieux,
+               repères, le piéton et son point. -->
+          <div class="dial">
+            <label for="s-icon">Icônes</label>
+            <input id="s-icon" type="range" min="0" max="100" value="58"><output id="o-icon">&#8212;</output>
+          </div>
           <!-- LA FENÊTRE DU SOLEIL, en pointillé, à 0° et 42°. -->
           <div class="dial">
             <label for="s-porte">Couloir</label>
@@ -337,10 +341,6 @@
             <div class="dial">
               <label for="s-text">texte</label>
               <input id="s-text" type="range" min="0" max="100" value="20"><output id="o-text">&#8212;</output>
-            </div>
-            <div class="dial">
-              <label for="s-icon">ic&#244;nes</label>
-              <input id="s-icon" type="range" min="0" max="100" value="32"><output id="o-icon">&#8212;</output>
             </div>
             <!-- Le point du r&#233;ticule. Tout &#224; gauche il reste de l'encre ;
                  ensuite il parcourt le cercle des teintes. -->

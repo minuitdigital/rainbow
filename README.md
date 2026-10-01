@@ -3,8 +3,9 @@
 Une carte du monde où s'allument les endroits sur le point de voir
 paraître un arc-en-ciel.
 
-C'est une œuvre, pas un produit : un tableau d'aluminium brossé qui porte
-un écran, des curseurs et des boutons sous la main du spectateur. Ce dépôt
+C'est une œuvre, pas un produit : un tableau, une plaque d'inox sablé
+avec, derrière, un écran LCD ; des boutons, des interrupteurs et un
+joystick sous la main du spectateur. Ce dépôt
 en contient la carte, qui tourne aussi dans un navigateur :
 <https://minuitdigital.github.io/rainbow/>
 
@@ -76,6 +77,7 @@ personne, et c'est une information.
 | flèches | déplacement par pas |
 | `0` | recentrer |
 | `f` | plein écran |
+| `i` | afficher ou cacher le panneau |
 | `?` | l'explication |
 | Échap | fermer une feuille |
 

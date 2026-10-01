@@ -29,12 +29,8 @@ const FACE = '"Fragment Mono", ui-monospace, monospace';
 
 let ink = null;
 
-/** Le calque des repères, animé en teinte par le CSS. */
-let rep = null, repAlive = false;
-
-export function initInk(canvas, repCanvas) {
+export function initInk(canvas) {
   ink = canvas.getContext('2d');
-  rep = repCanvas.getContext('2d');
   return ink;
 }
 
@@ -67,7 +63,6 @@ export function measureRail() {
 /** À appeler après chaque redimensionnement : le canvas perd sa transformée. */
 export function rescale() {
   ink.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  rep.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   measureRail();
 }
 
@@ -279,49 +274,69 @@ const LEG_SAY_ZOOM  = 5;
 const GLYPH_PX = 15;
 
 // L'ARC-EN-CIEL, en quart de cercle comme 🌈 : il part en bas à gauche
-// et monte vers la droite. Six bandes, du rouge dehors au violet dedans.
-// Les hauts lieux le portent avec des RAYONS — de petits traits de
-// lumière qui partent du bord. Les repères le portent nu, plus petit, et
-// sur leur propre calque, qui tourne en teinte (voir drawReperes).
+// et monte vers la droite. Six bandes, du dehors vers le dedans.
+//
+//   HAUT LIEU   en couleur, fixe. Pas de teinte qui tourne : un
+//               hue-rotate décale toutes les bandes ensemble, et l'arc
+//               passe par des moments bleu dehors — ce n'est plus un
+//               arc-en-ciel. Écarté par l'auteur le 1er octobre.
+//   REPÈRE      une étoile, surmontée d'une épingle de carte. Même taille
+//               (voir drawReperes).
 //
 // La couleur est permise ici, et ici seulement : l'écran est un LCD. Les
 // étiquettes des taches restent en gris.
 const BANDS = ['#e23b3b', '#f08a24', '#f2c53d', '#47a95f', '#3a7bd5', '#7a4cc4'];
-const RAYS = [0.18, 0.5, 0.82];                 // en fraction du quart
-const RAY_INK = '#e0a11b';
 
-/** Le quart d'arc centré sur (cx, cy), à l'échelle k. */
-function rainbowGlyph(g, cx, cy, k, rays) {
-  const R = 10 * k, w = 1.25 * k;
+// TOUTES LES ICÔNES ONT LA MÊME TAILLE, S = view.look.icon pixels — le
+// bouton Icônes. Le quart d'arc fait S de côté, le piéton S de haut.
+
+/** Le quart d'arc de côté S, centré sur (cx, cy), dans la palette donnée. */
+function rainbowGlyph(g, cx, cy, S, bands) {
+  const k = S / 10, R = S, w = 1.25 * k;
   const ox = cx + R / 2, oy = cy + R / 2;       // le centre du cercle
   const A0 = Math.PI, A1 = Math.PI * 1.5;       // de la gauche vers le haut
   g.lineCap = 'butt';
 
-  // le halo blanc d'abord : la couleur doit tenir par-dessus une tache
-  // irisée comme par-dessus le papier.
-  g.strokeStyle = 'rgba(255,255,255,0.95)';
-  g.lineWidth = BANDS.length * w + 2.4 * k;
-  g.beginPath(); g.arc(ox, oy, R - (BANDS.length - 1) * w / 2, A0, A1); g.stroke();
+  // LE CONTOUR NOIR, qui cerne les six bandes et leurs deux bouts : un
+  // peu plus large qu'elles, et prolongé d'autant aux extrémités — un bout
+  // coupé net n'aurait pas de bord. C'est lui qui détache l'arc d'une
+  // tache irisée : plus de halo blanc, qui faisait une bordure étrangère.
+  const mid = R - (bands.length - 1) * w / 2, t = 0.45 * k;
+  const ext = t / mid, band = bands.length * w;
+  g.strokeStyle = '#14171c';
+  g.lineWidth = band + 2 * t;
+  g.beginPath(); g.arc(ox, oy, mid, A0 - ext, A1 + ext); g.stroke();
 
   g.lineWidth = w * 1.05;                       // pas de jour entre les bandes
-  for (let i = 0; i < BANDS.length; i++) {
-    g.strokeStyle = BANDS[i];
+  for (let i = 0; i < bands.length; i++) {
+    g.strokeStyle = bands[i];
     g.beginPath(); g.arc(ox, oy, R - i * w, A0, A1); g.stroke();
   }
-  if (!rays) return;
+}
 
-  g.lineCap = 'round';
-  for (const pass of [0, 1]) {
-    g.strokeStyle = pass ? RAY_INK : 'rgba(255,255,255,0.95)';
-    g.lineWidth = (pass ? 1.1 : 3.2) * k;
-    for (const f of RAYS) {
-      const a = A0 + f * (A1 - A0), c = Math.cos(a), s = Math.sin(a);
-      g.beginPath();
-      g.moveTo(ox + c * (R + 2.2 * k), oy + s * (R + 2.2 * k));
-      g.lineTo(ox + c * (R + 5.2 * k), oy + s * (R + 5.2 * k));
-      g.stroke();
-    }
-  }
+/**
+ * L'ÉPINGLE, comme dans une application de cartes : une goutte renversée,
+ * la pointe en bas, un rond blanc dans la tête. Sa pointe se pose sur la
+ * branche du haut de l'étoile du repère.
+ */
+function pinGlyph(g, tx, ty, k) {
+  const r = 3.6 * k, h = 8.6 * k;               // rayon de la tête, pointe → centre
+  const cy = ty - h, b = Math.acos(r / h);
+  const drop = () => {
+    g.beginPath();
+    g.moveTo(tx, ty);
+    g.arc(tx, cy, r, Math.PI / 2 - b, Math.PI / 2 + b, true);
+    g.closePath();
+  };
+  g.lineJoin = 'round';
+  drop();
+  g.strokeStyle = 'rgba(255,255,255,0.95)';
+  g.lineWidth = 2.2 * k;
+  g.stroke();
+  g.fillStyle = '#1d2127';
+  g.fill();
+  g.fillStyle = '#ffffff';
+  g.beginPath(); g.arc(tx, cy, 1.35 * k, 0, 6.2832); g.fill();
 }
 
 function drawLegends(boxes, Rt) {
@@ -360,7 +375,7 @@ function drawLegends(boxes, Rt) {
     if (!aimed && overlaps(box, boxes)) continue;
     if (!aimed) boxes.push(box);
 
-    rainbowGlyph(ink, X + ox, Y, gk, true);
+    rainbowGlyph(ink, X + ox, Y, view.look.icon, BANDS);
 
     if (!named || (aimed && overlaps(box, boxes))) continue;
     if (aimed) boxes.push(box);
@@ -504,13 +519,9 @@ function walkerGait(phase) {
  * d'un bloc : membres, torse et tête gardent leurs proportions, seule
  * l'orientation change.
  */
-function drawWalker(cx, cy, k, phase, angle) {
+function drawWalker(cx, cy, k, phase) {
   const { limbs: WALKER_LIMBS, lift } = walkerGait(phase);
-  const ca = Math.cos(angle), sa = Math.sin(angle);
-  const P = (x, y) => {
-    const u = x * k, v = (y + lift) * k;
-    return [cx + u * ca - v * sa, cy + u * sa + v * ca];
-  };
+  const P = (x, y) => [cx + x * k, cy + (y + lift) * k];
   const X = (x, y) => P(x, y)[0], Y = (x, y) => P(x, y)[1];
 
   // deux passes : le halo blanc d'abord, l'encre ensuite. La figure doit
@@ -546,31 +557,71 @@ function drawWalker(cx, cy, k, phase, angle) {
 }
 
 // ---------------------------------------------------------- les repères
-// Posés par le bouton « Repère ». Un arc-en-ciel lui aussi, mais NU — sans
-// rayons — et plus petit : c'est ce qui le distingue d'un haut lieu. Et il
-// vit sur SON calque, que le CSS fait tourner en teinte (`hue-rotate`) :
-// le seul signe vivant de la carte. Le navigateur anime seul, sans
-// JavaScript et sans redessiner la carte ; les gris ne bougent pas sous
-// un hue-rotate, il n'y a de toute façon que des arcs sur ce calque.
-//
-// Le calque ne tourne que s'il porte quelque chose : la classe `alive`
-// tombe quand aucun repère n'est à l'écran, et l'animation s'arrête.
+// Posés par le bouton « Repère » : une étoile, une épingle dessus. Même
+// taille qu'un haut lieu. Sur l'encre, sous le piéton.
+
+/** L'étoile à cinq branches de diamètre S, centrée sur (cx, cy), à l'encre. */
+function starGlyph(g, cx, cy, S) {
+  const ro = S / 2, ri = ro * 0.42;
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 ? ri : ro, a = -Math.PI / 2 + i * Math.PI / 5;
+    const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.closePath();
+  g.lineJoin = 'round';
+  g.strokeStyle = 'rgba(255,255,255,0.95)';
+  g.lineWidth = Math.max(2, S * 0.14);
+  g.stroke();
+  g.fillStyle = '#1d2127';
+  g.fill();
+}
 
 function drawReperes(Rt) {
-  const k = view.look.icon / GLYPH_PX * 0.75;
-  let n = 0;
+  const S = view.look.icon, k = S / 10;
   for (const r of liveReperes()) {
     const f = flatten(Rt, geoVec(r.lon, r.lat));
     if (Math.abs(f[2]) > 179.1) continue;
     const X = sx(f[0]), Y = sy(f[1]);
-    if (X < -20 || X > view.W + 20 || Y < -20 || Y > view.H + 20) continue;
-    rainbowGlyph(rep, X, Y, k, false);
-    n++;
+    if (X < -30 || X > view.W + 30 || Y < -30 || Y > view.H + 30) continue;
+    starGlyph(ink, X, Y, S);
+    // la pointe de l'épingle sur la branche du haut, plus le halo
+    pinGlyph(ink, X, Y - S / 2 - 0.8 * k, k * 0.8);
   }
-  if ((n > 0) !== repAlive) {
-    repAlive = n > 0;
-    rep.canvas.classList.toggle('alive', repAlive);
-  }
+}
+
+/** Le piéton, par rapport à la taille commune des icônes. */
+const WALKER_SCALE = 1.25;
+
+/** Du sommet de la tête au sol, en unités de la figure. */
+const WALKER_H = -(WALKER_HEAD[1] - WALKER_HEAD[2]);
+
+// LA FLÈCHE. Le piéton reste droit — il marche, il ne pivote plus. C'est
+// une flèche qui tourne autour de lui et dit où l'on va. Elle prend le cap
+// de `gait.angle` (view.js), qui a déjà son inertie ; elle n'apparaît
+// qu'après le premier pas — avant, il n'y a pas de direction à dire — et
+// garde ensuite le dernier cap, comme la figure le gardait.
+function drawArrow(cx, cy, S) {
+  if (!gait.moved) return;
+  // gait.angle est le cap de la TÊTE, qui visait l'opposé du déplacement :
+  // le déplacement est donc (−sin, cos).
+  const a = gait.angle, ux = -Math.sin(a), uy = Math.cos(a);
+  const ox = cx, oy = cy - S / 2;               // le milieu de la figure
+  const r = S * 0.85, L = S * 0.32, W = S * 0.22;
+  const tx = ox + ux * (r + L / 2), ty = oy + uy * (r + L / 2);
+  const bx = ox + ux * (r - L / 2), by = oy + uy * (r - L / 2);
+  ink.beginPath();
+  ink.moveTo(tx, ty);
+  ink.lineTo(bx - uy * W, by + ux * W);
+  ink.lineTo(bx + uy * W, by - ux * W);
+  ink.closePath();
+  ink.lineJoin = 'round';
+  ink.strokeStyle = 'rgba(255,255,255,0.95)';
+  ink.lineWidth = Math.max(2, S * 0.12);
+  ink.stroke();
+  ink.fillStyle = 'rgba(20,22,26,0.78)';
+  ink.fill();
 }
 
 function drawReticle(cx, cy) {
@@ -595,7 +646,11 @@ function drawReticle(cx, cy) {
                             : `hsl(${Math.round(d * 360)} 78% 44%)`;
   ink.fill();
 
-  drawWalker(cx, cy, k, gait.phase, gait.angle);
+  // Le piéton fait un quart de plus que les autres icônes (décision de
+  // l'auteur, 1er octobre) ; sa flèche le suit.
+  const S = view.look.icon * WALKER_SCALE;
+  drawWalker(cx, cy, S / WALKER_H, gait.phase);
+  drawArrow(cx, cy, S);
 }
 
 // --------------------------------------------------------------- la passe
@@ -603,7 +658,6 @@ function drawReticle(cx, cy) {
 export function trace(centre) {
   const { W, H } = view;
   ink.clearRect(0, 0, W, H);
-  rep.clearRect(0, 0, W, H);
 
   const Rt = matT(view.R);
   const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));

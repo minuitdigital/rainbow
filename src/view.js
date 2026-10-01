@@ -481,18 +481,14 @@ const STRIDE_PX = 26;
 /** Par image. Une téléportation — une pastille cliquée — n'est pas une course. */
 const GAIT_MAX = 58;
 
-// ------------------------------------------------------------- LA GIRATION
-//  Le piéton PIVOTE AUTOUR DU POINT VISÉ, et il prend l'envers de la
-//  direction choisie : on monte vers le nord, il se retrouve la tête en
-//  bas. Ses pieds restent au point — c'est lui qui tourne autour, pas le
-//  point qui se déplace.
+// ------------------------------------------------------------- LE CAP
+//  Le piéton reste DROIT : il marche, il ne pivote plus (1er octobre
+//  2026). L'angle sert à la FLÈCHE qui tourne autour de lui (drawArrow,
+//  ink.js). Il est gardé tel qu'il était : le cap de la tête, qui vise
+//  l'opposé du déplacement — la flèche en prend l'envers.
 //
-//  La règle tient en une phrase : SA TÊTE POINTE À L'OPPOSÉ DU
-//  DÉPLACEMENT. C'est ce qui donne les cent quatre-vingts degrés quand on
-//  va vers le haut, et le quart de tour quand on va sur le côté.
-//
-//  L'angle ne revient pas à l'endroit quand on s'arrête : il garde le
-//  dernier cap. La figure se souvient d'où l'on vient.
+//  L'angle ne revient pas en arrière quand on s'arrête : la flèche garde
+//  le dernier cap. `moved` dit si l'on a déjà fait un pas.
 
 /** Vitesse de rattrapage de l'angle, par seconde. Plus bas = plus lourd. */
 const TURN_RATE = 5;
@@ -502,9 +498,10 @@ const TURN_MIN_PX = 0.6;
 
 /**
  *  phase  où en est la foulée
- *  angle  de combien la figure est tournée autour du point visé
+ *  angle  le cap, pour la flèche
+ *  moved  a-t-on déjà marché
  */
-export const gait = { phase: GAIT_REST, angle: 0 };
+export const gait = { phase: GAIT_REST, angle: 0, moved: false };
 
 let gaitPrev = null, gaitAim = 0;
 
@@ -534,7 +531,7 @@ export function stride(dt) {
 
     // (dx, dy) est là où NOUS allons : le sol part à gauche, donc nous
     // allons à droite. La tête vise l'opposé — d'où le signe.
-    if (d > TURN_MIN_PX) gaitAim = Math.atan2(-dx, dy);
+    if (d > TURN_MIN_PX) { gaitAim = Math.atan2(-dx, dy); gait.moved = true; }
   } else {
     // Arrêté, il FINIT SON PAS : la phase continue vers le repos en
     // ralentissant, elle ne revient pas en arrière — on ne marche pas à
