@@ -32,7 +32,7 @@ import { solar } from './sky.js';
 import { scan } from './zones.js';
 import { initMap, paint, uploadWeather } from './map.js';
 import { initInk, rescale, trace } from './ink.js';
-import { initPanel, refreshPanel } from './panel.js';
+import { initPanel, refreshPanel, weatherArrived, plaque } from './panel.js';
 import { bind } from './chrome.js';
 
 const glCv = document.getElementById('gl');
@@ -182,6 +182,11 @@ if (!initMap(glCv, invalidate, noteLoad)) {
   // retailler les deux calques.
   initPanel(invalidate, resize);
   bind(inkCv, invalidate);
+
+  // LA PLAQUE, à portée du Raspberry Pi. Une entrée par commande gravée —
+  // voir `plaque` dans src/panel.js. Le Pi n'aura qu'à appeler, par
+  // exemple, window.plaque.maison() ou window.plaque.meteo(40).
+  window.plaque = plaque;
   window.addEventListener('resize', resize);
   resize();
 
@@ -189,11 +194,10 @@ if (!initMap(glCv, invalidate, noteLoad)) {
   // premier coup : il faut aller chercher un fichier, le décoder, le
   // verser au processeur graphique. On ne conditionne donc rien à sa
   // présence — même règle que les textures, piège n°2. Quand elle tombe,
-  // on la verse, on allume la case du panneau et on redessine.
+  // on la verse, le panneau passe en météo, et on redessine.
   initWeather(() => {
     if (uploadWeather()) {
-      document.getElementById('clk-meteo').disabled = false;
-      document.getElementById('l-meteo').classList.remove('off');
+      weatherArrived();
       invalidate();
     }
   }, noteLoad);

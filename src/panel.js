@@ -1,12 +1,19 @@
 // =========================================================================
 //  LE PANNEAU
 //
-//  Quatre registres dans une colonne à droite. Une boîte, une tâche :
+//  Quatre registres dans une colonne à droite, un cinquième caché.
+//  Une boîte, une tâche :
 //
-//      ESTIMATEUR  montre      où l'on vise, le soleil, la présence
-//      CROYANCE    règle       météo / légende / chance, somme 100 %
+//      ESTIMATEUR  montre      où l'on vise, le soleil
+//      ALGORITHME  montre      la présence, et la formule qui la fait
 //      LÉGENDES    situe       les hauts lieux et ce qu'on y croit
-//      RÉGLAGES    ajuste      l'allure du panneau et de la carte
+//      RÉGLAGES    règle       les commandes de la plaque, et elles seules
+//      ADMIN       ajuste      tout le reste — n'apparaît que par /admin
+//
+//  CHAQUE COMMANDE DE LA PLAQUE A UN POINT D'ENTRÉE, et un seul : l'objet
+//  `plaque`, plus bas. La page l'appelle quand on touche un curseur ; le
+//  Raspberry Pi l'appellera quand on tournera un bouton. Chaque entrée
+//  pose l'état ET remet le curseur de la page à la bonne place.
 //
 //  Tout ce qu'il affiche décrit LE RÉTICULE — le centre exact de l'écran.
 //  Le panneau ne choisit pas un lieu : il décrit celui qu'on regarde. Les
@@ -23,11 +30,14 @@
 //  à l'écran.
 // =========================================================================
 
-import { view, beliefWeights, anchorTo,
+import { view, beliefWeights, anchorTo, centre, centreVec, sx, sy,
+         simDate, drift, driftChance, liveReperes,
          beat, beatIdle, pixelCount, loadState } from './view.js';
 import { GAIN, SUN_MAX, SPILL_DEG, openFor, nearestLegend,
-         LEGEND_POINTS } from './sky.js';
+         LEGEND_POINTS, solar } from './sky.js';
+import { flatten, matT, geoVec } from './projection.js';
 import { past, recall, posOf, AGE_MAX } from './history.js';
+import { brightest } from './zones.js';
 import { weatherReach, weatherInfo } from './weather.js';
 import { gpuMs } from './map.js';
 import { measureRail } from './ink.js';
@@ -48,27 +58,22 @@ let repaint = () => {};
  */
 let remeasure = () => {};
 
-// ===================================================== LE PARTAGE DE LA CROYANCE
-// Une croyance FINIE. Pousser l'une pousse physiquement les deux autres,
-// au prorata de ce qu'elles valaient, et LEURS POIGNÉES BOUGENT. Une
-// somme affichée qui se redistribue pendant que les curseurs restent en
-// place ne se lit pas : on ne voit pas l'arbitrage, on le devine.
+// ================================================================ LA CROYANCE
+// Trois boutons INDÉPENDANTS : aucun ne pousse les autres. Chacun donne un
+// poids brut, de 0 à 100 %, et c'est `beliefWeights` qui les ramène à une
+// somme de 1. La plaque est en métal : un bouton rotatif ne bouge pas
+// tout seul, et une page qui déplacerait ses poignées dirait autre chose
+// que le tableau. Tous à zéro, la carte ne montre rien.
 
 const SHARES = [['w-m', 'm', 'o-m'], ['w-l', 'l', 'o-l'], ['w-c', 'c', 'o-c']];
 
 /** Les fonctions de rafraîchissement des curseurs, posées par initPanel. */
 const SYNCS = {};
-const syncKnob = id => SYNCS[id] && SYNCS[id]();
 
-function pushBelief(key, v) {
-  const b = view.belief;
-  v = bound(v, 0, 100);
-  const [a, c] = ['m', 'l', 'c'].filter(x => x !== key);
-  const rest = 100 - v, sum = b[a] + b[c];
-  if (sum <= 0.001) { b[a] = b[c] = rest / 2; }
-  else { b[a] = b[a] / sum * rest; b[c] = b[c] / sum * rest; }
-  b[key] = v;
+function setBelief(key, v) {
+  view.belief[key] = bound(v, 0, 100);
   showBelief();
+  repaint();
 }
 
 function showBelief() {
@@ -90,10 +95,10 @@ function showBelief() {
 // tout seul fait du bruit — la croyance du lieu se dit dans le corps du
 // registre, où on est venu la chercher.
 
-// Les quatre registres, puis les réglages sur DEUX niveaux : trois
-// familles — graphisme, données, performance — et sous chacune ce sur quoi
-// les curseurs agissent. Onze curseurs en colonne ne se lisent plus, ils
-// se subissent ; rangés par famille, on retrouve ce qu'on cherche.
+// Les quatre registres, puis l'admin sur DEUX niveaux : trois familles —
+// graphisme, données, performance — et sous chacune ce sur quoi les
+// curseurs agissent. Les groupes de la plaque, eux, ne se replient pas :
+// le métal n'a pas de pli.
 //
 // L'ordre compte : un parent replié cache ses enfants, mais leur propre
 // état de pli est conservé et retrouvé tel quel à la réouverture.
@@ -102,10 +107,10 @@ const FOLDS = [
   ['pli-croy',       'corps-croy',       true ],
   ['pli-leg',        'corps-leg',        false],
   ['pli-reg',        'corps-reg',        false],
+  ['pli-adm',        'corps-adm',        true ],
 
   ['pli-gfx',        'corps-gfx',        true ],
   ['pli-r-tache',    'corps-r-tache',    true ],
-  ['pli-r-fond',     'corps-r-fond',     false],
   ['pli-r-panneau',  'corps-r-panneau',  false],
 
   ['pli-dat',        'corps-dat',        true ],
@@ -179,20 +184,20 @@ const KNOBS = {
   // au-delà de deux tours on voit un arc-en-ciel par-dessus le sujet,
   // et la carte n'est plus lisible. En deçà d'un, la tache tend vers une
   // seule teinte qui se contente de foncer.
-  's-franges':  { fmt: t => tween(0.30, 3.50, t).toFixed(2) + ' tr',
+  // Sur la plaque, 0 à 100 % : on affiche la position du bouton.
+  's-franges':  { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.franges = tween(0.30, 3.50, t); repaint(); } },
 
-  // LES TROUS et LA FINESSE ne disent rien au monde entier : ce sont des
-  // gains sur ce que le zoom révèle. Le milieu du rail est le réglage
-  // d'usine, le haut force le trait — utile pour juger au tramage de
-  // l'e-ink, où le détail fin sera le premier à disparaître.
-  // LE SEUIL. Sous cette présence, du papier. C'est le réglage qui
-  // décide si la carte est une nappe teintée ou un semis de taches — et
-  // il agit à TOUTE ÉCHELLE, contrairement aux « trous » qu'il remplace,
-  // qui ne faisaient rien avant ×6 de zoom.
-  's-seuil':    { fmt: t => (t <= 0.005 ? 'tout' : 'dès ' + Math.round(t * 90) + ' %'),
-                  apply: t => { view.look.seuil = t * 0.9; repaint(); } },
+  // LA SENSIBILITÉ — le seuil. Sous cette présence, du papier. C'est le
+  // réglage qui décide si la carte est une nappe teintée ou un semis de
+  // taches, et il agit à toute échelle. À 0 % de la couleur partout, à
+  // 100 % seulement les endroits les plus forts : la course s'arrête à
+  // SEUIL_MAX et non à 1, où plus rien ne s'allumait.
+  's-seuil':    { fmt: t => Math.round(t * 100) + ' %',
+                  apply: t => { view.look.seuil = t * SEUIL_MAX; repaint(); } },
 
+  // LA FINESSE ne dit rien au monde entier : c'est un gain sur ce que le
+  // zoom révèle. Le milieu du rail est le réglage d'usine.
   's-fine':     { fmt: t => (t <= 0.005 ? 'aplat' : Math.round(t * 200) + ' %'),
                   apply: t => { view.look.fine = t * 2; repaint(); } },
 
@@ -212,10 +217,11 @@ const KNOBS = {
   // d'origine — c'est ce qui permet de revenir à la carte connue sans
   // chercher, et de voir d'un coup d'œil si on s'en est écarté. En deçà
   // l'encre s'allège jusqu'au papier nu, au-delà elle se charge.
-  's-terres':   { fmt: t => Math.round(inkDepth(t, 'land') * 100) + ' %',
+  // Sur la plaque, 0 à 100 % : on affiche la position du bouton.
+  's-terres':   { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.land = inkDepth(t, 'land'); repaint(); } },
 
-  's-mer':      { fmt: t => Math.round(inkDepth(t, 'sea') * 100) + ' %',
+  's-mer':      { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.sea = inkDepth(t, 'sea'); repaint(); } },
 
   's-text':     { fmt: t => tween(9, 14, t).toFixed(0) + ' px',
@@ -232,63 +238,34 @@ const KNOBS = {
   's-point':    { fmt: t => (t <= 0.02 ? 'encre' : Math.round(t * 360) + '°'),
                   apply: t => { view.look.dot = t; repaint(); } },
 
-  // LE CURSEUR QUI CHANGE DE NATURE. En dev c'est une vitesse, cinq
-  // décades de la seconde à l'année. En météo ça n'aurait aucun sens —
-  // une prévision ne s'accélère pas — et il devient un « quand » : de
-  // vingt-quatre heures en arrière à quarante-huit en avant, dans la
-  // fenêtre que le fichier couvre. Le même rail, deux significations, et
-  // le libellé à gauche dit laquelle.
-  's-time':     { fmt: t => view.clock === 'meteo' ? whenSaid(whenOf(t))
-                          : (t <= 0 ? 'figé'
+  // LA VITESSE, en dev seulement : cinq décades, de la seconde à
+  // l'année. En météo elle n'a aucun sens — une prévision ne s'accélère
+  // pas — et elle s'éteint ; c'est Temps, sur la plaque, qui dit quand.
+  's-time':     { fmt: t => (t <= 0 ? 'figé'
                              : '×' + Math.round(Math.pow(10, t * 5)).toLocaleString('fr-FR')),
-                  apply: t => {
-                    if (view.clock === 'meteo') view.when = whenOf(t);
-                    else view.speed = t <= 0 ? 0 : Math.pow(10, t * 5);
-                    repaint();
-                  } }
+                  apply: t => { view.speed = t <= 0 ? 0 : Math.pow(10, t * 5); repaint(); } }
 };
 
-// ------------------------------------------------------- le « quand »
-// La fenêtre du fichier météo : hier, et deux jours devant. Maintenant
-// tombe au tiers du rail — et pas au milieu, parce que le passé qu'on
-// peut consulter est deux fois plus court que l'avenir qu'on prévoit.
+/**
+ * Le haut de la course de Sensibilité. Mesuré sur la présence du globe
+ * entier, en dev, le 30 septembre 2026 : le 99e centile des points allumés
+ * tourne autour de 0,70. À 100 %, il reste donc à peu près le centième le
+ * plus fort. À revoir devant la vraie météo.
+ */
+const SEUIL_MAX = 0.7;
 
-const WHEN_BACK = -24, WHEN_AHEAD = 48;
-
-const whenOf = t => WHEN_BACK + t * (WHEN_AHEAD - WHEN_BACK);
-
-/** La position du rail qui vaut « maintenant ». */
-const WHEN_NOW = -WHEN_BACK / (WHEN_AHEAD - WHEN_BACK);
-
-function whenSaid(h) {
-  // Une demi-heure de part et d'autre : le rail fait cent un crans pour
-  // soixante-douze heures, un cran vaut donc quarante-trois minutes et
-  // « maintenant » ne serait sinon jamais atteignable à la main.
-  if (Math.abs(h) < 0.5) return 'maintenant';
-  const s = h < 0 ? '−' : '+';
-  const a = Math.abs(h);
-  const said = a >= 24 ? `${s}${(a / 24).toFixed(1)} j` : `${s}${Math.round(a)} h`;
-
-  // AU-DELÀ DU RELEVÉ, la carte répète son dernier pas de temps sans le
-  // dire — et l'on croit regarder après-demain. Le tilde ne coûte qu'un
-  // caractère et il empêche exactement ce malentendu. Il apparaît quand
-  // le robot a manqué un passage : la fenêtre glisse alors vers le passé
-  // sans que le rail bouge.
-  const reach = weatherReach(Date.now());
-  return (reach != null && h > reach) ? '~' + said : said;
-}
-
-// La case « dégradé » est un ENCODAGE, pas une teinte en moins : quand
-// elle est mise, le curseur « couleur » n'a plus rien à dire.
-function showGrey() {
-  const on = byId('s-grey').checked;
-  view.look.grey = on ? 1 : 0;
-  byId('o-grey').textContent = on ? 'oui' : 'non';
+// COULEUR. ON, l'irisation ; OFF, le dégradé — un ENCODAGE, pas une
+// teinte en moins : la force passe alors par la densité, en paliers et en
+// points.
+function showCouleur() {
+  const on = byId('s-couleur').checked;
+  view.look.grey = on ? 0 : 1;
+  byId('o-couleur').textContent = on ? 'ON' : 'OFF';
   // En dégradé il n'y a plus de teinte : ni saturation, ni ordre
   // d'interférence. Les deux curseurs s'éteignent plutôt que de mentir.
   for (const k of ['colour', 'franges']) {
-    byId('s-' + k).disabled = on;
-    byId('l-' + k).classList.toggle('off', on);
+    byId('s-' + k).disabled = !on;
+    byId('l-' + k).classList.toggle('off', !on);
   }
   repaint();
   saveKnobs();
@@ -305,10 +282,10 @@ function showGrey() {
 function showPorte() {
   const on = byId('s-porte').checked;
   view.look.porte = on ? 1 : 0;
-  byId('o-porte').textContent = on ? 'oui' : 'non';
+  byId('o-porte').textContent = on ? 'ON' : 'OFF';
   // Couloir éteint, ses deux mesures ne décrivent plus rien : elles
   // s'éteignent aussi, plutôt que de laisser croire qu'on règle quelque
-  // chose. Même geste que « dégradé » avec la couleur et les franges.
+  // chose. Même geste que Couleur avec la saturation et l'irisation.
   for (const k of ['ecart', 'trait']) {
     byId('s-' + k).disabled = !on;
     byId('l-' + k).classList.toggle('off', !on);
@@ -335,44 +312,47 @@ function showRig() {
 // un temps inventé ne peut pas aller chercher une prévision, et une vraie
 // prévision ne se laisse pas accélérer dix mille fois.
 //
-// « météo » reste éteint tant que data/weather.png n'est pas à côté de la
-// page. Une case qui prétendrait brancher des données absentes mentirait —
-// et sur un mur, un réglage qui ne fait rien est pire qu'un réglage absent.
+// LA PAGE PUBLIQUE EST EN MÉTÉO dès que data/weather.png est arrivé. Le
+// dev ne se choisit que dans l'admin, et le choix est mémorisé : c'est
+// `clockWanted`. Tant que le fichier n'est pas là, la page reste en dev —
+// une case qui prétendrait brancher des données absentes mentirait.
 
-/**
- * UNE POSITION DE CURSEUR PAR MODE. Sans ça, basculer en météo laisserait
- * le rail à 72 % — la vitesse ×3981 du mode dev — qui vaut « dans 28
- * heures » une fois relu comme un « quand ». On retrouverait la carte de
- * mercredi prochain sans avoir rien demandé.
- */
-const timePos = { dev: null, meteo: null };
+let clockWanted = 'meteo';
 
 function showClock() {
-  const was = view.clock;
-  const now = byId('clk-meteo').checked ? 'meteo' : 'dev';
-  if (was === now) return;
-
-  timePos[was] = +byId('s-time').value;
-  view.clock = now;
-
-  // En arrivant en météo pour la première fois, on se pose sur
-  // maintenant. C'est le seul instant qui ne demande pas d'explication.
-  const back = timePos[now] != null ? timePos[now]
-             : now === 'meteo' ? Math.round(WHEN_NOW * 100) : 72;
-  byId('s-time').value = back;
-
-  // Le libellé dit laquelle des deux significations le rail porte. Sans
-  // lui, un curseur qui affiche « +6 h » là où il disait « ×3 981 » est
-  // une énigme.
-  byId('l-time').textContent = now === 'meteo' ? 'quand' : 'vitesse';
-
-  // En dev, le temps reprend sa course ; en météo, il n'y a plus de
-  // vitesse du tout et `elapsedHours` lit l'heure réelle.
-  if (now === 'dev') view.when = 0;
-
-  syncKnob('s-time');
-  saveKnobs();
+  view.clock = byId('clk-meteo').checked ? 'meteo' : 'dev';
+  clockWanted = view.clock;
+  showTemps();
   remeasure();
+}
+
+/** Appelé par main.js quand la grille météo est versée. */
+export function weatherArrived() {
+  byId('clk-meteo').disabled = false;
+  byId('l-meteo').classList.remove('off');
+  if (clockWanted === 'meteo' && view.clock !== 'meteo') {
+    byId('clk-meteo').checked = true;
+    showClock();
+  }
+}
+
+// TEMPS — le bouton à trois positions de la plaque. Il n'a de sens
+// qu'avec la vraie météo : en dev il s'éteint, et c'est la vitesse de
+// l'admin qui reprend la main. « Après-demain » n'existe plus.
+const TEMPS = { hier: -24, maintenant: 0, demain: 24 };
+
+function showTemps() {
+  const met = view.clock === 'meteo';
+  const pos = Object.keys(TEMPS).find(k => byId('t-' + k).checked) || 'maintenant';
+  view.when = TEMPS[pos];
+  for (const k of Object.keys(TEMPS)) {
+    byId('t-' + k).disabled = !met;
+    byId('l-' + k).classList.toggle('off', !met);
+  }
+  byId('s-time').disabled = met;
+  byId('l-time').classList.toggle('off', met);
+  repaint();
+  saveKnobs();
 }
 
 /**
@@ -669,9 +649,7 @@ const NOTES = {
         + 'chercher une prévision, et une vraie prévision ne se laisse pas '
         + 'accélérer dix mille fois. « météo » restera éteint tant que le '
         + 'fichier data/weather.png ne sera pas à côté de la page — une case '
-        + 'qui prétendrait brancher des données absentes mentirait. En météo, '
-        + 'le curseur cessera d’être une vitesse pour devenir un « quand », '
-        + 'de vingt-quatre heures en arrière à quarante-huit en avant.'
+        + 'qui prétendrait brancher des données absentes mentirait.'
   }
 };
 
@@ -682,6 +660,7 @@ function openNote(key) {
   const n = NOTES[key];
   if (!n) return;
   noted = key;
+  showSwitch('p-formule', key === 'formule');
   byId('note-nom').textContent = n.nom;
   byId('note-quoi').textContent = n.quoi;
 
@@ -728,6 +707,7 @@ function openNote(key) {
 function closeNote() {
   byId('note-sheet').hidden = true;
   noted = null;
+  showSwitch('p-formule', false);
 }
 
 // Sur un mur, on ne veut pas refaire ses réglages à chaque allumage. Tout
@@ -735,13 +715,15 @@ function closeNote() {
 // Le numéro fait partie de la clé : changer une valeur par défaut dans
 // index.html ne sert à rien si la page relit l'ancienne. Quand un défaut
 // bouge et qu'il doit s'imposer, on incrémente.
-const STORE_KEY = 'estimateur.reglages.2';
+const STORE_KEY = 'estimateur.reglages.3';
 
 function saveKnobs() {
   try {
-    const o = { belief: view.belief, grey: byId('s-grey').checked,
+    const o = { belief: view.belief, couleur: byId('s-couleur').checked,
                 porte: byId('s-porte').checked,
-                rig: view.rig, clock: view.clock, plis: folded };
+                iface: byId('p-interface').checked, poeme: byId('p-poeme').checked,
+                temps: Object.keys(TEMPS).find(k => byId('t-' + k).checked),
+                rig: view.rig, clock: clockWanted, plis: folded };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
   } catch (e) { /* sans mémoire, la page marche quand même */ }
@@ -754,15 +736,15 @@ function loadKnobs() {
   for (const id of Object.keys(KNOBS))
     if (typeof o[id] === 'number') byId(id).value = bound(o[id], 0, 100);
   if (o.belief && typeof o.belief.m === 'number') Object.assign(view.belief, o.belief);
-  byId('s-grey').checked = !!o.grey;
+  byId('s-couleur').checked = o.couleur !== false;
   byId('s-porte').checked = !!o.porte;
+  byId('p-interface').checked = o.iface !== false;
+  byId('p-poeme').checked = !!o.poeme;
+  if (o.temps in TEMPS) byId('t-' + o.temps).checked = true;
   byId(o.rig === 'mini' ? 'rig-mini' : 'rig-laptop').checked = true;
-  // Une horloge « météo » mémorisée ne se restaure QUE si la case est
-  // encore disponible : sans data/weather.png, le bouton est désactivé et
-  // cocher un bouton désactivé donnerait un état que l'on ne peut plus
-  // quitter, puisqu'aucun clic ne l'atteindrait.
-  const met = byId('clk-meteo');
-  byId(o.clock === 'meteo' && !met.disabled ? 'clk-meteo' : 'clk-dev').checked = true;
+  // L'horloge voulue seulement : la case « météo » ne se coche qu'à
+  // l'arrivée du fichier, dans weatherArrived.
+  clockWanted = o.clock === 'dev' ? 'dev' : 'meteo';
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -1156,6 +1138,154 @@ function closeSrc() {
   shown = null;
 }
 
+// ================================================================ LA PLAQUE
+// Les commandes gravées dans l'inox, TEXTES.md §9. Une entrée par
+// commande, et c'est la seule : la page y passe, le Raspberry Pi y
+// passera. Chaque entrée pose l'état et remet le curseur de la page à sa
+// place — la page reste le miroir exact du métal.
+//
+//     boutons rotatifs 0–100 %     plaque.meteo(55), plaque.sensibilite(86)…
+//     interrupteurs                plaque.couloir(true)
+//     boutons poussoirs            plaque.maison()
+//     Temps                        plaque.temps('hier' | 'maintenant' | 'demain')
+
+/** Un interrupteur affiché : la case, et ON / OFF à côté. */
+function showSwitch(id, on) {
+  byId(id).checked = on;
+  byId('o-' + id.slice(2)).textContent = on ? 'ON' : 'OFF';
+}
+
+/** Un bouton rotatif : on pose la valeur, et le curseur fait le reste. */
+function turnKnob(id, p) {
+  byId(id).value = bound(Math.round(p), 0, 100);
+  SYNCS[id]();
+}
+
+// INTERFACE. Éteinte, il ne reste que la carte — et, dans un navigateur,
+// un petit bouton en coin et la touche « i » pour la rallumer, puisque
+// l'interrupteur de la page est lui-même dans le panneau qu'on cache.
+let bare = false;
+
+function showInterface() {
+  const on = byId('p-interface').checked;
+  bare = !on;
+  showSwitch('p-interface', on);
+  document.body.classList.toggle('bare', bare);
+  byId('iface-on').hidden = on;
+  measureRail();
+  repaint();
+  saveKnobs();
+}
+
+// FORMULE. La même feuille que le « ? » du registre ALGORITHME : ouvrir
+// l'un coche l'autre, fermer la feuille éteint l'interrupteur.
+function showFormule() {
+  if (byId('p-formule').checked) openNote('formule');
+  else if (noted === 'formule') closeNote();
+  else showSwitch('p-formule', false);
+}
+
+// POÈME. Par-dessus la carte. Le texte reste à écrire : index.html tient
+// la place.
+function showPoeme() {
+  const on = byId('p-poeme').checked;
+  showSwitch('p-poeme', on);
+  byId('poeme').hidden = !on;
+  saveKnobs();
+}
+
+/** Le piéton est posé là, au centre de l'écran. Le zoom ne bouge pas. */
+function walkTo(lon, lat) {
+  view.anchor = null;
+  view.spin.rate = 0;
+  anchorTo(lon, lat, view.W / 2, view.H / 2);
+  repaint();
+}
+
+// ARC-EN-CIEL. Le point de plus haute présence de TOUTE la Terre, à
+// l'instant de l'appui — pas seulement de l'écran. Aucune remise à
+// l'échelle : le maximum peut être faible, on y va quand même. Si l'on ne
+// croit à rien, il n'y a nulle part où aller.
+function arcEnCiel() {
+  const best = brightest(solar(simDate()), drift(), driftChance(),
+                         beliefWeights(), centreVec());
+  if (best.v > 0) walkTo(best.lon, best.lat);
+}
+
+// TÉLÉPORTATION. Un haut lieu, au hasard — jamais celui où l'on est déjà.
+function teleportation() {
+  const [lon, lat] = centre();
+  const here = nearestLegend(lon, lat);
+  const pool = LEGEND_POINTS.filter(l => l !== here);
+  const l = pool[Math.floor(Math.random() * pool.length)];
+  walkTo(l.lon, l.lat);
+}
+
+// MAISON. Paris. Le nom de la ville n'est pas gravé.
+const MAISON = { lon: 2.3522, lat: 48.8566 };
+
+function maison() { walkTo(MAISON.lon, MAISON.lat); }
+
+// REPÈRE. Pose un repère sous le piéton ; si le piéton est déjà sur un
+// repère, l'efface. « Sur » se juge À L'ÉCRAN, à la taille du signe : ce
+// qu'on voit sous ses pieds, à n'importe quel zoom. Un jour au plus, en
+// temps réel, et mémorisé à part — ce n'est pas un réglage.
+const REPERE_PX = 12;
+const REPERE_KEY = 'estimateur.reperes.1';
+
+function repere() {
+  view.reperes = liveReperes();
+  const Rt = matT(view.R), k = view.look.icon / 15;
+  const hit = view.reperes.findIndex(r => {
+    const f = flatten(Rt, geoVec(r.lon, r.lat));
+    return Math.hypot(sx(f[0]) - view.W / 2, sy(f[1]) - view.H / 2) < REPERE_PX * k;
+  });
+  if (hit >= 0) view.reperes.splice(hit, 1);
+  else {
+    const [lon, lat] = centre();
+    view.reperes.push({ lon, lat, at: Date.now() });
+  }
+  try { localStorage.setItem(REPERE_KEY, JSON.stringify(view.reperes)); }
+  catch (e) { /* sans mémoire, le repère vit jusqu'au rechargement */ }
+  repaint();
+}
+
+function loadReperes() {
+  try {
+    const a = JSON.parse(localStorage.getItem(REPERE_KEY) || '[]');
+    if (Array.isArray(a)) view.reperes = a.filter(r =>
+      typeof r.lon === 'number' && typeof r.lat === 'number' && typeof r.at === 'number');
+  } catch (e) { /* tant pis */ }
+  view.reperes = liveReperes();
+}
+
+export const plaque = {
+  interface:      on => { byId('p-interface').checked = !!on; showInterface(); },
+  formule:        on => { byId('p-formule').checked = !!on; showFormule(); },
+  poeme:          on => { byId('p-poeme').checked = !!on; showPoeme(); },
+
+  meteo:          p => setBelief('m', p),
+  legendes:       p => setBelief('l', p),
+  chance:         p => setBelief('c', p),
+  arcEnCiel,
+  repere,
+  teleportation,
+  maison,
+
+  temps:          pos => {
+    if (!(pos in TEMPS)) return;
+    byId('t-' + pos).checked = true;
+    showTemps();
+  },
+
+  contrasteTerre: p => turnKnob('s-terres', p),
+  contrasteMer:   p => turnKnob('s-mer', p),
+  irisation:      p => turnKnob('s-franges', p),
+  sensibilite:    p => turnKnob('s-seuil', p),
+  couloir:        on => { byId('s-porte').checked = !!on; showPorte(); },
+  couleur:        on => { byId('s-couleur').checked = !!on; showCouleur(); }
+};
+
 // ================================================================ LA LECTURE
 
 const HHMM = n => String(n).padStart(2, '0');
@@ -1165,6 +1295,8 @@ const HHMM = n => String(n).padStart(2, '0');
  * l'écran — le réticule — et `sun` le soleil de l'instant simulé.
  */
 export function refreshPanel(sun, c, now) {
+  // Interface éteinte, personne ne lit le panneau : on ne le calcule pas.
+  if (bare) return;
   const [lon, lat] = c;
   recall(lon, lat);
   const last = past[past.length - 1];
@@ -1220,11 +1352,17 @@ export function initPanel(invalidate, resize) {
   for (const [, bodyId, openByDefault] of FOLDS) folded[bodyId] = !openByDefault;
 
   loadKnobs();
+  loadReperes();
   buildChips();
 
-  for (const [id, key] of SHARES.map(s => [s[0], s[1]])) {
+  // L'ADMIN ne se montre que par /admin — admin/index.html renvoie ici
+  // avec « ?admin ». Caché, pas protégé.
+  const admin = new URLSearchParams(location.search).has('admin');
+  byId('box-admin').hidden = !admin;
+
+  for (const [id, key] of SHARES) {
     const input = byId(id);
-    input.addEventListener('input', () => { pushBelief(key, +input.value); repaint(); });
+    input.addEventListener('input', () => setBelief(key, +input.value));
   }
   showBelief();
 
@@ -1245,8 +1383,7 @@ export function initPanel(invalidate, resize) {
 
   for (const id of ['clk-dev', 'clk-meteo'])
     byId(id).addEventListener('change', showClock);
-  view.clock = byId('clk-meteo').checked ? 'meteo' : 'dev';
-  byId('l-time').textContent = view.clock === 'meteo' ? 'quand' : 'vitesse';
+  view.clock = 'dev';
 
   for (const [id, knob] of Object.entries(KNOBS)) {
     const input = byId(id);
@@ -1265,16 +1402,39 @@ export function initPanel(invalidate, resize) {
     sync();
   }
 
-  byId('s-grey').addEventListener('change', showGrey);
-  showGrey();
+  // LA PLAQUE. Les cases et les boutons de la page passent par `plaque`,
+  // comme le fera le Pi ; les curseurs, par leur `sync`, qui est ce que
+  // `plaque` appelle aussi.
+  byId('s-couleur').addEventListener('change', e => plaque.couleur(e.target.checked));
+  byId('s-porte').addEventListener('change', e => plaque.couloir(e.target.checked));
+  byId('p-interface').addEventListener('change', e => plaque.interface(e.target.checked));
+  byId('p-formule').addEventListener('change', e => plaque.formule(e.target.checked));
+  byId('p-poeme').addEventListener('change', e => plaque.poeme(e.target.checked));
+  byId('p-arc').addEventListener('click', plaque.arcEnCiel);
+  byId('p-repere').addEventListener('click', plaque.repere);
+  byId('p-teleport').addEventListener('click', plaque.teleportation);
+  byId('p-maison').addEventListener('click', plaque.maison);
+  for (const k of Object.keys(TEMPS))
+    byId('t-' + k).addEventListener('change', () => plaque.temps(k));
+  byId('iface-on').addEventListener('click', () => plaque.interface(true));
+  addEventListener('keydown', e => {
+    if (e.key !== 'i' && e.key !== 'I') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'BUTTON')) return;
+    plaque.interface(bare);
+  });
 
-  byId('s-porte').addEventListener('change', showPorte);
+  showCouleur();
   showPorte();
+  showTemps();
+  showInterface();
+  showPoeme();
 
   // LES APPELS DE NOTE, par délégation. Les boutons vivent dans index.html
   // et ne sont jamais refabriqués — un seul écouteur sur le registre entier
   // suffit, et il survivra aux lignes qu'on ajoutera.
-  for (const zone of ['corps-reg', 'corps-croy'])
+  for (const zone of ['corps-adm', 'corps-croy'])
     byId(zone).addEventListener('click', e => {
       const b = e.target.closest('.ask');
       if (b) openNote(b.dataset.note);
@@ -1286,10 +1446,10 @@ export function initPanel(invalidate, resize) {
   // données doit rester vrai pendant ce temps. Replié sur le tableau du
   // mur, il ne coûte plus rien du tout.
   // La minuterie s'arrête dès que le registre est replié — À N'IMPORTE
-  // QUEL niveau. Replier « données », ou « réglages » tout entier, suffit
-  // à l'éteindre : sur le tableau du mur, elle ne coûtera plus rien.
-  const dataSeen = () => !folded['corps-data'] && !folded['corps-dat']
-                       && !folded['corps-reg'];
+  // QUEL niveau — et hors de l'admin : sur le tableau du mur, elle ne
+  // coûtera plus rien.
+  const dataSeen = () => admin && !bare && !folded['corps-data']
+                       && !folded['corps-dat'] && !folded['corps-adm'];
   showData();
   setInterval(() => { if (dataSeen()) showData(); }, 1000);
 

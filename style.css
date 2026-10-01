@@ -603,9 +603,62 @@ input[type="range"]::-moz-range-thumb {
 }
 .fallback code { color: var(--ink); }
 
+/* ------------------------------------------------------------ la plaque */
+
+/* Les labels gravés sont plus longs que ceux de l'atelier — « Contraste
+   Terre » ne tient pas dans 88 px. La colonne s'élargit pour eux seuls. */
+.plaque .dial { grid-template-columns: 112px 1fr 44px; }
+/* Temps et ses trois positions ne tiennent pas derrière une colonne de
+   112 px : le libellé prend sa largeur, pas plus. */
+.plaque .choice > span { width: auto; }
+
+/* Les quatre boutons poussoirs, deux par deux. */
+.presses { display: grid; grid-template-columns: 1fr 1fr; margin-top: 2px; }
+.presses button:active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
+
+/* Interface éteinte : il ne reste que la carte. */
+body.bare .rail { display: none; }
+.iface-on {
+  position: fixed;
+  z-index: 3;
+  right: calc(10px + env(safe-area-inset-right, 0px));
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  font: inherit;
+  padding: 0 6px;
+  color: var(--ink-faint);
+  background: none;
+  border: 1px solid var(--ink-faint);
+  cursor: pointer;
+  opacity: .5;
+}
+.iface-on:hover { opacity: 1; color: var(--ink); border-color: var(--ink); }
+
+/* Le poème, par-dessus la carte. Il ne prend pas la main. */
+.poeme {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-content: center;
+  padding: 24px;
+  pointer-events: none;
+}
+.poeme p {
+  margin: 0;
+  max-width: 34em;
+  padding: 18px 24px;
+  background: rgba(255, 255, 255, .86);
+  color: var(--ink);
+  font-size: calc(var(--ui-pt) + 3px);
+  font-style: italic;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
 @media (max-width: 620px) {
   .rail { width: 100%; }
   .dial { grid-template-columns: 78px 1fr 42px; }
   .dial.wide { grid-template-columns: 78px 1fr 72px; }
+  .plaque .dial { grid-template-columns: 104px 1fr 42px; }
   .sheet-inner { padding: 26px 20px 28px; }
 }

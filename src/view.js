@@ -47,13 +47,21 @@ export const view = {
   speed: 3981,
 
   /**
-   * LE PARTAGE DE LA CROYANCE. Trois parts brutes, telles que les
-   * curseurs les posent ; ce qui compte est leur RAPPORT, pas leur
-   * valeur. Pousser la météo affaiblit les deux autres sans toucher à
-   * leurs poignées — c'est le pourcentage affiché qui bouge, et c'est là
-   * que l'arbitrage se voit.
+   * LA CROYANCE. Trois poids bruts, de 0 à 100, tels que les trois boutons
+   * de la plaque les posent — indépendants, aucun ne pousse les autres.
+   * Ce qui compte est leur RAPPORT : `beliefWeights` les ramène à une
+   * somme de 1. Tous à zéro, on ne croit à rien, et la carte ne montre
+   * rien.
    */
   belief: { m: 55, l: 20, c: 25 },
+
+  /**
+   * LES REPÈRES, posés par le bouton « Repère » : { lon, lat, at }, `at`
+   * en millisecondes de l'horloge réelle. Un arc que le spectateur a vu
+   * là, une fois. Sans date affichée, sans source, sans aucun poids dans
+   * la présence ; ils durent un jour au plus (REPERE_MS).
+   */
+  reperes: [],
 
   /**
    * L'ALLURE. Ce que le panneau « réglages » pilote et que les trois
@@ -62,7 +70,7 @@ export const view = {
    *
    *    sat    saturation de l'irisation, 0 = gris de luminance
    *    tache  gain sur la force de la tache
-   *    grey   0 = irisé, 1 = densité tramée (ce que fera l'e-ink)
+   *    grey   0 = irisé, 1 = densité tramée — l'interrupteur « Couleur » éteint
    *    porte  1 = tracer en pointillé la fenêtre du soleil, 0° et 42°
    *    pas    l'écart entre les points du couloir, 1 = la course d'origine
    *    trait  l'épaisseur du couloir, 1 = 1,6 pixel
@@ -95,9 +103,8 @@ export const view = {
   clock: 'dev',
 
   /**
-   * LE DÉCALAGE, en heures, et seulement en mode météo. Le curseur du bas
-   * cesse alors d'être une vitesse pour devenir un « quand » : de -24 h,
-   * hier, à +48 h, après-demain. Zéro est maintenant.
+   * LE DÉCALAGE, en heures, et seulement en mode météo. C'est le bouton
+   * « Temps » de la plaque : −24 hier, 0 maintenant, +24 demain.
    */
   when: 0
 };
@@ -214,13 +221,23 @@ export function noteLoad(nom, what) {
 /** Les pixels réellement calculés par le shader, par image. */
 export const pixelCount = () => view.W * view.dpr * view.H * view.dpr;
 
-/** Les trois parts ramenées à une somme de 1. */
+/**
+ * Les trois poids ramenés à une somme de 1 : wM = m / (m + l + c).
+ * Tous à zéro, tous nuls — la carte ne montre rien, et c'est voulu.
+ */
 export function beliefWeights() {
   const b = view.belief;
   const s = b.m + b.l + b.c;
-  if (s <= 0) return { m: 1/3, l: 1/3, c: 1/3 };   // ne jamais tout éteindre
+  if (s <= 0) return { m: 0, l: 0, c: 0 };
   return { m: b.m / s, l: b.l / s, c: b.c / s };
 }
+
+/** Un repère dure un jour au plus, en temps réel. */
+export const REPERE_MS = 24 * 3600000;
+
+/** Les repères encore vivants. */
+export const liveReperes = () =>
+  view.reperes.filter(r => Date.now() - r.at < REPERE_MS);
 
 // --------------------------------------------------------------- l'échelle
 

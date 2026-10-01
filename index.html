@@ -76,22 +76,16 @@
   </section>
 
   <!-- =================================================== L'ALGORITHME -->
-  <!-- UN SEUL CADRE, UN SEUL TITRE. La courbe de la présence vivait
-       au-dessus, dans l'estimateur, et les trois curseurs qui la
-       fabriquent en dessous, dans un autre registre : on réglait une chose
-       en regardant ailleurs. Ils sont maintenant l'un sous l'autre, sans
-       rien entre eux — pas de sous-titres, qui redécoupaient précisément
-       ce qu'on venait de réunir. Le chiffre est monté dans le bandeau,
-       puisqu'il n'y a plus qu'un bandeau.
+  <!-- UN SEUL CADRE, UN SEUL TITRE : la courbe de la présence et la
+       formule qui la fabrique. Le chiffre est dans le bandeau.
 
        « Algorithme » et non « présence » : le registre ne montre pas un
-       résultat, il montre la machine qui le fabrique — et c'est le seul
-       endroit de la pièce où l'on peut la changer.
+       résultat, il montre la machine qui le fabrique.
 
-       Une croyance finie qui se partage : pousser l'une pousse
-       physiquement les deux autres. Les poignées bougent, la somme reste
-       100 %. Le soleil n'est pas là : on ne croit pas en sa hauteur, on
-       la calcule. -->
+       Les trois boutons de la croyance — Météo, Légendes, Chance — sont
+       dans RÉGLAGES, groupe ALGORITHME, comme sur la plaque : une
+       commande, une seule place. Le soleil n'y est pas : on ne croit pas
+       en sa hauteur, on la calcule. -->
   <section class="box">
     <div class="head">
       <span>algorithme</span>
@@ -107,34 +101,15 @@
            est composite et volontairement poétique. -->
       <canvas class="plot" id="p-idx"></canvas>
 
+      <!-- COMMENT LES TROIS SE MÉLANGENT. Même action que l'interrupteur
+           « Formule » de la plaque. -->
       <div class="dials">
-        <div class="dial">
-          <label for="w-m">météo</label>
-          <input id="w-m" type="range" min="0" max="100" step="1" value="55" style="--fill: var(--meteo)">
-          <output id="o-m">—</output>
-        </div>
-        <div class="dial">
-          <label for="w-l">légende</label>
-          <input id="w-l" type="range" min="0" max="100" step="1" value="20" style="--fill: var(--legende)">
-          <output id="o-l">—</output>
-        </div>
-        <div class="dial">
-          <label for="w-c">chance</label>
-          <input id="w-c" type="range" min="0" max="100" step="1" value="25" style="--fill: var(--chance)">
-          <output id="o-c">—</output>
-        </div>
-
-        <!-- COMMENT LES TROIS SE MÉLANGENT. Les curseurs disent les
-             proportions ; celui-ci dit la règle. Une somme et non un
-             produit, le soleil qui multiplie tout, et la chance qui seule
-             lui échappe. -->
         <div class="gauge lone"><span>formule</span>
           <button type="button" class="ask" data-note="formule"
                   aria-label="La formule de mélange" title="La formule de mélange">?</button></div>
       </div>
     </div>
   </section>
-
   <!-- ===================================================== LES LÉGENDES -->
   <!-- Les pastilles ne sélectionnent rien : elles amènent le réticule. -->
   <section class="box">
@@ -155,22 +130,14 @@
   </section>
 
   <!-- ===================================================== LES RÉGLAGES -->
-  <!-- Ils ne disent rien du ciel : ils disent comment on le regarde. D'où
-       la boîte à part, le titre discret, et le repli par défaut.
+  <!-- LA PLAQUE, ET RIEN D'AUTRE. Les commandes gravées dans l'inox du
+       tableau, avec leurs labels et leurs groupes exacts — TEXTES.md §9.
+       Un mot changé ici est un mot qui ne correspond plus au métal.
 
-       TROIS FAMILLES, et elles répondent à trois questions différentes :
-
-           GRAPHISME     comment la carte est peinte
-           DONNÉES       ce qu'elle peint, d'où ça vient, et de quand
-           PERFORMANCE   ce que ça coûte
-
-       Onze curseurs en colonne, ce n'est plus une liste, c'est un tableau
-       de bord — on ne trouve plus rien. Rangés par famille, puis par ce
-       sur quoi ils agissent, chaque niveau se repliant.
-
-       Le pli suit partout la même mécanique, à ceci près que c'est le
-       `.sub` qui porte la classe `folded` et non la boîte entière. -->
-  <section class="box">
+       Chaque commande a UN point d'entrée, `plaque` dans src/panel.js :
+       la page l'appelle, le Raspberry Pi l'appellera. Tout ce qui n'est
+       pas sur la plaque est dans le registre ADMIN, plus bas, caché. -->
+  <section class="box plaque">
     <div class="head quiet">
       <span>réglages</span>
       <button type="button" id="pli-reg" aria-expanded="false" aria-controls="corps-reg"
@@ -178,9 +145,132 @@
     </div>
     <div class="body" id="corps-reg" hidden>
 
+      <!-- Sans titre, en haut : trois interrupteurs. -->
+      <div class="sub">
+        <div class="dials">
+          <div class="dial">
+            <label for="p-interface">Interface</label>
+            <input id="p-interface" type="checkbox" checked><output id="o-interface">ON</output>
+          </div>
+          <div class="dial">
+            <label for="p-formule">Formule</label>
+            <input id="p-formule" type="checkbox"><output id="o-formule">OFF</output>
+          </div>
+          <div class="dial">
+            <label for="p-poeme">Poème</label>
+            <input id="p-poeme" type="checkbox"><output id="o-poeme">OFF</output>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALGORITHME. Trois poids indépendants : le logiciel les ramène à
+           100 %. Tous à 0 %, la carte ne montre rien. Puis quatre boutons
+           poussoirs, qui déplacent le piéton ou posent un repère. -->
+      <div class="sub">
+        <div class="head"><span>ALGORITHME</span></div>
+        <div class="dials">
+          <div class="dial">
+            <label for="w-m">Météo</label>
+            <input id="w-m" type="range" min="0" max="100" step="1" value="55" style="--fill: var(--meteo)">
+            <output id="o-m">—</output>
+          </div>
+          <div class="dial">
+            <label for="w-l">Légendes</label>
+            <input id="w-l" type="range" min="0" max="100" step="1" value="20" style="--fill: var(--legende)">
+            <output id="o-l">—</output>
+          </div>
+          <div class="dial">
+            <label for="w-c">Chance</label>
+            <input id="w-c" type="range" min="0" max="100" step="1" value="25" style="--fill: var(--chance)">
+            <output id="o-c">—</output>
+          </div>
+          <div class="chips presses">
+            <button type="button" id="p-arc">Arc-en-ciel</button>
+            <button type="button" id="p-repere">Repère</button>
+            <button type="button" id="p-teleport">Téléportation</button>
+            <button type="button" id="p-maison">Maison</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HORLOGE. Un bouton à trois positions. Il n'agit qu'avec la vraie
+           météo : en horloge « dev » (ADMIN), il s'éteint. -->
+      <div class="sub">
+        <div class="head"><span>HORLOGE</span></div>
+        <div class="dials">
+          <div class="choice">
+            <span>Temps</span>
+            <label id="l-hier"><input type="radio" name="temps" id="t-hier"><b>Hier</b></label>
+            <label id="l-maintenant"><input type="radio" name="temps" id="t-maintenant" checked><b>Maintenant</b></label>
+            <label id="l-demain"><input type="radio" name="temps" id="t-demain"><b>Demain</b></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRAPHISME. Quatre boutons rotatifs, deux interrupteurs. -->
+      <div class="sub">
+        <div class="head"><span>GRAPHISME</span></div>
+        <div class="dials">
+          <!-- La profondeur d'encre des aplats. Le papier ne bouge pas :
+               c'est le palier le plus profond qu'on charge ou qu'on
+               allège. 50 % est le tirage d'origine. -->
+          <div class="dial">
+            <label for="s-terres">Contraste Terre</label>
+            <input id="s-terres" type="range" min="0" max="100" value="50"><output id="o-terres">&#8212;</output>
+          </div>
+          <div class="dial">
+            <label for="s-mer">Contraste Mer</label>
+            <input id="s-mer" type="range" min="0" max="100" value="50"><output id="o-mer">&#8212;</output>
+          </div>
+          <!-- Combien de fois la palette fait le tour. Au-delà de deux, on
+               voit un arc-en-ciel par-dessus le sujet. -->
+          <div class="dial">
+            <label for="s-franges" id="l-franges">Irisation</label>
+            <input id="s-franges" type="range" min="0" max="100" value="33"><output id="o-franges">&#8212;</output>
+          </div>
+          <!-- Le seuil sous lequel rien ne s'allume. À 0 % de la couleur
+               partout, à 100 % seulement les endroits les plus forts. -->
+          <div class="dial">
+            <label for="s-seuil">Sensibilité</label>
+            <input id="s-seuil" type="range" min="0" max="100" value="86"><output id="o-seuil">&#8212;</output>
+          </div>
+          <!-- LA FENÊTRE DU SOLEIL, en pointillé, à 0° et 42°. -->
+          <div class="dial">
+            <label for="s-porte">Couloir</label>
+            <input id="s-porte" type="checkbox"><output id="o-porte">OFF</output>
+          </div>
+          <!-- ON : l'irisation. OFF : le dégradé, en points et en paliers. -->
+          <div class="dial">
+            <label for="s-couleur">Couleur</label>
+            <input id="s-couleur" type="checkbox" checked><output id="o-couleur">ON</output>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================================================== L'ADMIN -->
+  <!-- CE QUI N'EST PAS SUR LA PLAQUE. Caché : il n'apparaît que par
+       /admin (admin/index.html renvoie ici avec « ?admin »). Caché ne veut
+       pas dire protégé — la page n'a rien à protéger, elle ne fait que ne
+       pas le montrer. Les réglages faits ici sont mémorisés et la page
+       publique les relit.
+
+       TROIS FAMILLES, et elles répondent à trois questions différentes :
+
+           GRAPHISME     comment la carte est peinte
+           DONNÉES       ce qu'elle peint, d'où ça vient, et de quand
+           PERFORMANCE   ce que ça coûte -->
+  <section class="box" id="box-admin" hidden>
+    <div class="head quiet">
+      <span>admin</span>
+      <button type="button" id="pli-adm" aria-expanded="true" aria-controls="corps-adm"
+              aria-label="Replier">&#8722;</button>
+    </div>
+    <div class="body" id="corps-adm">
+
       <!-- ######################################## GRAPHISME ########## -->
-      <!-- COMMENT ON REGARDE, et rien d'autre. Deux réglages différents
-           décrivent le même ciel. -->
       <div class="sub">
         <div class="head"><span>graphisme</span>
           <button type="button" id="pli-gfx" aria-expanded="true"
@@ -200,43 +290,21 @@
               <label for="s-tache">intensit&#233;</label>
               <input id="s-tache" type="range" min="0" max="100" value="54"><output id="o-tache">&#8212;</output>
             </div>
+            <!-- « saturation » et non plus « couleur » : « Couleur » est
+                 l'interrupteur de la plaque, et ce n'est pas la même chose. -->
             <div class="dial">
-              <label for="s-colour" id="l-colour">couleur</label>
+              <label for="s-colour" id="l-colour">saturation</label>
               <input id="s-colour" type="range" min="0" max="100" value="83"><output id="o-colour">&#8212;</output>
             </div>
-            <!-- Combien de fois la palette fait le tour. Au-del&#224; de deux, on
-                 voit un arc-en-ciel par-dessus le sujet. -->
-            <div class="dial">
-              <label for="s-franges" id="l-franges">franges</label>
-              <input id="s-franges" type="range" min="0" max="100" value="33"><output id="o-franges">&#8212;</output>
-            </div>
-            <!-- Les deux suivants ne disent rien au monde entier : ils ne
-                 pilotent que ce que le zoom r&#233;v&#232;le. -->
-            <div class="dial">
-              <label for="s-seuil" id="l-seuil">seuil</label>
-              <input id="s-seuil" type="range" min="0" max="100" value="67"><output id="o-seuil">&#8212;</output>
-            </div>
+            <!-- Ne pilote que ce que le zoom r&#233;v&#232;le. -->
             <div class="dial">
               <label for="s-fine" id="l-fine">finesse</label>
               <input id="s-fine" type="range" min="0" max="100" value="50"><output id="o-fine">&#8212;</output>
             </div>
-            <div class="dial">
-              <label for="s-grey" id="l-grey">d&#233;grad&#233;</label>
-              <input id="s-grey" type="checkbox">
-              <output id="o-grey">&#8212;</output>
-            </div>
-            <!-- LA FEN&#202;TRE DU SOLEIL, en pointill&#233;. Entre les deux traits,
-                 l'astre est entre 0 et 42 degr&#233;s : c'est la seule bande du
-                 globe o&#249; un arc peut se tenir, et toute la couleur y vit.
-                 Sans elle, une zone &#233;teinte ne dit pas pourquoi. -->
-            <div class="dial">
-              <label for="s-porte" id="l-porte">couloir</label>
-              <input id="s-porte" type="checkbox">
-              <output id="o-porte">&#8212;</output>
-            </div>
-            <!-- Les deux mesures du pointill&#233;, et deux curseurs parce qu'un
-                 seul ferait grossir les points en les &#233;cartant. Les chiffres
-                 sont ceux du monde entier : de pr&#232;s, l'&#233;cart s'allonge seul. -->
+            <!-- Les deux mesures du pointill&#233; du Couloir, et deux curseurs
+                 parce qu'un seul ferait grossir les points en les &#233;cartant.
+                 Les chiffres sont ceux du monde entier : de pr&#232;s, l'&#233;cart
+                 s'allonge seul. -->
             <div class="dial">
               <label for="s-ecart" id="l-ecart">&#8212; &#233;cart</label>
               <input id="s-ecart" type="range" min="0" max="100" value="45"><output id="o-ecart">&#8212;</output>
@@ -244,28 +312,6 @@
             <div class="dial">
               <label for="s-trait" id="l-trait">&#8212; trait</label>
               <input id="s-trait" type="range" min="0" max="100" value="20"><output id="o-trait">&#8212;</output>
-            </div>
-          </div>
-        </div>
-
-  <!-- ============================================= LE FOND -->
-        <!-- La profondeur d'encre des aplats. Le papier ne bouge pas : c'est
-             le palier le plus profond qu'on charge ou qu'on all&#232;ge. 50 % est
-             le tirage d'origine. -->
-        <div class="sub">
-          <div class="head quiet">
-            <span>le fond</span>
-            <button type="button" id="pli-r-fond" aria-expanded="false"
-                    aria-controls="corps-r-fond" aria-label="D&#233;plier">+</button>
-          </div>
-          <div class="dials" id="corps-r-fond" hidden>
-            <div class="dial">
-              <label for="s-terres">terres</label>
-              <input id="s-terres" type="range" min="0" max="100" value="50"><output id="o-terres">&#8212;</output>
-            </div>
-            <div class="dial">
-              <label for="s-mer">mer</label>
-              <input id="s-mer" type="range" min="0" max="100" value="50"><output id="o-mer">&#8212;</output>
             </div>
           </div>
         </div>
@@ -345,10 +391,10 @@
                       aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
             </div>
 
-            <!-- LA COLONNE DE DROITE EST PLUS LARGE ICI, et pour les deux
-                 significations du rail : « maintenant » d&#233;borde d'une case
-                 de 44 px, et « &#215;100 000 » aussi. C'est le seul curseur de
-                 la page dont la sortie soit un mot. -->
+            <!-- LA COLONNE DE DROITE EST PLUS LARGE ICI : « &#215;100 000 »
+                 d&#233;borde d'une case de 44 px. La vitesse ne vaut qu'en dev ;
+                 en m&#233;t&#233;o elle s'&#233;teint, et c'est Temps, sur la plaque,
+                 qui dit quand. -->
             <div class="dial wide">
               <label for="s-time" id="l-time">vitesse</label>
               <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">&#8212;</output>
@@ -450,8 +496,21 @@
     </div>
   </section>
 
-
 </div>
+
+<!-- LE POÈME, par-dessus la carte — l'interrupteur « Poème ». Le texte
+     n'existe pas encore : l'auteur l'apportera. Ce qui suit tient la
+     place, rien de plus. Il ne prend pas la main : la carte reste
+     saisissable au travers. -->
+<div class="poeme" id="poeme" hidden>
+  <p>Le poème viendra ici.</p>
+</div>
+
+<!-- Interface éteinte, il ne reste que la carte — et ce bouton, pour la
+     rallumer depuis un navigateur. Sur le tableau, c'est l'interrupteur
+     qui s'en charge. La touche « i » fait la même chose. -->
+<button type="button" class="iface-on" id="iface-on" hidden
+        aria-label="Afficher l'interface" title="Afficher l'interface (i)">+</button>
 
 <div class="sheet" id="help" hidden>
   <div class="sheet-inner" role="dialog" aria-modal="true" aria-labelledby="help-title">

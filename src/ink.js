@@ -19,7 +19,7 @@
 // =========================================================================
 
 import { DEG, flatten, matT, geoVec, angDist } from './projection.js';
-import { view, scale, sx, sy, gait } from './view.js';
+import { view, scale, sx, sy, gait, liveReperes } from './view.js';
 import { zones } from './zones.js';
 import { CITY, tierAt, placeLine } from './ground.js';
 import { LEGEND_POINTS } from './sky.js';
@@ -536,6 +536,40 @@ function drawWalker(cx, cy, k, phase, angle) {
   }
 }
 
+// ---------------------------------------------------------- les repères
+// Posés par le bouton « Repère ». LE SIGNE EST PROVISOIRE — son dessin
+// reste à décider. Il doit seulement ne pas ressembler au petit arc des
+// hauts lieux : un repère ne dit pas une croyance, il dit « quelqu'un a
+// vu un arc ici ». D'où un jalon à fanion, en encre seule, sans arc.
+
+function drawReperes(Rt) {
+  const k = view.look.icon / GLYPH_PX;
+  for (const r of liveReperes()) {
+    const f = flatten(Rt, geoVec(r.lon, r.lat));
+    if (Math.abs(f[2]) > 179.1) continue;
+    const X = sx(f[0]), Y = sy(f[1]);
+    if (X < -20 || X > view.W + 20 || Y < -20 || Y > view.H + 20) continue;
+    for (const pass of [0, 1]) {
+      ink.lineCap = 'round';
+      ink.lineJoin = 'round';
+      ink.strokeStyle = pass ? ARC[0] : 'rgba(255,255,255,0.95)';
+      ink.lineWidth = (pass ? 1.2 : 3.4) * k;
+      ink.beginPath();
+      ink.moveTo(X, Y);
+      ink.lineTo(X, Y - 13 * k);
+      ink.lineTo(X + 7 * k, Y - 10.5 * k);
+      ink.lineTo(X, Y - 8 * k);
+      ink.stroke();
+    }
+    ink.fillStyle = ARC[0];
+    ink.beginPath();
+    ink.moveTo(X, Y - 13 * k);
+    ink.lineTo(X + 7 * k, Y - 10.5 * k);
+    ink.lineTo(X, Y - 8 * k);
+    ink.fill();
+  }
+}
+
 function drawReticle(cx, cy) {
   const k = view.look.icon / GLYPH_PX;
 
@@ -572,6 +606,9 @@ export function trace(centre) {
   const radius = visibleRadius();
   drawRings(COAST.coast, radius, centre, Rt, lw, 0.92);
   drawRings(COAST.lakes, radius, centre, Rt, lw * 0.8, 0.5);
+
+  // Le repère SOUS le piéton : tracé d'abord, le piéton se tient dessus.
+  drawReperes(Rt);
 
   const cx = W / 2, cy = H / 2;
   drawReticle(cx, cy);

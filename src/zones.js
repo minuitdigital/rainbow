@@ -14,7 +14,7 @@
 //  existe pour un observateur.
 // =========================================================================
 
-import { DEG, wrap180 } from './projection.js';
+import { DEG, wrap180, geoVec } from './projection.js';
 import { view, scale, geoAt, slotNow, rig } from './view.js';
 import { rainbowIndex, ingredients, openFor, nearestLegend } from './sky.js';
 import { terrainAt } from './ground.js';
@@ -215,4 +215,37 @@ export function scan(sun, drift, driftC, simH, w, here) {
     }
     z.seen = false;
   }
+}
+
+// ------------------------------------------------------------ l'arc-en-ciel
+// LE POINT LE PLUS FORT DE TOUTE LA TERRE, et pas seulement de l'écran —
+// c'est ce que promet le bouton « Arc-en-ciel » de la plaque. Le piéton
+// est supposé déjà sur place : la flaque y vaut donc 1, comme au réticule,
+// et le chiffre qu'on lira en arrivant est celui qu'on a trouvé.
+//
+// Un degré, puis un dixième autour du meilleur : 65 000 appels, une
+// quarantaine de millisecondes, une fois par appui. Aucune remise à
+// l'échelle — le maximum peut être faible, et on y va quand même.
+//
+// La présence plafonne à 1, et plusieurs endroits l'atteignent souvent
+// ensemble. Entre deux égaux, le plus proche du piéton : sans quoi le
+// bouton mènerait toujours au même coin du monde, le premier de la grille.
+
+export function brightest(sun, drift, driftC, w, here) {
+  const slot = slotNow();
+  let best = { v: -1, d: 9, lon: 0, lat: 0 };
+  const probe = (lon, lat) => {
+    const v = rainbowIndex(lon, lat, sun, drift, driftC, w, null, slot);
+    if (v < best.v - 1e-3) return;
+    const g = geoVec(lon, lat);
+    const d = (g[0] - here[0]) ** 2 + (g[1] - here[1]) ** 2 + (g[2] - here[2]) ** 2;
+    if (v > best.v + 1e-3 || d < best.d) best = { v, d, lon, lat };
+  };
+  for (let lat = -89.5; lat < 90; lat += 1)
+    for (let lon = -179.5; lon < 180; lon += 1) probe(lon, lat);
+  const { lon: l0, lat: b0 } = best;
+  for (let lat = b0 - 1; lat <= b0 + 1; lat += 0.1)
+    for (let lon = l0 - 1; lon <= l0 + 1; lon += 0.1)
+      if (Math.abs(lat) < 90) probe(wrap180(lon), lat);
+  return best;
 }
