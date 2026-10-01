@@ -297,13 +297,13 @@ function rainbowGlyph(g, cx, cy, S, bands) {
   const A0 = Math.PI, A1 = Math.PI * 1.5;       // de la gauche vers le haut
   g.lineCap = 'butt';
 
-  // LE CONTOUR NOIR, qui cerne les six bandes et leurs deux bouts : un
+  // LE LISERÉ BLANC, qui cerne les six bandes et leurs deux bouts : un
   // peu plus large qu'elles, et prolongé d'autant aux extrémités — un bout
-  // coupé net n'aurait pas de bord. C'est lui qui détache l'arc d'une
-  // tache irisée : plus de halo blanc, qui faisait une bordure étrangère.
+  // coupé net n'aurait pas de bord. Fin, et non plus le large halo d'avant,
+  // qui faisait une bordure étrangère. (Noir le 1er octobre, puis blanc.)
   const mid = R - (bands.length - 1) * w / 2, t = 0.45 * k;
   const ext = t / mid, band = bands.length * w;
-  g.strokeStyle = '#14171c';
+  g.strokeStyle = '#ffffff';
   g.lineWidth = band + 2 * t;
   g.beginPath(); g.arc(ox, oy, mid, A0 - ext, A1 + ext); g.stroke();
 
