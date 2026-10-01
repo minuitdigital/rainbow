@@ -56,6 +56,13 @@ body {
   display: block;
 }
 #gl  { z-index: 0; background: var(--paper); }
+/* Les repères : la teinte tourne, en CSS seul — ni JavaScript ni carte à
+   redessiner. Seulement quand le calque porte un repère (classe posée
+   par src/ink.js), et jamais pour qui a demandé moins de mouvement. */
+#rep { z-index: 1; pointer-events: none; }
+#rep.alive { animation: hue 6s linear infinite; }
+@keyframes hue { to { filter: hue-rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #rep.alive { animation: none; } }
 #ink { z-index: 1; touch-action: none; cursor: grab; }
 #ink.dragging { cursor: grabbing; }
 

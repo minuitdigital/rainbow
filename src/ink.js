@@ -29,8 +29,12 @@ const FACE = '"Fragment Mono", ui-monospace, monospace';
 
 let ink = null;
 
-export function initInk(canvas) {
+/** Le calque des repères, animé en teinte par le CSS. */
+let rep = null, repAlive = false;
+
+export function initInk(canvas, repCanvas) {
   ink = canvas.getContext('2d');
+  rep = repCanvas.getContext('2d');
   return ink;
 }
 
@@ -63,6 +67,7 @@ export function measureRail() {
 /** À appeler après chaque redimensionnement : le canvas perd sa transformée. */
 export function rescale() {
   ink.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  rep.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   measureRail();
 }
 
@@ -273,45 +278,49 @@ const LEG_SAY_ZOOM  = 5;
 // de dix, et un glyphe de quinze pixels ne survit pas aux deux.
 const GLYPH_PX = 15;
 
-function wandGlyph(cx, cy) {
-  const k = view.look.icon / GLYPH_PX;
-  const arcX = cx - 3 * k, arcY = cy + 5 * k;
+// L'ARC-EN-CIEL, en quart de cercle comme 🌈 : il part en bas à gauche
+// et monte vers la droite. Six bandes, du rouge dehors au violet dedans.
+// Les hauts lieux le portent avec des RAYONS — de petits traits de
+// lumière qui partent du bord. Les repères le portent nu, plus petit, et
+// sur leur propre calque, qui tourne en teinte (voir drawReperes).
+//
+// La couleur est permise ici, et ici seulement : l'écran est un LCD. Les
+// étiquettes des taches restent en gris.
+const BANDS = ['#e23b3b', '#f08a24', '#f2c53d', '#47a95f', '#3a7bd5', '#7a4cc4'];
+const RAYS = [0.18, 0.5, 0.82];                 // en fraction du quart
+const RAY_INK = '#e0a11b';
 
-  // deux passes : le halo blanc d'abord, l'encre ensuite. Le trait doit
-  // tenir par-dessus une tache irisée.
+/** Le quart d'arc centré sur (cx, cy), à l'échelle k. */
+function rainbowGlyph(g, cx, cy, k, rays) {
+  const R = 10 * k, w = 1.25 * k;
+  const ox = cx + R / 2, oy = cy + R / 2;       // le centre du cercle
+  const A0 = Math.PI, A1 = Math.PI * 1.5;       // de la gauche vers le haut
+  g.lineCap = 'butt';
+
+  // le halo blanc d'abord : la couleur doit tenir par-dessus une tache
+  // irisée comme par-dessus le papier.
+  g.strokeStyle = 'rgba(255,255,255,0.95)';
+  g.lineWidth = BANDS.length * w + 2.4 * k;
+  g.beginPath(); g.arc(ox, oy, R - (BANDS.length - 1) * w / 2, A0, A1); g.stroke();
+
+  g.lineWidth = w * 1.05;                       // pas de jour entre les bandes
+  for (let i = 0; i < BANDS.length; i++) {
+    g.strokeStyle = BANDS[i];
+    g.beginPath(); g.arc(ox, oy, R - i * w, A0, A1); g.stroke();
+  }
+  if (!rays) return;
+
+  g.lineCap = 'round';
   for (const pass of [0, 1]) {
-    ink.lineCap = 'round';
-    ink.lineJoin = 'round';
-
-    if (pass === 0) {
-      ink.strokeStyle = 'rgba(255,255,255,0.95)';
-      ink.lineWidth = 3.4 * k;
+    g.strokeStyle = pass ? RAY_INK : 'rgba(255,255,255,0.95)';
+    g.lineWidth = (pass ? 1.1 : 3.2) * k;
+    for (const f of RAYS) {
+      const a = A0 + f * (A1 - A0), c = Math.cos(a), s = Math.sin(a);
+      g.beginPath();
+      g.moveTo(ox + c * (R + 2.2 * k), oy + s * (R + 2.2 * k));
+      g.lineTo(ox + c * (R + 5.2 * k), oy + s * (R + 5.2 * k));
+      g.stroke();
     }
-
-    // l'arc, trois bandes espacées de 2 px pour 1,1 px de trait
-    for (let i = 0; i < 3; i++) {
-      if (pass === 1) {
-        ink.strokeStyle = ARC[i];
-        ink.lineWidth = 1.1 * k;
-      }
-      ink.beginPath();
-      ink.arc(arcX, arcY, (7 - i * 2) * k, Math.PI, 0);
-      ink.stroke();
-    }
-
-    // la baguette, penchée, et son étincelle à quatre branches
-    if (pass === 1) { ink.strokeStyle = ARC[1]; ink.lineWidth = 1.1 * k; }
-    ink.beginPath();
-    ink.moveTo(cx + 4 * k, cy + 7 * k);
-    ink.lineTo(cx + 10 * k, cy - 4 * k);
-    ink.stroke();
-
-    if (pass === 1) { ink.strokeStyle = ARC[0]; ink.lineWidth = k; }
-    const sx0 = cx + 11 * k, sy0 = cy - 6 * k, b = 3 * k;
-    ink.beginPath();
-    ink.moveTo(sx0 - b, sy0); ink.lineTo(sx0 + b, sy0);
-    ink.moveTo(sx0, sy0 - b); ink.lineTo(sx0, sy0 + b);
-    ink.stroke();
   }
 }
 
@@ -351,7 +360,7 @@ function drawLegends(boxes, Rt) {
     if (!aimed && overlaps(box, boxes)) continue;
     if (!aimed) boxes.push(box);
 
-    wandGlyph(X + ox, Y);
+    rainbowGlyph(ink, X + ox, Y, gk, true);
 
     if (!named || (aimed && overlaps(box, boxes))) continue;
     if (aimed) boxes.push(box);
@@ -537,36 +546,30 @@ function drawWalker(cx, cy, k, phase, angle) {
 }
 
 // ---------------------------------------------------------- les repères
-// Posés par le bouton « Repère ». LE SIGNE EST PROVISOIRE — son dessin
-// reste à décider. Il doit seulement ne pas ressembler au petit arc des
-// hauts lieux : un repère ne dit pas une croyance, il dit « quelqu'un a
-// vu un arc ici ». D'où un jalon à fanion, en encre seule, sans arc.
+// Posés par le bouton « Repère ». Un arc-en-ciel lui aussi, mais NU — sans
+// rayons — et plus petit : c'est ce qui le distingue d'un haut lieu. Et il
+// vit sur SON calque, que le CSS fait tourner en teinte (`hue-rotate`) :
+// le seul signe vivant de la carte. Le navigateur anime seul, sans
+// JavaScript et sans redessiner la carte ; les gris ne bougent pas sous
+// un hue-rotate, il n'y a de toute façon que des arcs sur ce calque.
+//
+// Le calque ne tourne que s'il porte quelque chose : la classe `alive`
+// tombe quand aucun repère n'est à l'écran, et l'animation s'arrête.
 
 function drawReperes(Rt) {
-  const k = view.look.icon / GLYPH_PX;
+  const k = view.look.icon / GLYPH_PX * 0.75;
+  let n = 0;
   for (const r of liveReperes()) {
     const f = flatten(Rt, geoVec(r.lon, r.lat));
     if (Math.abs(f[2]) > 179.1) continue;
     const X = sx(f[0]), Y = sy(f[1]);
     if (X < -20 || X > view.W + 20 || Y < -20 || Y > view.H + 20) continue;
-    for (const pass of [0, 1]) {
-      ink.lineCap = 'round';
-      ink.lineJoin = 'round';
-      ink.strokeStyle = pass ? ARC[0] : 'rgba(255,255,255,0.95)';
-      ink.lineWidth = (pass ? 1.2 : 3.4) * k;
-      ink.beginPath();
-      ink.moveTo(X, Y);
-      ink.lineTo(X, Y - 13 * k);
-      ink.lineTo(X + 7 * k, Y - 10.5 * k);
-      ink.lineTo(X, Y - 8 * k);
-      ink.stroke();
-    }
-    ink.fillStyle = ARC[0];
-    ink.beginPath();
-    ink.moveTo(X, Y - 13 * k);
-    ink.lineTo(X + 7 * k, Y - 10.5 * k);
-    ink.lineTo(X, Y - 8 * k);
-    ink.fill();
+    rainbowGlyph(rep, X, Y, k, false);
+    n++;
+  }
+  if ((n > 0) !== repAlive) {
+    repAlive = n > 0;
+    rep.canvas.classList.toggle('alive', repAlive);
   }
 }
 
@@ -600,6 +603,7 @@ function drawReticle(cx, cy) {
 export function trace(centre) {
   const { W, H } = view;
   ink.clearRect(0, 0, W, H);
+  rep.clearRect(0, 0, W, H);
 
   const Rt = matT(view.R);
   const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));

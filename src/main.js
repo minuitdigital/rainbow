@@ -37,12 +37,13 @@ import { bind } from './chrome.js';
 
 const glCv = document.getElementById('gl');
 const inkCv = document.getElementById('ink');
+const repCv = document.getElementById('rep');
 
 // --------------------------------------------------------------- la mesure
 
 function resize() {
   measure(glCv.clientWidth, glCv.clientHeight);
-  for (const c of [glCv, inkCv]) {
+  for (const c of [glCv, repCv, inkCv]) {
     c.width = Math.round(view.W * view.dpr);
     c.height = Math.round(view.H * view.dpr);
   }
@@ -174,7 +175,7 @@ if (!initMap(glCv, invalidate, noteLoad)) {
                      + '<br>WebGL 2 n\'est pas disponible dans ce navigateur.';
   fallback.hidden = false;
 } else {
-  initInk(inkCv);
+  initInk(inkCv, repCv);
   // Le panneau avant la main : les réglages mémorisés doivent être posés
   // (vitesse, allure, croyance) avant la première image.
   // Deux fonctions et non une : le panneau redessine la plupart du temps,

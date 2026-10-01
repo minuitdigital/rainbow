@@ -30,7 +30,7 @@
 //  à l'écran.
 // =========================================================================
 
-import { view, beliefWeights, anchorTo, centre, centreVec, sx, sy,
+import { view, beliefWeights, faceNorth, centre, centreVec, sx, sy,
          simDate, drift, driftChance, liveReperes,
          beat, beatIdle, pixelCount, loadState } from './view.js';
 import { GAIN, SUN_MAX, SPILL_DEG, openFor, nearestLegend,
@@ -1046,10 +1046,7 @@ function buildChips() {
     b.type = 'button';
     b.textContent = l.nom;
     b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', () => {
-      anchorTo(l.lon, l.lat, view.W / 2, view.H / 2);
-      repaint();
-    });
+    b.addEventListener('click', () => walkTo(l.lon, l.lat));
     box.appendChild(b);
   }
 }
@@ -1194,11 +1191,12 @@ function showPoeme() {
   saveKnobs();
 }
 
-/** Le piéton est posé là, au centre de l'écran. Le zoom ne bouge pas. */
+/**
+ * Le piéton est posé là, au centre de l'écran, la carte remise droite —
+ * le nord en haut. Le zoom ne bouge pas.
+ */
 function walkTo(lon, lat) {
-  view.anchor = null;
-  view.spin.rate = 0;
-  anchorTo(lon, lat, view.W / 2, view.H / 2);
+  faceNorth(lon, lat);
   repaint();
 }
 

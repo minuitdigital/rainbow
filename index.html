@@ -10,9 +10,11 @@
 </head>
 <body>
 
-<!-- Deux calques superposés : la carte, calculée par le processeur
-     graphique, et l'encre, tracée en 2D par-dessus. -->
+<!-- Trois calques superposés : la carte, calculée par le processeur
+     graphique ; les repères, qui tournent en teinte (style.css) ; et
+     l'encre, tracée en 2D par-dessus — le piéton se tient sur ses repères. -->
 <canvas id="gl" class="layer"></canvas>
+<canvas id="rep" class="layer"></canvas>
 <canvas id="ink" class="layer"></canvas>
 
 <!-- =====================================================================

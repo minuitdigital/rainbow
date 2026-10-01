@@ -13,7 +13,7 @@
 // =========================================================================
 
 import {
-  RAD, XMAX, YMAX, clamp1,
+  RAD, DEG, XMAX, YMAX, clamp1,
   inverseEE, flatten, geoVec, matMul, matVec, matT, identity,
   orthonormalize, between, rodrigues
 } from './projection.js';
@@ -315,6 +315,22 @@ export function anchorTo(lon, lat, px, py) {
   if (!pNew) return;
   const q = between(pNew, matVec(matT(view.R), geoVec(lon, lat)));
   if (q) view.R = matMul(view.R, q);
+}
+
+/**
+ * (lon, lat) au centre, LE NORD EN HAUT. Les trois colonnes de R sont ce
+ * que deviennent le centre, la droite et le haut de l'écran : le lieu, son
+ * est, son nord. anchorTo, lui, prend la rotation la plus courte et laisse
+ * la carte de travers — bien pour un glissé, pas pour un saut.
+ */
+export function faceNorth(lon, lat) {
+  const a = lon * DEG, b = lat * DEG;
+  const ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b);
+  view.anchor = null;
+  view.spin.rate = 0;
+  view.R = new Float32Array([cb * ca, cb * sa, sb,
+                             -sa,     ca,      0,
+                             -sb * ca, -sb * sa, cb]);
 }
 
 /** Déplacement par pas, depuis le centre — parité avec le futur joystick. */
