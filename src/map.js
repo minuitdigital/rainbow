@@ -324,6 +324,15 @@ export function paint(canvas, sun, slot) {
   // On relève AVANT de poser la suivante : la requête lue ici est celle
   // d'une image précédente, déjà digérée par le pilote.
   timerRead();
+
+  // Shader coupé (admin) : une page blanche, et pas de chronomètre posé —
+  // une requête ouverte sans drawArrays mesurerait le vide.
+  if (view.cut.shader) {
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(1, 1, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    return;
+  }
   const timed = timerStart();
 
   gl.viewport(0, 0, canvas.width, canvas.height);

@@ -94,6 +94,14 @@ export const view = {
   rig: 'laptop',
 
   /**
+   * LES COUPURES de l'admin (performance). Un instrument de mesure, pas
+   * un réglage : rien n'est mémorisé, un rechargement remet tout. Une
+   * carte laissée sans shader par mégarde ne doit pas survivre au soir.
+   */
+  cut: { shader: false, ink: false, coast: false, places: false,
+         callouts: false, icons: false, walker: false, panel: false },
+
+  /**
    * D'OÙ VIENT L'HEURE, et donc d'où vient la pluie. `dev` invente un
    * temps que le curseur accélère et tire la pluie d'un bruit fractal ;
    * `meteo` suivra le temps réel et la vraie prévision. Les deux vont

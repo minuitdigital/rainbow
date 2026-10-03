@@ -383,7 +383,7 @@ function showBeat() {
 
   // Le seul chiffre qui dise vraiment ce que le shader coûte. Un tiret
   // veut dire que le navigateur refuse l'extension, pas que c'est gratuit.
-  const gpu = gpuMs();
+  const gpu = view.cut.shader ? null : gpuMs();
   byId('g-gpu').textContent = gpu == null ? '—' : ms(gpu);
 
   byId('g-ms').textContent    = ms(beat.ms);
@@ -1299,6 +1299,9 @@ const HHMM = n => String(n).padStart(2, '0');
 export function refreshPanel(sun, c, now) {
   // Interface éteinte, personne ne lit le panneau : on ne le calcule pas.
   if (bare) return;
+  // Panneau coupé (admin) : seules les jauges tournent encore — c'est
+  // avec elles qu'on mesure ce que la coupure a rendu.
+  if (view.cut.panel) { showBeat(); return; }
   const [lon, lat] = c;
   recall(lon, lat);
   const last = past[past.length - 1];
@@ -1381,6 +1384,31 @@ export function initPanel(invalidate, resize) {
   // « maintenant ».
   for (const id of ['rig-laptop', 'rig-mini'])
     byId(id).addEventListener('change', showRig);
+
+  // LES COUPURES. Une case par poste ; cochée, le poste n'est plus dessiné.
+  // Jamais mémorisées — voir `view.cut`.
+  for (const key of Object.keys(view.cut)) {
+    const input = byId('cut-' + key);
+    input.checked = false;
+    input.addEventListener('change', () => { view.cut[key] = input.checked; repaint(); });
+  }
+
+  // LE PLEIN ÉCRAN, pour le Pi qui n'a pas de clavier (la touche « f ») :
+  // un bouton dans l'admin, un autre dans le coin de la carte. Celui du
+  // coin s'efface une fois en plein écran, et n'existe pas si le
+  // navigateur ne sait pas le faire.
+  const toggleFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  };
+  byId('plein-ecran').addEventListener('click', toggleFull);
+  const plein = byId('plein');
+  plein.addEventListener('click', toggleFull);
+  const showFull = () => {
+    plein.hidden = !document.fullscreenEnabled || !!document.fullscreenElement;
+  };
+  document.addEventListener('fullscreenchange', showFull);
+  showFull();
   view.rig = byId('rig-mini').checked ? 'mini' : 'laptop';
 
   for (const id of ['clk-dev', 'clk-meteo'])

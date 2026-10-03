@@ -659,17 +659,23 @@ export function trace(centre) {
   const { W, H } = view;
   ink.clearRect(0, 0, W, H);
 
+  // Les coupures de l'admin, une par poste — pour savoir lequel coûte.
+  const cut = view.cut;
+  if (cut.ink) return;
+
   const Rt = matT(view.R);
-  const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));
-  const radius = visibleRadius();
-  drawRings(COAST.coast, radius, centre, Rt, lw, 0.92);
-  drawRings(COAST.lakes, radius, centre, Rt, lw * 0.8, 0.5);
+  if (!cut.coast) {
+    const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));
+    const radius = visibleRadius();
+    drawRings(COAST.coast, radius, centre, Rt, lw, 0.92);
+    drawRings(COAST.lakes, radius, centre, Rt, lw * 0.8, 0.5);
+  }
 
   // Le repère SOUS le piéton : tracé d'abord, le piéton se tient dessus.
-  drawReperes(Rt);
+  if (!cut.icons) drawReperes(Rt);
 
   const cx = W / 2, cy = H / 2;
-  drawReticle(cx, cy);
+  if (!cut.walker) drawReticle(cx, cy);
 
   // L'emprise du réticule est devenue un CARRÉ centré : la figure pivote
   // tout autour du point, elle peut donc se tenir dans n'importe quelle
@@ -680,7 +686,7 @@ export function trace(centre) {
     [cx - 24 * rk, cy - 24 * rk, cx + 24 * rk, cy + 24 * rk]
   ];
   if (railBox) boxes.push(railBox);               // le panneau
-  drawCallouts(boxes, Rt);
-  drawLegends(boxes, Rt);
-  drawPlaces(boxes, Rt);
+  if (!cut.callouts) drawCallouts(boxes, Rt);
+  if (!cut.icons) drawLegends(boxes, Rt);
+  if (!cut.places) drawPlaces(boxes, Rt);
 }

@@ -490,6 +490,31 @@
               <button type="button" class="ask" data-note="rig"
                       aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
             </div>
+
+            <!-- LES COUPURES : cocher, c'est NE PLUS dessiner ce poste. Pour
+                 savoir lequel co&#251;te, sur la machine m&#234;me. Rien n'est
+                 m&#233;moris&#233; : un rechargement remet tout. -->
+            <div class="choice cut">
+              <span>couper</span>
+              <label><input type="checkbox" id="cut-shader"><b>shader</b></label>
+              <label><input type="checkbox" id="cut-ink"><b>encre</b></label>
+              <label><input type="checkbox" id="cut-panel"><b>panneau</b></label>
+            </div>
+            <div class="choice cut">
+              <span>dans l'encre</span>
+              <label><input type="checkbox" id="cut-coast"><b>c&#244;tes</b></label>
+              <label><input type="checkbox" id="cut-places"><b>villes</b></label>
+              <label><input type="checkbox" id="cut-callouts"><b>&#233;tiquettes</b></label>
+            </div>
+            <div class="choice cut">
+              <span></span>
+              <label><input type="checkbox" id="cut-icons"><b>ic&#244;nes</b></label>
+              <label><input type="checkbox" id="cut-walker"><b>pi&#233;ton</b></label>
+            </div>
+            <div class="choice">
+              <span>&#233;cran</span>
+              <button type="button" class="plain" id="plein-ecran">plein &#233;cran</button>
+            </div>
         </div>
 
         </div>
@@ -513,6 +538,16 @@
      qui s'en charge. La touche « i » fait la même chose. -->
 <button type="button" class="iface-on" id="iface-on" hidden
         aria-label="Afficher l'interface" title="Afficher l'interface (i)">+</button>
+
+<!-- LE PLEIN ÉCRAN, dans le coin bas-gauche : la page d'arrivée doit pouvoir
+     le demander sans clavier (le Pi n'en a pas). Discret comme le bouton
+     d'interface ; il s'efface une fois en plein écran. Touche « f ». -->
+<button type="button" class="plein" id="plein"
+        aria-label="Plein écran" title="Plein écran (f)">
+  <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+    <path d="M1 4V1h3M8 1h3v3M11 8v3H8M4 11H1V8" fill="none" stroke="currentColor" stroke-width="1.4"/>
+  </svg>
+</button>
 
 <div class="sheet" id="help" hidden>
   <div class="sheet-inner" role="dialog" aria-modal="true" aria-labelledby="help-title">
