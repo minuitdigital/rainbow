@@ -58,6 +58,9 @@ let repaint = () => {};
  */
 let remeasure = () => {};
 
+/** Posé par initPanel : le détail du shader, mesuré à la demande (admin). */
+let profile = () => null;
+
 // ================================================================ LA CROYANCE
 // Trois boutons INDÉPENDANTS : aucun ne pousse les autres. Chacun donne un
 // poids brut, de 0 à 100 %, et c'est `beliefWeights` qui les ramène à une
@@ -726,7 +729,8 @@ function saveKnobs() {
                 porte: byId('s-porte').checked,
                 iface: byId('p-interface').checked, poeme: byId('p-poeme').checked,
                 temps: Object.keys(TEMPS).find(k => byId('t-' + k).checked),
-                rig: view.rig, clock: clockWanted, plis: folded };
+                rig: view.rig, clock: clockWanted, plis: folded,
+                cut: view.cut, gls: view.gls };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
   } catch (e) { /* sans mémoire, la page marche quand même */ }
@@ -748,6 +752,10 @@ function loadKnobs() {
   // L'horloge voulue seulement : la case « météo » ne se coche qu'à
   // l'arrivée du fichier, dans weatherArrived.
   clockWanted = o.clock === 'dev' ? 'dev' : 'meteo';
+  // Les coupures et la résolution du shader (admin, performance).
+  if (o.cut) for (const k of Object.keys(view.cut))
+    if (typeof o.cut[k] === 'boolean') view.cut[k] = o.cut[k];
+  if (typeof o.gls === 'number') view.gls = bound(o.gls, 0.1, 1);
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -1346,9 +1354,10 @@ export function refreshPanel(sun, c, now) {
 
 // ============================================================== LE DÉMARRAGE
 
-export function initPanel(invalidate, resize) {
+export function initPanel(invalidate, resize, shaderProfile) {
   repaint = invalidate;
   remeasure = resize || invalidate;
+  profile = shaderProfile || (() => null);
 
   // Les plis d'usine d'abord : loadKnobs n'écrase que ce qu'il connaît.
   for (const [, bodyId, openByDefault] of FOLDS) folded[bodyId] = !openByDefault;
@@ -1389,11 +1398,11 @@ export function initPanel(invalidate, resize) {
     byId(id).addEventListener('change', showRig);
 
   // LES COUPURES. Une case par poste ; cochée, le poste n'est plus dessiné.
-  // Jamais mémorisées — voir `view.cut`.
+  // Mémorisées comme le reste — voir `view.cut`.
   for (const key of Object.keys(view.cut)) {
     const input = byId('cut-' + key);
     input.checked = view.cut[key];
-    input.addEventListener('change', () => { view.cut[key] = input.checked; repaint(); });
+    input.addEventListener('change', () => { view.cut[key] = input.checked; repaint(); saveKnobs(); });
   }
 
   // LA RÉSOLUTION DU SHADER — voir `view.gls`. Retaille les calques.
@@ -1403,9 +1412,31 @@ export function initPanel(invalidate, resize) {
     gls.style.setProperty('--p', gls.value + '%');
     byId('o-gls').textContent = gls.value + ' %';
     remeasure();
+    saveKnobs();
   };
   gls.value = Math.round(view.gls * 100);
+  gls.style.setProperty('--p', gls.value + '%');
+  byId('o-gls').textContent = gls.value + ' %';
   gls.addEventListener('input', showGls);
+
+  // LE SHADER EN DÉTAIL — voir profileShader dans src/map.js. Le texte
+  // est posé d'abord, la mesure part à l'image suivante : sinon la page
+  // se figerait sans avoir dit pourquoi.
+  byId('gpu-prof').addEventListener('click', () => {
+    const list = byId('gpu-parts');
+    list.innerHTML = '<div class="gauge deep"><span>mesure en cours</span><em>…</em></div>';
+    setTimeout(() => requestAnimationFrame(() => {
+      const r = profile();
+      if (!r) return;
+      const ms = v => v.toFixed(v < 10 ? 2 : 1) + ' ms';
+      const rows = [['une image', r.tout], ['socle', r.socle], ['relief', r.relief],
+                    ['tache', r.tache], ['· grain', r.grain], ['· chance', r.chance],
+                    ['· météo', r['météo']], ['· légendes', r['légendes']]];
+      list.innerHTML = rows.map(([n, v]) =>
+        `<div class="gauge deep"><span>${n}</span><em>${ms(v)}</em></div>`).join('');
+      repaint();
+    }), 30);
+  });
 
   // LE PLEIN ÉCRAN, pour le Pi qui n'a pas de clavier (la touche « f ») :
   // un bouton dans l'admin, un autre dans le coin de la carte. Celui du

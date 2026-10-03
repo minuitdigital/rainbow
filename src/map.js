@@ -334,7 +334,18 @@ export function paint(canvas, sun, slot) {
     return;
   }
   const timed = timerStart();
+  draw(canvas, sun, slot, cutMask());
+  if (timed) { gl.endQuery(timerExt.TIME_ELAPSED_EXT); timerBusy = true; }
+}
 
+/** Les coupures de l'admin, en bits pour `uOff` — voir shader.js. */
+function cutMask() {
+  const sc = view.cut;
+  return (sc.relief ? 1 : 0) | (sc.tache ? 2 : 0) | (sc.chance ? 4 : 0)
+       | (sc.meteo ? 8 : 0) | (sc.legendes ? 16 : 0) | (sc.grain ? 32 : 0);
+}
+
+function draw(canvas, sun, slot, off) {
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(1, 1, 1, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
@@ -363,9 +374,7 @@ export function paint(canvas, sun, slot) {
   gl.uniform2f(U.uCouloir, view.look.pas, view.look.trait);
   gl.uniform1f(U.uSea, view.look.sea);
   gl.uniform1f(U.uLand, view.look.land);
-  const sc = view.cut;
-  gl.uniform1i(U.uOff, (sc.relief ? 1 : 0) | (sc.tache ? 2 : 0) | (sc.chance ? 4 : 0)
-                     | (sc.meteo ? 8 : 0) | (sc.legendes ? 16 : 0) | (sc.grain ? 32 : 0));
+  gl.uniform1i(U.uOff, off);
 
   // La grille n'est en service que si elle est arrivée ET versée. Un slot
   // nul veut dire « mode dev » : le shader reprend son bruit fractal.
@@ -375,6 +384,37 @@ export function paint(canvas, sun, slot) {
   gl.uniform1f(U.uWxN, wxLayers || 1);
 
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
 
-  if (timed) { gl.endQuery(timerExt.TIME_ELAPSED_EXT); timerBusy = true; }
+// ==================================================== LE SHADER EN DÉTAIL
+//  Le chronomètre du pilote ne mesure qu'un tracé entier : il ne sait pas
+//  ce qui, DANS le shader, coûte. On redessine donc la même image en
+//  coupant une partie à la fois, et la différence est le prix de cette
+//  partie. Chaque variante est tracée plusieurs fois, puis on attend la
+//  carte graphique en lisant un pixel — ce qui force la fin du travail et
+//  rend la montre honnête. La page se fige une à trois secondes : c'est
+//  un geste d'atelier, à la demande, jamais en continu.
+//
+//  Le coût de la tache dépend de la place qu'elle prend À L'ÉCRAN : la
+//  mesure vaut pour la vue du moment.
+
+const VARIANTS = [['tout', 0], ['socle', 1 | 2], ['relief', 1], ['tache', 2],
+                  ['grain', 32], ['chance', 4], ['météo', 8], ['légendes', 16]];
+
+export function profileShader(canvas, sun, slot) {
+  const px = new Uint8Array(4);
+  const sync = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  const t = {};
+  for (const [name, off] of VARIANTS) {
+    draw(canvas, sun, slot, off); sync();          // à blanc
+    let n = 0;
+    const t0 = performance.now();
+    do { draw(canvas, sun, slot, off); n++; sync(); }
+    while (n < 3 || (n < 40 && performance.now() - t0 < 250));
+    t[name] = (performance.now() - t0) / n;
+  }
+  const d = k => Math.max(0, t.tout - t[k]);
+  return { tout: t.tout, socle: t.socle, relief: d('relief'), tache: d('tache'),
+           grain: d('grain'), chance: d('chance'), 'météo': d('météo'),
+           'légendes': d('légendes') };
 }

@@ -30,7 +30,7 @@ import { view, measure, centre, centreVec, coast, anchorTo, simDate, elapsedHour
 import { initWeather, keepFresh } from './weather.js';
 import { solar } from './sky.js';
 import { scan } from './zones.js';
-import { initMap, paint, uploadWeather } from './map.js';
+import { initMap, paint, uploadWeather, profileShader } from './map.js';
 import { initInk, rescale, trace } from './ink.js';
 import { initPanel, refreshPanel, weatherArrived, plaque } from './panel.js';
 import { bind } from './chrome.js';
@@ -181,7 +181,7 @@ if (!initMap(glCv, invalidate, noteLoad)) {
   // Deux fonctions et non une : le panneau redessine la plupart du temps,
   // mais changer de machine change le nombre de pixels réels et demande de
   // retailler les deux calques.
-  initPanel(invalidate, resize);
+  initPanel(invalidate, resize, () => profileShader(glCv, solar(simDate()), slotNow()));
   bind(inkCv, invalidate);
 
   // LA PLAQUE, à portée du Raspberry Pi. Une entrée par commande gravée —

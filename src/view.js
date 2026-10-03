@@ -94,15 +94,15 @@ export const view = {
   rig: 'laptop',
 
   /**
-   * LES COUPURES de l'admin (performance). Un instrument de mesure, pas
-   * un réglage : rien n'est mémorisé, un rechargement remet tout. Une
-   * carte laissée sans shader par mégarde ne doit pas survivre au soir.
+   * LES COUPURES de l'admin (performance). Mémorisées avec les autres
+   * réglages (décision de l'auteur, 3 octobre) : le Pi les retrouve après
+   * un rechargement.
    */
   /**
    * LA RÉSOLUTION DU SHADER, en fraction des pixels de l'encre, de 0,1
    * à 1 (curseur de l'admin). Le calque WebGL est calculé plus petit et le navigateur
    * l'agrandit ; l'encre, elle, reste nette. 0,5 divise le travail du
-   * processeur graphique par quatre, 0,25 par seize. Admin, non mémorisé.
+   * processeur graphique par quatre, 0,25 par seize. Admin, mémorisé.
    */
   gls: 1,
 

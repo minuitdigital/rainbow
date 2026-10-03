@@ -463,6 +463,15 @@
             <div class="gauge"><span>shader</span><em id="g-gpu">&#8212;</em>
               <button type="button" class="ask" data-note="gpu" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
 
+            <!-- LE SHADER EN D&#201;TAIL : chaque partie coup&#233;e tour &#224; tour, la
+                 diff&#233;rence est son prix. &#192; la demande : la page se fige le
+                 temps de la mesure. -->
+            <div class="choice">
+              <span>en d&#233;tail</span>
+              <button type="button" class="plain" id="gpu-prof">mesurer</button>
+            </div>
+            <div id="gpu-parts"></div>
+
             <div class="gauge"><span>javascript</span><em id="g-ms">&#8212;</em>
               <button type="button" class="ask" data-note="js" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
 
@@ -492,10 +501,9 @@
             </div>
 
             <!-- LES COUPURES : cocher, c'est NE PLUS dessiner ce poste. Pour
-                 savoir lequel co&#251;te, sur la machine m&#234;me. Rien n'est
-                 m&#233;moris&#233; : un rechargement remet tout. -->
+                 savoir lequel co&#251;te, sur la machine m&#234;me. M&#233;moris&#233;. -->
             <!-- LA R&#201;SOLUTION DU SHADER : le calque WebGL calcul&#233; plus petit,
-                 agrandi par le navigateur. L'encre reste nette. Non m&#233;moris&#233;. -->
+                 agrandi par le navigateur. L'encre reste nette. M&#233;moris&#233;. -->
             <div class="dial">
               <label for="s-gls">shader</label>
               <input id="s-gls" type="range" min="10" max="100" value="100"><output id="o-gls">100 %</output>
