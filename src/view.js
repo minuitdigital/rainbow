@@ -107,7 +107,7 @@ export const view = {
   gls: 1,
 
   cut: { shader: false, ink: false, coast: false, places: false,
-         callouts: false, icons: false, walker: false, panel: false },
+         callouts: false, icons: false, walker: false },
 
   /**
    * D'OÙ VIENT L'HEURE, et donc d'où vient la pluie. `dev` invente un

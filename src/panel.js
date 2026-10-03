@@ -1299,9 +1299,6 @@ const HHMM = n => String(n).padStart(2, '0');
 export function refreshPanel(sun, c, now) {
   // Interface éteinte, personne ne lit le panneau : on ne le calcule pas.
   if (bare) return;
-  // Panneau coupé (admin) : seules les jauges tournent encore — c'est
-  // avec elles qu'on mesure ce que la coupure a rendu.
-  if (view.cut.panel) { showBeat(); return; }
   const [lon, lat] = c;
   recall(lon, lat);
   const last = past[past.length - 1];
