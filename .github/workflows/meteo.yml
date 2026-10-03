@@ -1,24 +1,4 @@
 # =========================================================================
-#  CE FICHIER EXISTE EN DEUX EXEMPLAIRES, et c'est voulu.
-#
-#      .github/workflows/meteo.yml   celui que GitHub execute
-#      build/meteo.workflow.yml      la copie que Claude peut ecrire
-#
-#  Le pont entre Claude et l'ordinateur de l'auteur refuse d'ecrire dans
-#  .github/workflows/ : un fichier pose la s'execute sur les serveurs de
-#  GitHub, et c'est une protection saine contre un assistant qui
-#  installerait un robot a l'insu de son auteur.
-#
-#  Apres toute modification de la copie, une ligne dans le terminal du
-#  depot — ou le meme geste a la souris :
-#
-#      copy build\meteo.workflow.yml .github\workflows\meteo.yml
-#
-#  Puis commiter les deux. En cas de divergence, c'est .github/ qui fait
-#  foi : c'est lui qui tourne.
-# =========================================================================
-
-# =========================================================================
 #  LE ROBOT : LA MÉTÉO, ET LE SITE
 #
 #  Une fois par jour, GitHub va chercher la météo du monde entier chez

@@ -237,8 +237,6 @@ export function initMap(canvas, onReady, note = () => {}) {
 
 let wxTex = null, wxLayers = 0;
 
-/** Le nombre de pas de temps versés. Le shader en a besoin pour borner. */
-export const weatherLayers = () => wxLayers;
 
 function bindWeather() {
   gl.activeTexture(gl.TEXTURE0 + 3);

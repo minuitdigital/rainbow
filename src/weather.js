@@ -111,15 +111,6 @@ export function weatherSlot(ms) {
   return k < 0 ? 0 : k > grid.nt - 1 ? grid.nt - 1 : k;
 }
 
-/**
- * De quand date le relevé, en heures. Négatif si la fenêtre a commencé
- * avant maintenant — ce qui est le cas normal, puisqu'elle couvre hier.
- * Null si pas de grille.
- */
-export function weatherAge(ms) {
-  return grid ? (ms - grid.t0) / 3600000 : null;
-}
-
 /** Le dernier pas de temps couvert, en heures depuis maintenant. */
 export function weatherReach(ms) {
   return grid ? (grid.t0 + (grid.nt - 1) * grid.stepMs - ms) / 3600000 : null;
@@ -188,10 +179,6 @@ export const wxRain = (lon, lat, slot) => grid ? sample(0, lon, lat, slot) : 0;
 
 /** La clarté : des rayons directs arrivent-ils jusqu'ici. */
 export const wxClear = (lon, lat, slot) => grid ? sample(1, lon, lat, slot) : 0;
-
-/** La pluie locale — pleut-il SUR nous. Pour les étiquettes. */
-export const wxHere = (lon, lat, slot) => grid ? sample(2, lon, lat, slot) : 0;
-
 // ------------------------------------------------------------ l'arrivée
 
 /**
