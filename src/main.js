@@ -50,12 +50,35 @@ function resize() {
   view.ox = rw && rw < glCv.clientWidth * 0.6 ? -Math.round(rw / 2) : 0;
   measure(glCv.clientWidth, glCv.clientHeight);
   // Le shader peut tourner à une résolution moindre que l'encre — `gls`.
-  glCv.width = Math.round(view.W * view.dpr * view.gls);
-  glCv.height = Math.round(view.H * view.dpr * view.gls);
+  glSize(view.gls);
   inkCv.width = Math.round(view.W * view.dpr);
   inkCv.height = Math.round(view.H * view.dpr);
   rescale();
   invalidate();
+}
+
+/** Taille le calque du shader à la fraction k ; ne fait rien si elle y est. */
+function glSize(k) {
+  const w = Math.round(view.W * view.dpr * k), h = Math.round(view.H * view.dpr * k);
+  if (glCv.width !== w || glCv.height !== h) { glCv.width = w; glCv.height = h; }
+}
+
+// LA RÉSOLUTION EN MOUVEMENT. Tant que la carte glisse, le shader peut
+// descendre à `glsMove` ; dès qu'elle s'arrête, une dernière image à la
+// pleine résolution choisie (`gls`). L'œil ne lit pas le détail d'une
+// carte qui bouge — il le lit quand elle s'arrête. `glsMove` égal à 1 :
+// rien ne change (le défaut, tant que l'auteur ne l'a pas vu).
+const SETTLE_MS = 140;
+let lastR = null, lastZoom = 0, movedAt = -1e9;
+
+function trackMotion(now) {
+  const R = view.R;
+  let moved = view.zoom !== lastZoom;
+  if (!moved && lastR) for (let i = 0; i < 9; i++) if (R[i] !== lastR[i]) { moved = true; break; }
+  lastR = Float32Array.from(R);
+  lastZoom = view.zoom;
+  if (moved) movedAt = now;
+  return now - movedAt < SETTLE_MS;
 }
 
 // -------------------------------------------------------- la boucle d'images
@@ -115,8 +138,14 @@ function frame(now) {
   // la boucle de loin en loin ; entre deux, la carte dort pour de bon.
   if (view.clock === 'dev' && view.speed > 0) animating = true;
 
+  // En mouvement, et pour SETTLE_MS après : la boucle continue, pour que
+  // l'image nette tombe d'elle-même quand le doigt s'arrête.
+  const moving = trackMotion(now);
+  if (moving && view.glsMove < view.gls) animating = true;
+
   if (dirty || animating) {
     dirty = false;
+    glSize(moving ? Math.min(view.gls, view.glsMove) : view.gls);
     const when = simDate();
     const sun = solar(when);
 

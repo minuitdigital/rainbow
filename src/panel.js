@@ -730,7 +730,7 @@ function saveKnobs() {
                 iface: byId('p-interface').checked, poeme: byId('p-poeme').checked,
                 temps: Object.keys(TEMPS).find(k => byId('t-' + k).checked),
                 rig: view.rig, clock: clockWanted, plis: folded,
-                cut: view.cut, gls: view.gls };
+                cut: view.cut, gls: view.gls, glsMove: view.glsMove };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
   } catch (e) { /* sans mémoire, la page marche quand même */ }
@@ -756,6 +756,7 @@ function loadKnobs() {
   if (o.cut) for (const k of Object.keys(view.cut))
     if (typeof o.cut[k] === 'boolean') view.cut[k] = o.cut[k];
   if ([0.5, 0.6, 0.7, 0.8, 1].includes(o.gls)) view.gls = o.gls;
+  if ([0.3, 0.4, 0.5, 0.6, 1].includes(o.glsMove)) view.glsMove = o.glsMove;
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -1410,6 +1411,12 @@ export function initPanel(invalidate, resize, shaderProfile) {
     const input = byId('gls-' + pc);
     input.checked = Math.round(view.gls * 100) === pc;
     input.addEventListener('change', () => { view.gls = pc / 100; remeasure(); saveKnobs(); });
+  }
+  // En mouvement : « idem » (1) ou une fraction plus basse — voir main.js.
+  for (const pc of [30, 40, 50, 60, 100]) {
+    const input = byId('glm-' + pc);
+    input.checked = Math.round(view.glsMove * 100) === pc;
+    input.addEventListener('change', () => { view.glsMove = pc / 100; repaint(); saveKnobs(); });
   }
 
   // LE SHADER EN DÉTAIL — voir profileShader dans src/map.js. Le texte

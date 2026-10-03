@@ -106,6 +106,9 @@ export const view = {
    */
   gls: 1,
 
+  /** La même, pendant que la carte bouge — voir main.js. 1 = pas de baisse. */
+  glsMove: 1,
+
   /**
    * LE CENTRE DE LA CARTE, décalé du centre de l'écran, en pixels de page.
    * Le panneau couvre la droite : le piéton se tient au milieu de ce qui
