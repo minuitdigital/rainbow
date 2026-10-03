@@ -13,6 +13,7 @@ import { view, scale, drift, driftChance, detail, fine, seuil,
          beliefWeights, centreVec } from './view.js';
 import { VERTEX, FRAGMENT, MAX_LEGENDS } from './shader.js';
 import { LEGEND_POINTS } from './sky.js';
+import { LEGEND_FLOOR } from './legends.js';
 import { weatherPixels } from './weather.js';
 
 let gl = null;
@@ -70,7 +71,7 @@ const UNIFORMS = ['uRes', 'uScale', 'uRot', 'uDecl', 'uSublon',
                   'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uSeuil', 'uFranges',
                   'uBelief', 'uHere',
                   'uSat', 'uTache', 'uGrey', 'uPorte', 'uCouloir', 'uSea', 'uLand',
-                  'uLegN', 'uOff', 'uLegP', 'uLegQ', 'uField', 'uMask',
+                  'uLegN', 'uOff', 'uLegP', 'uLegQ', 'uLegR', 'uField', 'uMask',
                   'uWx', 'uWxOn', 'uSlot', 'uWxN'];
 
 /**
@@ -306,15 +307,20 @@ function uploadLegends() {
   const n = Math.min(LEGEND_POINTS.length, MAX_LEGENDS);
   const pos = new Float32Array(MAX_LEGENDS * 4);
   const rad = new Float32Array(MAX_LEGENDS);
+  const reach = new Float32Array(MAX_LEGENDS);
   for (let i = 0; i < n; i++) {
     const l = LEGEND_POINTS[i];
     pos[i*4] = l.v[0]; pos[i*4+1] = l.v[1]; pos[i*4+2] = l.v[2];
     pos[i*4+3] = l.f;
     rad[i] = l.q;
+    // Où f · exp(−d²/q) retombe au plancher : d² = q · ln(f / plancher).
+    // Au-delà, le shader ne calcule rien — le maximum ne l'aurait pas pris.
+    reach[i] = l.f > LEGEND_FLOOR ? l.q * Math.log(l.f / LEGEND_FLOOR) : 0;
   }
   gl.uniform1i(U.uLegN, n);
   gl.uniform4fv(U.uLegP, pos);
   gl.uniform1fv(U.uLegQ, rad);
+  gl.uniform1fv(U.uLegR, reach);
   if (LEGEND_POINTS.length > MAX_LEGENDS)
     console.warn('légendes : %d au-delà de la place réservée, ignorées',
                  LEGEND_POINTS.length - MAX_LEGENDS);

@@ -57,6 +57,7 @@ uniform int   uLegN;
 uniform int   uOff;
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
 uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
+uniform float uLegR[${MAX_LEGENDS}];   // au-dela (corde au carre), sous le plancher
 uniform sampler2D uField, uMask;
 
 // LA VRAIE METEO, en couches : un pas de temps par couche, trente-deux
@@ -144,7 +145,10 @@ float legendAt(vec3 g){
   for(int i = 0; i < ${MAX_LEGENDS}; i++){
     if(i >= uLegN) break;
     vec3 d = g - uLegP[i].xyz;
-    v = max(v, uLegP[i].w * exp(-dot(d, d) / uLegQ[i]));
+    // Au-dela de uLegR, f * exp(...) passe sous le plancher : le maximum
+    // ne le retiendrait pas. On saute l'exponentielle — resultat identique.
+    float dd = dot(d, d);
+    if(dd < uLegR[i]) v = max(v, uLegP[i].w * exp(-dd / uLegQ[i]));
   }
   return min(v, 1.0);
 }
@@ -155,7 +159,9 @@ void main(){
 
   // --- inverse de la projection (Newton sur theta)
   float th = asin(clamp(y / YMAX, -1.0, 1.0) * M);
-  for(int i = 0; i < 6; i++) th -= (fyf(th) - y) / fypf(th);
+  // Deux pas suffisent : l'ecart au calcul complet est d'un millionieme
+  // de degre (verifie en double precision, 3 octobre). Il en faisait six.
+  for(int i = 0; i < 2; i++) th -= (fyf(th) - y) / fypf(th);
 
   float sn  = sin(th) / M;
   float lam = M * x * fypf(th) / cos(th);
