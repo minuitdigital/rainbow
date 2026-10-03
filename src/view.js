@@ -99,8 +99,8 @@ export const view = {
    * carte laissée sans shader par mégarde ne doit pas survivre au soir.
    */
   /**
-   * LA RÉSOLUTION DU SHADER, en fraction des pixels de l'encre : 1, 0,5
-   * ou 0,25. Le calque WebGL est calculé plus petit et le navigateur
+   * LA RÉSOLUTION DU SHADER, en fraction des pixels de l'encre, de 0,1
+   * à 1 (curseur de l'admin). Le calque WebGL est calculé plus petit et le navigateur
    * l'agrandit ; l'encre, elle, reste nette. 0,5 divise le travail du
    * processeur graphique par quatre, 0,25 par seize. Admin, non mémorisé.
    */

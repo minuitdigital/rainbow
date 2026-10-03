@@ -1397,10 +1397,15 @@ export function initPanel(invalidate, resize) {
   }
 
   // LA RÉSOLUTION DU SHADER — voir `view.gls`. Retaille les calques.
-  for (const [id, k] of [['gls-100', 1], ['gls-50', 0.5], ['gls-25', 0.25]]) {
-    byId(id).checked = view.gls === k;
-    byId(id).addEventListener('change', () => { view.gls = k; remeasure(); });
-  }
+  const gls = byId('s-gls');
+  const showGls = () => {
+    view.gls = +gls.value / 100;
+    gls.style.setProperty('--p', gls.value + '%');
+    byId('o-gls').textContent = gls.value + ' %';
+    remeasure();
+  };
+  gls.value = Math.round(view.gls * 100);
+  gls.addEventListener('input', showGls);
 
   // LE PLEIN ÉCRAN, pour le Pi qui n'a pas de clavier (la touche « f ») :
   // un bouton dans l'admin, un autre dans le coin de la carte. Celui du
