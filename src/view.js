@@ -129,8 +129,15 @@ export const view = {
   //
   // Les côtes sont coupées par défaut (décision de l'auteur, 3 octobre) :
   // sur le Pi, elles coûtaient plus que tout le reste de l'encre.
-  cut: { shader: false, ink: false, coast: true, places: false,
+  cut: { shader: false, ink: false, places: false,
          callouts: false, relief: false, tache: false, grain: false },
+
+  /**
+   * LES CÔTES : 'aucune', 'encre' (le tracé vectoriel, lacs compris — 25 ms
+   * sur le Pi) ou 'shader' (l'iso-ligne 0,5 du relief, presque gratuite,
+   * sans les lacs). À l'essai, comme A et P. Admin, mémorisé.
+   */
+  coasts: 'aucune',
 
   /**
    * D'OÙ VIENT L'HEURE, et donc d'où vient la pluie. `dev` invente un
@@ -600,6 +607,10 @@ export function stride(dt) {
  * le grain n'y ferait que du bruit et ferait mentir la lecture d'ensemble ;
  * plein à partir de ×10.
  */
+/** L'épaisseur du trait de côte, en pixels de page : plus gras de près. */
+export const coastWidth = () =>
+  Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));
+
 export const detail = () => Math.max(0, Math.min(1, (view.zoom - 2.5) / 7.5));
 
 /**

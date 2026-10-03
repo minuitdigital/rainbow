@@ -68,6 +68,7 @@ uniform int   uPass;
 uniform float uPixN;
 uniform sampler2D uPix;
 uniform float uPal;                    // PALETTE : teintes par tour, 0 = continue
+uniform float uCoast;                  // COTES : epaisseur en pixels du calque, 0 = rien
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
 uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
 uniform float uLegR[${MAX_LEGENDS}];   // au-dela (corde au carre), sous le plancher
@@ -447,6 +448,20 @@ void main(){
   // Multiplication : sur le papier, les taches teintent au lieu d'éclairer.
   // Si le fond redevenait sombre, il faudrait repasser en additif.
   vec3 col = ground * mix(vec3(1.0), hue, field);
+
+  // ====================================================== LES COTES
+  // La cote est DEJA dans le relief : la ou le champ vaut 0,5. Le trait
+  // suit cette iso-ligne, comme le couloir suit l'iso-hauteur : la
+  // distance en pixels est l'ecart a 0,5 divise par le gradient a l'ecran.
+  // Une valeur deja lue, quelques operations — au lieu de reprojeter des
+  // dizaines de milliers de points en JavaScript a chaque image. Meme
+  // encre que le trace de l'encre ; les lacs, eux, n'y sont pas.
+  if(uCoast > 0.0 && (uOff & 1) == 0){
+    float gf = max(length(vec2(dFdx(f), dFdy(f))), 1e-6);
+    float cl = clamp(0.5 * uCoast + 0.5 - abs(f - 0.5) / gf, 0.0, 1.0)
+             * min(uCoast, 1.0);
+    col = mix(col, vec3(0.078, 0.086, 0.102), cl * 0.92);
+  }
 
   // ====================================================== LE COULOIR
   // DEUX POINTILLES, et la fenetre du soleil entre eux : 0 degre d'un

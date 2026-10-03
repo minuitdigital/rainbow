@@ -19,7 +19,7 @@
 // =========================================================================
 
 import { DEG, RAD, M, fy, fyp, clamp1, flatten, matT, geoVec, angDist } from './projection.js';
-import { view, scale, sx, sy, gait, liveReperes } from './view.js';
+import { view, scale, sx, sy, gait, liveReperes, coastWidth } from './view.js';
 import { zones } from './zones.js';
 import { CITY, tierAt, placeLine } from './ground.js';
 import { LEGEND_POINTS } from './sky.js';
@@ -746,8 +746,8 @@ export function trace(centre) {
   if (cut.ink) return;
 
   const Rt = matT(view.R);
-  if (!cut.coast) {
-    const lw = Math.max(0.55, Math.min(1.5, 0.55 + Math.log2(view.zoom) * 0.24));
+  if (view.coasts === 'encre') {
+    const lw = coastWidth();
     const radius = visibleRadius();
     drawRings(COAST.coast, radius, centre, Rt, lw, 0.92);
     drawRings(COAST.lakes, radius, centre, Rt, lw * 0.8, 0.5);

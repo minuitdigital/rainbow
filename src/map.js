@@ -10,7 +10,7 @@
 // =========================================================================
 
 import { view, scale, drift, driftChance, detail, fine, seuil,
-         beliefWeights, centreVec } from './view.js';
+         beliefWeights, centreVec, coastWidth } from './view.js';
 import { VERTEX, FRAGMENT, MAX_LEGENDS } from './shader.js';
 import { LEGEND_POINTS } from './sky.js';
 import { LEGEND_FLOOR } from './legends.js';
@@ -73,7 +73,7 @@ const UNIFORMS = ['uRes', 'uScale', 'uOx', 'uRot', 'uDecl', 'uSublon',
                   'uSat', 'uTache', 'uGrey', 'uPorte', 'uCouloir', 'uSea', 'uLand',
                   'uLegN', 'uOff', 'uLegP', 'uLegQ', 'uLegR', 'uField', 'uMask',
                   'uWx', 'uWxOn', 'uSlot', 'uWxN',
-                  'uPass', 'uPixN', 'uPix', 'uPal'];
+                  'uPass', 'uPixN', 'uPix', 'uPal', 'uCoast'];
 
 /**
  * Les textures arrivent quand elles arrivent. On lie donc des textures
@@ -438,6 +438,8 @@ function draw(canvas, sun, slot, off) {
   gl.uniform1f(U.uSlot, wxOk ? slot : 0);
   gl.uniform1f(U.uWxN, wxLayers || 1);
   gl.uniform1f(U.uPal, view.pal);
+  // COTES dans le shader : la même épaisseur que l'encre, en pixels du calque.
+  gl.uniform1f(U.uCoast, view.coasts === 'shader' ? coastWidth() * canvas.width / view.W : 0);
 
   if (view.pix > 1) drawPixels(canvas, off);          // PIXEL
   else gl.uniform1i(U.uPass, 0);

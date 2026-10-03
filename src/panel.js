@@ -726,6 +726,7 @@ const STORE_KEY = 'estimateur.reglages.3';
 // PIXEL et PALETTE : les cases de l'admin, et seules valeurs admises.
 const PIX = [1, 4, 6, 8, 12];
 const PAL = [0, 6, 8, 12];
+const COASTS = ['aucune', 'encre', 'shader'];
 
 function saveKnobs() {
   try {
@@ -735,7 +736,7 @@ function saveKnobs() {
                 temps: Object.keys(TEMPS).find(k => byId('t-' + k).checked),
                 rig: view.rig, clock: clockWanted, plis: folded,
                 cut: view.cut, gls: view.gls, glsMove: view.glsMove,
-                pix: view.pix, pal: view.pal };
+                pix: view.pix, pal: view.pal, coasts: view.coasts };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
   } catch (e) { /* sans mémoire, la page marche quand même */ }
@@ -764,6 +765,7 @@ function loadKnobs() {
   if ([0.3, 0.45, 0.6, 1].includes(o.glsMove)) view.glsMove = o.glsMove;
   if (PIX.includes(o.pix)) view.pix = o.pix;
   if (PAL.includes(o.pal)) view.pal = o.pal;
+  if (COASTS.includes(o.coasts)) view.coasts = o.coasts;
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -1431,6 +1433,11 @@ export function initPanel(invalidate, resize, shaderProfile) {
     const input = byId('pix-' + n);
     input.checked = view.pix === n;
     input.addEventListener('change', () => { view.pix = n; repaint(); saveKnobs(); });
+  }
+  for (const k of COASTS) {
+    const input = byId('cote-' + k);
+    input.checked = view.coasts === k;
+    input.addEventListener('change', () => { view.coasts = k; repaint(); saveKnobs(); });
   }
   for (const n of PAL) {
     const input = byId('pal-' + n);
