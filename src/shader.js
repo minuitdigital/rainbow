@@ -39,6 +39,7 @@ precision highp sampler2DArray;
 
 uniform vec2  uRes;
 uniform float uScale;
+uniform float uOx;                     // decalage du centre, en pixels du calque
 uniform mat3  uRot;
 uniform float uDecl, uSublon, uDrift, uDriftC, uDetail;
 uniform float uFine;                   // la finesse : 0 au monde, plein de près
@@ -154,7 +155,7 @@ float legendAt(vec3 g){
 }
 
 void main(){
-  float x = (gl_FragCoord.x - uRes.x * 0.5) / uScale;
+  float x = (gl_FragCoord.x - uRes.x * 0.5 - uOx) / uScale;
   float y = (gl_FragCoord.y - uRes.y * 0.5) / uScale;
 
   // --- inverse de la projection (Newton sur theta)

@@ -41,6 +41,13 @@ const inkCv = document.getElementById('ink');
 // --------------------------------------------------------------- la mesure
 
 function resize() {
+  // Le piéton au milieu de la carte LIBRE : la moitié du panneau en moins,
+  // tant qu'il est là et qu'il ne prend pas tout l'écran (téléphone).
+  // Avant `measure`, qui en tient compte pour que la carte couvre encore
+  // tout l'écran.
+  const rail = document.querySelector('.rail');
+  const rw = rail && !document.body.classList.contains('bare') ? rail.offsetWidth : 0;
+  view.ox = rw && rw < glCv.clientWidth * 0.6 ? -Math.round(rw / 2) : 0;
   measure(glCv.clientWidth, glCv.clientHeight);
   // Le shader peut tourner à une résolution moindre que l'encre — `gls`.
   glCv.width = Math.round(view.W * view.dpr * view.gls);

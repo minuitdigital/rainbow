@@ -106,6 +106,14 @@ export const view = {
    */
   gls: 1,
 
+  /**
+   * LE CENTRE DE LA CARTE, décalé du centre de l'écran, en pixels de page.
+   * Le panneau couvre la droite : le piéton se tient au milieu de ce qui
+   * reste, pas derrière les boîtes. Posé par main.js à chaque mesure —
+   * négatif, la moitié de la largeur du panneau ; zéro sans interface.
+   */
+  ox: 0,
+
   //
   // Les côtes sont coupées par défaut (décision de l'auteur, 3 octobre) :
   // sur le Pi, elles coûtaient plus que tout le reste de l'encre.
@@ -265,7 +273,7 @@ export const liveReperes = () =>
 export const scale = () => view.baseScale * view.zoom;
 
 /** Unités de projection → pixels d'écran. */
-export const sx = x =>  x * scale() + view.W / 2;
+export const sx = x =>  x * scale() + view.W / 2 + view.ox;
 export const sy = y => -y * scale() + view.H / 2;
 
 /**
@@ -281,14 +289,16 @@ export function measure(cssW, cssH) {
   view.dpr = Math.min(window.devicePixelRatio || 1, rig().dpr);
   view.W = cssW;
   view.H = cssH;
-  view.baseScale = Math.max(cssW / (2 * XMAX), cssH / (2 * YMAX));
+  // Le centre décalé de `ox` : le monde doit couvrir |ox| de plus de
+  // chaque côté, sinon son bord apparaît à droite, sous le panneau.
+  view.baseScale = Math.max((cssW + 2 * Math.abs(view.ox)) / (2 * XMAX), cssH / (2 * YMAX));
 }
 
 // ------------------------------------------------- écran ⇄ géographique
 
 /** Direction unitaire, dans le repère de la projection, sous un point écran. */
 export function relDir(px, py) {
-  const r = inverseEE((px - view.W / 2) / scale(), -(py - view.H / 2) / scale());
+  const r = inverseEE((px - view.W / 2 - view.ox) / scale(), -(py - view.H / 2) / scale());
   if (!r) return null;
   const cp = Math.cos(r[1]);
   return [cp * Math.cos(r[0]), cp * Math.sin(r[0]), Math.sin(r[1])];
@@ -356,7 +366,7 @@ export function faceNorth(lon, lat) {
 
 /** Déplacement par pas, depuis le centre — parité avec le futur joystick. */
 export function nudge(dx, dy) {
-  const cx = view.W / 2, cy = view.H / 2;
+  const cx = view.W / 2 + view.ox, cy = view.H / 2;
   const a = relDir(cx, cy), b = relDir(cx + dx, cy + dy);
   if (a && b) turn(between(b, a));
 }
@@ -541,7 +551,7 @@ export function stride(dt) {
   // est le glissement APPARENT du sol, en pixels. Le zoom, lui, ne bouge
   // pas le centre : on ne marche donc pas en s'approchant.
   const f = flatten(matT(view.R), geoVec(gaitPrev[0], gaitPrev[1]));
-  const dx = view.W / 2 - sx(f[0]), dy = view.H / 2 - sy(f[1]);
+  const dx = view.W / 2 + view.ox - sx(f[0]), dy = view.H / 2 - sy(f[1]);
   gaitPrev = c;
 
   const d = Math.min(GAIT_MAX, Math.hypot(dx, dy));

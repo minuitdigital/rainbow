@@ -131,7 +131,7 @@ function drawRings(rings, radius, centre, Rt, width, alpha) {
   // par point, et 55 000 tableaux par image se paient au ramasse-miettes.
   const r0 = Rt[0], r1 = Rt[1], r2 = Rt[2], r3 = Rt[3], r4 = Rt[4],
         r5 = Rt[5], r6 = Rt[6], r7 = Rt[7], r8 = Rt[8];
-  const s = scale(), cxW = view.W / 2, cyH = view.H / 2;
+  const s = scale(), cxW = view.W / 2 + view.ox, cyH = view.H / 2;
   const lod = lodFor();
 
   for (const ring of rings) {
@@ -416,7 +416,7 @@ function drawLegends(boxes, Rt) {
     // Le haut lieu que l'on vise ne doit jamais être celui qu'on cache :
     // sous le réticule, le glyphe passe outre l'encombrement. Son nom,
     // lui, reste soumis à la règle commune.
-    const aimed = Math.hypot(X - view.W / 2, Y - view.H / 2) < 26;
+    const aimed = Math.hypot(X - view.W / 2 - view.ox, Y - view.H / 2) < 26;
 
     // Visé, le glyphe est exactement là où se tient le piéton : il passe
     // donc à sa droite. Un décalage de quinze pixels ment moins que deux
@@ -756,7 +756,7 @@ export function trace(centre) {
   // Le repère SOUS le piéton : tracé d'abord, le piéton se tient dessus.
   if (!cut.icons) drawReperes(Rt);
 
-  const cx = W / 2, cy = H / 2;
+  const cx = W / 2 + view.ox, cy = H / 2;
   if (!cut.walker) drawReticle(cx, cy);
 
   // L'emprise du réticule est devenue un CARRÉ centré : la figure pivote

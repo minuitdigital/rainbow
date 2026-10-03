@@ -67,7 +67,7 @@ function timerRead() {
   timerBusy = false;
 }
 
-const UNIFORMS = ['uRes', 'uScale', 'uRot', 'uDecl', 'uSublon',
+const UNIFORMS = ['uRes', 'uScale', 'uOx', 'uRot', 'uDecl', 'uSublon',
                   'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uSeuil', 'uFranges',
                   'uBelief', 'uHere',
                   'uSat', 'uTache', 'uGrey', 'uPorte', 'uCouloir', 'uSea', 'uLand',
@@ -358,6 +358,7 @@ function draw(canvas, sun, slot, off) {
   gl.uniform2f(U.uRes, canvas.width, canvas.height);
   // Pixels du calque par pixel de page : dpr, réduit par `gls` s'il y a lieu.
   gl.uniform1f(U.uScale, scale() * canvas.width / view.W);
+  gl.uniform1f(U.uOx, view.ox * canvas.width / view.W);
   gl.uniformMatrix3fv(U.uRot, false, view.R);
   gl.uniform1f(U.uDecl, sun.decl);
   gl.uniform1f(U.uSublon, sun.sublon);

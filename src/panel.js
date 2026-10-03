@@ -1180,8 +1180,8 @@ function showInterface() {
   showSwitch('p-interface', on);
   document.body.classList.toggle('bare', bare);
   byId('iface-on').hidden = on;
-  measureRail();
-  repaint();
+  // Le centre de la carte suit le panneau : sans lui, il revient au milieu.
+  remeasure();
   saveKnobs();
 }
 
@@ -1247,7 +1247,7 @@ function repere() {
   const Rt = matT(view.R), k = view.look.icon / 15;
   const hit = view.reperes.findIndex(r => {
     const f = flatten(Rt, geoVec(r.lon, r.lat));
-    return Math.hypot(sx(f[0]) - view.W / 2, sy(f[1]) - view.H / 2) < REPERE_PX * k;
+    return Math.hypot(sx(f[0]) - view.W / 2 - view.ox, sy(f[1]) - view.H / 2) < REPERE_PX * k;
   });
   if (hit >= 0) view.reperes.splice(hit, 1);
   else {
