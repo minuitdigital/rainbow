@@ -99,8 +99,8 @@ export const view = {
    * un rechargement.
    */
   /**
-   * LA RÉSOLUTION DU SHADER, en fraction des pixels de l'encre : 0,5,
-   * 0,6, 0,7, 0,8 ou 1 (cases de l'admin). Le calque WebGL est calculé plus petit et le navigateur
+   * LA RÉSOLUTION DU SHADER, en fraction des pixels de l'encre : 0,8,
+   * 0,85, 0,9, 0,95 ou 1 (cases de l'admin). Le calque WebGL est calculé plus petit et le navigateur
    * l'agrandit ; l'encre, elle, reste nette. 0,5 divise le travail du
    * processeur graphique par quatre, 0,25 par seize. Admin, mémorisé.
    */

@@ -755,8 +755,8 @@ function loadKnobs() {
   // Les coupures et la résolution du shader (admin, performance).
   if (o.cut) for (const k of Object.keys(view.cut))
     if (typeof o.cut[k] === 'boolean') view.cut[k] = o.cut[k];
-  if ([0.5, 0.6, 0.7, 0.8, 1].includes(o.gls)) view.gls = o.gls;
-  if ([0.3, 0.4, 0.5, 0.6, 1].includes(o.glsMove)) view.glsMove = o.glsMove;
+  if ([0.8, 0.85, 0.9, 0.95, 1].includes(o.gls)) view.gls = o.gls;
+  if ([0.3, 0.45, 0.6, 1].includes(o.glsMove)) view.glsMove = o.glsMove;
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -1407,13 +1407,13 @@ export function initPanel(invalidate, resize, shaderProfile) {
   }
 
   // LA RÉSOLUTION DU SHADER — voir `view.gls`. Retaille les calques.
-  for (const pc of [50, 60, 70, 80, 100]) {
+  for (const pc of [80, 85, 90, 95, 100]) {
     const input = byId('gls-' + pc);
     input.checked = Math.round(view.gls * 100) === pc;
     input.addEventListener('change', () => { view.gls = pc / 100; remeasure(); saveKnobs(); });
   }
   // En mouvement : « idem » (1) ou une fraction plus basse — voir main.js.
-  for (const pc of [30, 40, 50, 60, 100]) {
+  for (const pc of [30, 45, 60, 100]) {
     const input = byId('glm-' + pc);
     input.checked = Math.round(view.glsMove * 100) === pc;
     input.addEventListener('change', () => { view.glsMove = pc / 100; repaint(); saveKnobs(); });

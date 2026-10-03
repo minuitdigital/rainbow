@@ -363,8 +363,16 @@ void main(){
     //
     // Le bord est calcule par les derivees d'ecran : net a toute echelle,
     // jamais crenele. Meme methode que les paliers du relief.
+    //
+    // BORNE PAR LE HAUT. Ce fwidth est pris DANS la branche de la porte,
+    // que les pixels voisins ne prennent pas tous : le GLSL ne garantit
+    // alors plus la derivee. Le processeur graphique de l'atelier s'en
+    // tire ; celui du Pi rend une valeur enorme au bord de la porte, et un
+    // fv presque nul passait le seuil — des traits roses le long de chaque
+    // courbe de hauteur du soleil (3 octobre). Un bord vrai ne fait jamais
+    // 0,08 de large par pixel.
     if(uSeuil > 0.001){
-      float w = max(fwidth(fv), 1e-4);
+      float w = clamp(fwidth(fv), 1e-4, 0.08);
       float edge = smoothstep(uSeuil - w, uSeuil + w, fv);
       float over = clamp((fv - uSeuil) / max(1.0 - uSeuil, 1e-3), 0.0, 1.0);
       fv = edge * mix(0.30, 1.0, over);
