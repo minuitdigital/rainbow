@@ -63,6 +63,7 @@ export function measureRail() {
 /** À appeler après chaque redimensionnement : le canvas perd sa transformée. */
 export function rescale() {
   ink.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  sprites.clear();
   measureRail();
 }
 
@@ -455,13 +456,51 @@ function drawLegends(boxes, Rt) {
 
 const MAX_PLACES = 44;
 
+// LES ÉTIQUETTES DE VILLE SONT DES IMAGES. Un nom cerné de blanc, écrit à
+// chaque image, coûtait sur le Pi plus que tout le reste de l'encre : le
+// contour d'un texte est un tracé, et le navigateur le refait lettre par
+// lettre. Chaque ville est donc écrite UNE fois dans un petit canvas — le
+// point, le halo, le nom — puis simplement recopiée. Le cache se vide si
+// la densité de pixels change ou si la police arrive après coup.
+const sprites = new Map();
+const SPR_X = 4, SPR_Y = 12, SPR_H = 24;
+
+function citySprite(i) {
+  let sp = sprites.get(i);
+  if (sp) return sp;
+  const cap = CITY.tier[i] === 0;               // une capitale : un cran plus franc
+  const font = `${cap ? 10 : 9}px ${FACE}`;
+  const label = CITY.name[i];
+  ink.font = font;
+  const tw = ink.measureText(label).width;
+  const w = Math.ceil(tw + SPR_X + 12), k = view.dpr;
+  const cv = document.createElement('canvas');
+  cv.width = Math.ceil(w * k);
+  cv.height = Math.ceil(SPR_H * k);
+  const g = cv.getContext('2d');
+  g.setTransform(k, 0, 0, k, SPR_X * k, SPR_Y * k);   // origine = le point
+  g.font = font;
+  g.textAlign = 'left';
+  g.textBaseline = 'alphabetic';
+  g.lineJoin = 'round';
+  g.strokeStyle = 'rgba(255,255,255,0.92)';
+  g.lineWidth = 3;
+  g.strokeText(label, 6, 3);
+  g.fillStyle = cap ? '#5f666f' : '#858c96';
+  g.fillText(label, 6, 3);
+  g.fillStyle = cap ? 'rgba(20,22,26,0.70)' : 'rgba(20,22,26,0.42)';
+  g.beginPath();
+  g.arc(0, 0, cap ? 1.9 : 1.3, 0, 6.2832);
+  g.fill();
+  sp = { cv, w, tw };
+  sprites.set(i, sp);
+  return sp;
+}
+document.fonts?.addEventListener?.('loadingdone', () => sprites.clear());
+
 function drawPlaces(boxes, Rt) {
   const top = tierAt(view.zoom);
   if (top < 0) return;
-
-  ink.textAlign = 'left';
-  ink.textBaseline = 'alphabetic';
-  ink.lineJoin = 'round';
 
   let placed = 0;
   for (let i = 0; i < CITY.n && placed < MAX_PLACES; i++) {
@@ -470,27 +509,16 @@ function drawPlaces(boxes, Rt) {
 
     const f = flatten(Rt, [CITY.vec[i*3], CITY.vec[i*3+1], CITY.vec[i*3+2]]);
     if (Math.abs(f[2]) > 179.1) continue;
-    const X = sx(f[0]), Y = sy(f[1]);
+    // Au pixel entier : une image recopiée entre deux pixels serait floue.
+    const X = Math.round(sx(f[0])), Y = Math.round(sy(f[1]));
     if (X < 6 || X > view.W - 6 || Y < 14 || Y > view.H - 6) continue;
 
-    const cap = tier === 0;                       // une capitale : un cran plus franc
-    ink.font = `${cap ? 10 : 9}px ${FACE}`;
-    const label = CITY.name[i];
-    const box = [X - 5, Y - 10, X + ink.measureText(label).width + 10, Y + 6];
+    const sp = citySprite(i);
+    const box = [X - 5, Y - 10, X + sp.tw + 10, Y + 6];
     if (overlaps(box, boxes)) continue;
     boxes.push(box);
 
-    ink.strokeStyle = 'rgba(255,255,255,0.92)';
-    ink.lineWidth = 3;
-    ink.strokeText(label, X + 6, Y + 3);
-    ink.fillStyle = cap ? '#5f666f' : '#858c96';
-    ink.fillText(label, X + 6, Y + 3);
-
-    ink.fillStyle = cap ? 'rgba(20,22,26,0.70)' : 'rgba(20,22,26,0.42)';
-    ink.beginPath();
-    ink.arc(X, Y, cap ? 1.9 : 1.3, 0, 6.2832);
-    ink.fill();
-
+    ink.drawImage(sp.cv, X - SPR_X, Y - SPR_Y, sp.w, SPR_H);
     placed++;
   }
 }
