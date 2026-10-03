@@ -70,7 +70,7 @@ const UNIFORMS = ['uRes', 'uScale', 'uRot', 'uDecl', 'uSublon',
                   'uDrift', 'uDriftC', 'uDetail', 'uFine', 'uSeuil', 'uFranges',
                   'uBelief', 'uHere',
                   'uSat', 'uTache', 'uGrey', 'uPorte', 'uCouloir', 'uSea', 'uLand',
-                  'uLegN', 'uLegP', 'uLegQ', 'uField', 'uMask',
+                  'uLegN', 'uOff', 'uLegP', 'uLegQ', 'uField', 'uMask',
                   'uWx', 'uWxOn', 'uSlot', 'uWxN'];
 
 /**
@@ -363,6 +363,9 @@ export function paint(canvas, sun, slot) {
   gl.uniform2f(U.uCouloir, view.look.pas, view.look.trait);
   gl.uniform1f(U.uSea, view.look.sea);
   gl.uniform1f(U.uLand, view.look.land);
+  const sc = view.cut;
+  gl.uniform1i(U.uOff, (sc.relief ? 1 : 0) | (sc.tache ? 2 : 0) | (sc.chance ? 4 : 0)
+                     | (sc.meteo ? 8 : 0) | (sc.legendes ? 16 : 0) | (sc.grain ? 32 : 0));
 
   // La grille n'est en service que si elle est arrivée ET versée. Un slot
   // nul veut dire « mode dev » : le shader reprend son bruit fractal.

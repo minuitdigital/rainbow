@@ -51,6 +51,10 @@ uniform float uSea, uLand;             // profondeur d'encre des aplats
 uniform vec3  uBelief;                 // météo, légende, chance — somme = 1
 uniform vec3  uHere;                   // le réticule : là où se tient le piéton
 uniform int   uLegN;
+// LES COUPURES de l'admin, bit a bit : 1 relief, 2 tache, 4 chance,
+// 8 meteo, 16 legendes, 32 grain. Uniformes : tous les pixels prennent
+// la meme branche, la branche coupee ne coute rien.
+uniform int   uOff;
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
 uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
 uniform sampler2D uField, uMask;
@@ -182,7 +186,8 @@ void main(){
   vec2 gx = vec2(du.x, dv.x), gy = vec2(du.y, dv.y);
 
   // --- APLATS : paliers découpés dans le champ (0 = fosses, .5 = côte, 1 = sommets)
-  float f = textureGrad(uField, uv, gx, gy).r;
+  float f = 0.62;
+  if((uOff & 1) == 0) f = textureGrad(uField, uv, gx, gy).r;
   float bS = clamp((0.5 - f) * 2.0, 0.0, 1.0) * NSEA;
   float bL = clamp((f - 0.5) * 2.0, 0.0, 1.0) * NLAND;
   float wS = max(fwidth(bS), 1e-4), wL = max(fwidth(bL), 1e-4);
@@ -233,6 +238,7 @@ void main(){
   float spill = SPILL_AMP * (1.0 - smoothstep(0.0, SPILL_DEG, dOut));
   float gateC = max(S, spill * uBelief.z);
 
+  if((uOff & 2) != 0){ S = 0.0; gateC = 0.0; }   // tache coupee (admin)
   if(S > 0.0 || gateC > 0.002){
     float ccl = cos(pl);
     vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * FIELD_FREQ;
@@ -242,8 +248,10 @@ void main(){
     // multipliée par LA FLAQUE — ce que le piéton porte. Loin de lui elle
     // ne vaut rien, et c'est pour ça que la fuite ne fait pas un anneau
     // plus gras mais des taches isolées, autour de nous.
-    float CHA = smoothstep(0.46, 0.76,
-                  fbm(sp * CHANCE_FREQ + vec3(uDriftC + 41.0, 17.0, 7.0)));
+    float CHA = 0.0;
+    if((uOff & 4) == 0)
+      CHA = smoothstep(0.46, 0.76,
+              fbm(sp * CHANCE_FREQ + vec3(uDriftC + 41.0, 17.0, 7.0)));
     vec3 dh = g - uHere;
     float lr = radians(mix(LUCK_NEAR, LUCK_FAR, uBelief.z));
     float luck = exp(-dot(dh, dh) / (lr * lr));
@@ -262,7 +270,9 @@ void main(){
       // Et il se trouve que la vraie meteo est la MOINS chere des deux :
       // deux lectures de texture au lieu de vingt-quatre hachages. Brancher
       // Open-Meteo accelere la carte, ce qui n'allait pas de soi.
-      if(uWxOn > 0.5){
+      if((uOff & 8) != 0){
+        rain = 0.0; gap = 0.0;
+      } else if(uWxOn > 0.5){
         float k0 = floor(uSlot);
         float k1 = min(k0 + 1.0, uWxN - 1.0);
         vec4 w0 = texture(uWx, vec3(uv, k0));
@@ -284,7 +294,7 @@ void main(){
       }
 
       float MET = 1.0 - exp(-rain * (gap / 1.2) * 6.0);
-      float LEG = legendAt(g);
+      float LEG = (uOff & 16) == 0 ? legendAt(g) : 0.0;
       belief += S * (uBelief.x * MET + uBelief.y * LEG);
     }
 
@@ -295,7 +305,7 @@ void main(){
     // Deux octaves fines entrent progressivement. Elles ne DÉPLACENT pas la
     // tache — elles la dépolissent : la structure, donc l'indice lu, reste
     // celle du champ. C'est de la matière, pas de la donnée.
-    if(uDetail > 0.002){
+    if(uDetail > 0.002 && (uOff & 32) == 0){
       float grain = (vnoise(sp *  6.1) - 0.5) * 1.10
                   + (vnoise(sp * 15.7) - 0.5) * 0.60;
 

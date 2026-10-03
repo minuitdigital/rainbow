@@ -110,7 +110,9 @@ export const view = {
   // Les côtes sont coupées par défaut (décision de l'auteur, 3 octobre) :
   // sur le Pi, elles coûtaient plus que tout le reste de l'encre.
   cut: { shader: false, ink: false, coast: true, places: false,
-         callouts: false, icons: false, walker: false },
+         callouts: false, icons: false, walker: false,
+         relief: false, tache: false, chance: false, meteo: false,
+         legendes: false, grain: false },
 
   /**
    * D'OÙ VIENT L'HEURE, et donc d'où vient la pluie. `dev` invente un
