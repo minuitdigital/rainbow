@@ -18,7 +18,7 @@
 //  ciel le sujet, pas la géographie.
 // =========================================================================
 
-import { DEG, flatten, matT, geoVec, angDist } from './projection.js';
+import { DEG, RAD, M, fy, fyp, clamp1, flatten, matT, geoVec, angDist } from './projection.js';
 import { view, scale, sx, sy, gait, liveReperes } from './view.js';
 import { zones } from './zones.js';
 import { CITY, tierAt, placeLine } from './ground.js';
@@ -77,12 +77,61 @@ function visibleRadius() {
   return Math.min(181, Math.hypot(view.W / 2, view.H / 2) / scale() * 75 + 15);
 }
 
+// LES NIVEAUX DE DÉTAIL. 55 000 points de côte, c'est le dessin à fort
+// zoom ; vu de loin, des dizaines tombent dans le même pixel et chacun
+// coûtait sa projection. Chaque anneau garde donc plusieurs versions,
+// éclaircies une fois pour toutes au chargement : un point n'est retenu
+// que s'il s'écarte du précédent d'au moins `tol` degrés. Les vecteurs
+// unitaires sont calculés là aussi — plus de trigonométrie par image que
+// celle de la projection elle-même.
+const LOD = [0, 0.04, 0.1, 0.25, 0.6];
+
+function prepare(rings) {
+  for (const ring of rings) {
+    const p = ring.p, n = p.length / 2;
+    ring.lod = LOD.map(tol => {
+      const keep = [];
+      let lx = 1e9, ly = 1e9;
+      for (let i = 0; i < n; i++) {
+        const lon = p[2*i], lat = p[2*i+1];
+        const d = Math.max(Math.abs(lon - lx) * Math.cos(lat * DEG), Math.abs(lat - ly));
+        if (i === 0 || i === n - 1 || d >= tol) { keep.push(i); lx = lon; ly = lat; }
+      }
+      const v = new Float32Array(keep.length * 3);
+      keep.forEach((i, k) => {
+        const cp = Math.cos(p[2*i+1] * DEG);
+        v[3*k]   = cp * Math.cos(p[2*i] * DEG);
+        v[3*k+1] = cp * Math.sin(p[2*i] * DEG);
+        v[3*k+2] = Math.sin(p[2*i+1] * DEG);
+      });
+      return v;
+    });
+  }
+}
+prepare(COAST.coast);
+prepare(COAST.lakes);
+
+/** Le niveau le plus clair dont l'écart reste sous un demi-pixel. */
+function lodFor() {
+  const tol = 0.5 * RAD / (scale() * view.dpr);
+  let k = 0;
+  while (k + 1 < LOD.length && LOD[k + 1] <= tol) k++;
+  return k;
+}
+
 function drawRings(rings, radius, centre, Rt, width, alpha) {
   ink.lineWidth = width;
   ink.strokeStyle = `rgba(20,22,26,${alpha})`;
   ink.lineJoin = 'round';
   ink.lineCap = 'round';
   ink.beginPath();
+
+  // La projection d'Equal Earth, déroulée ici : `flatten` rend un tableau
+  // par point, et 55 000 tableaux par image se paient au ramasse-miettes.
+  const r0 = Rt[0], r1 = Rt[1], r2 = Rt[2], r3 = Rt[3], r4 = Rt[4],
+        r5 = Rt[5], r6 = Rt[6], r7 = Rt[7], r8 = Rt[8];
+  const s = scale(), cxW = view.W / 2, cyH = view.H / 2;
+  const lod = lodFor();
 
   for (const ring of rings) {
     // Écartement grossier par boîte englobante, quand la boîte est assez
@@ -93,16 +142,21 @@ function drawRings(rings, radius, centre, Rt, width, alpha) {
       if (angDist((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, centre) - rr > radius) continue;
     }
 
-    const p = ring.p;
+    const v = ring.lod[lod];
     let started = false, prev = 0;
-    for (let i = 0; i < p.length; i += 2) {
-      const cp = Math.cos(p[i+1] * DEG);
-      const f = flatten(Rt, [cp * Math.cos(p[i] * DEG), cp * Math.sin(p[i] * DEG),
-                             Math.sin(p[i+1] * DEG)]);
+    for (let i = 0; i < v.length; i += 3) {
+      const x = v[i], y = v[i+1], z = v[i+2];
+      const q0 = r0*x + r3*y + r6*z;
+      const q1 = r1*x + r4*y + r7*z;
+      const q2 = r2*x + r5*y + r8*z;
+      const lam = Math.atan2(q1, q0);
+      const th = Math.asin(M * clamp1(q2));
       // Le trait passe derrière le méridien opposé : on lève le crayon.
-      if (started && Math.abs(f[2] - prev) > 180) started = false;
-      prev = f[2];
-      const X = sx(f[0]), Y = sy(f[1]);
+      const deg = lam * RAD;
+      if (started && Math.abs(deg - prev) > 180) started = false;
+      prev = deg;
+      const X = lam * Math.cos(th) / (M * fyp(th)) * s + cxW;
+      const Y = -fy(th) * s + cyH;
       if (!started) { ink.moveTo(X, Y); started = true; } else ink.lineTo(X, Y);
     }
   }
