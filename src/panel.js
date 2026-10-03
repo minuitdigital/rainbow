@@ -1364,6 +1364,12 @@ export function initPanel(invalidate, resize) {
   // avec « ?admin ». Caché, pas protégé.
   const admin = new URLSearchParams(location.search).has('admin');
   byId('box-admin').hidden = !admin;
+  // La page publique ne garde que les trois boîtes du tableau — titre,
+  // héliodon, algorithme. LÉGENDES et RÉGLAGES ne restent que dans
+  // l'admin ; la plaque, elle, appelle toujours `plaque` (décision de
+  // l'auteur, 3 octobre).
+  byId('box-leg').hidden = !admin;
+  byId('box-reg').hidden = !admin;
 
   for (const [id, key] of SHARES) {
     const input = byId(id);

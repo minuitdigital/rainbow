@@ -112,7 +112,7 @@
   </section>
   <!-- ===================================================== LES LÉGENDES -->
   <!-- Les pastilles ne sélectionnent rien : elles amènent le réticule. -->
-  <section class="box">
+  <section class="box" id="box-leg">
     <div class="head">
       <span>légendes</span>
       <button type="button" id="pli-leg" aria-expanded="false" aria-controls="corps-leg"
@@ -137,7 +137,7 @@
        Chaque commande a UN point d'entrée, `plaque` dans src/panel.js :
        la page l'appelle, le Raspberry Pi l'appellera. Tout ce qui n'est
        pas sur la plaque est dans le registre ADMIN, plus bas, caché. -->
-  <section class="box plaque">
+  <section class="box plaque" id="box-reg">
     <div class="head quiet">
       <span>réglages</span>
       <button type="button" id="pli-reg" aria-expanded="false" aria-controls="corps-reg"
