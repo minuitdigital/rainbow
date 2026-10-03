@@ -1400,7 +1400,7 @@ export function initPanel(invalidate, resize) {
   }
 
   // LA RÉSOLUTION DU SHADER — voir `view.gls`. Retaille les calques.
-  for (const [id, k] of [['gls-100', 1], ['gls-70', 0.7], ['gls-50', 0.5]]) {
+  for (const [id, k] of [['gls-100', 1], ['gls-50', 0.5], ['gls-25', 0.25]]) {
     byId(id).checked = view.gls === k;
     byId(id).addEventListener('change', () => { view.gls = k; remeasure(); });
   }
