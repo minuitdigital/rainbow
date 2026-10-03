@@ -691,6 +691,20 @@ body.bare .rail { display: none; }
   white-space: pre-line;
 }
 
+/* LE PETIT ÉCRAN — le LCD du tableau, 1024 × 600. Le panneau y mangeait
+   un tiers de la carte : plus étroit, plus serré, des graphes plus bas.
+   Le texte ne rapetisse pas : à 118 points par pouce, il est déjà petit. */
+@media (max-width: 1100px) {
+  .rail { width: 272px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+          padding-top: calc(8px + env(safe-area-inset-top, 0px)); gap: 6px; }
+  .body { padding: 5px 8px 7px; gap: 5px; }
+  .head { padding: 2px 8px; }
+  #p-sun { height: 70px; }
+  #p-idx { height: 88px; }
+  .head { letter-spacing: .08em; }
+  .reading { letter-spacing: 0; gap: 4px; flex-wrap: wrap; }
+}
+
 @media (max-width: 620px) {
   .rail { width: 100%; }
   .dial { grid-template-columns: 78px 1fr 42px; }
