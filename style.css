@@ -355,6 +355,23 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   cursor: pointer;
 }
 .choice.cut input[type="checkbox"]:checked { background: var(--ink); }
+/* L'étiquette AU-DESSUS de ses cases (admin, performance) : dans un
+   panneau de 272 px, la colonne de 88 px poussait les options à la ligne
+   n'importe où. Ici elles tiennent toutes sur la ligne d'en dessous. */
+.choice.stack { flex-wrap: wrap; column-gap: 12px; row-gap: 3px; margin-top: 4px; }
+.choice.stack > span { width: 100%; }
+
+/* Les trois parties de la performance : un titre discret et un filet. */
+.part {
+  margin: 10px 0 2px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  text-transform: uppercase;
+  letter-spacing: .16em;
+}
+.part:first-child { margin-top: 0; }
+
 .choice button.plain {
   font: inherit; letter-spacing: inherit; color: var(--ink);
   background: none; border: 1px solid var(--ink); padding: 1px 6px; cursor: pointer;

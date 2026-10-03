@@ -456,6 +456,7 @@
              rien tout seul : il faut savoir ce qu'il mesure, et surtout ce
              qui le fait monter. Sans &#231;a on optimise au hasard. -->
         <div class="dials" id="corps-r-perf">
+            <div class="part">mesures</div>
 
             <div class="gauge"><span>images/s</span><em id="g-fps">&#8212;</em>
               <button type="button" class="ask" data-note="fps" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
@@ -487,35 +488,38 @@
             <div class="gauge"><span>pixels</span><em id="g-px">&#8212;</em>
               <button type="button" class="ask" data-note="px" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
 
+            <!-- TROIS BLOCS : les mesures au-dessus, puis ce qu'on choisit,
+                 puis ce qu'on coupe pour mesurer. Dans le panneau de 272 px,
+                 l'&#233;tiquette passe AU-DESSUS de ses cases (.stack) : sur une
+                 seule ligne, les options s'enroulaient n'importe o&#249;. -->
+            <div class="part">affichage</div>
+
             <!-- LE MODE DE CALCUL, manuel et m&#233;moris&#233;. Une d&#233;tection
                  automatique aurait chang&#233; le rendu sans le dire, et sur une
                  oeuvre on ne veut pas d'un tableau qui se r&#232;gle dans notre
                  dos. Deux cases, pour la m&#234;me raison qu'&#224; l'horloge : on
                  doit LIRE ce qu'on a choisi, pas s'en souvenir. -->
-            <div class="choice">
+            <div class="choice stack">
               <span>machine</span>
               <label><input type="radio" name="rig" id="rig-laptop" checked><b>laptop</b></label>
               <label><input type="radio" name="rig" id="rig-mini"><b>mini</b></label>
               <button type="button" class="ask" data-note="rig"
                       aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
             </div>
-
-            <!-- LES COUPURES : cocher, c'est NE PLUS dessiner ce poste. Pour
-                 savoir lequel co&#251;te, sur la machine m&#234;me. M&#233;moris&#233;. -->
             <!-- LA R&#201;SOLUTION DU SHADER : le calque WebGL calcul&#233; plus petit,
                  agrandi par le navigateur. L'encre reste nette. M&#233;moris&#233;. -->
-            <div class="choice cut">
-              <span>shader</span>
+            <div class="choice cut stack">
+              <span>r&#233;solution, %</span>
               <label><input type="radio" name="gls" id="gls-80"><b>80</b></label>
               <label><input type="radio" name="gls" id="gls-85"><b>85</b></label>
               <label><input type="radio" name="gls" id="gls-90"><b>90</b></label>
               <label><input type="radio" name="gls" id="gls-95"><b>95</b></label>
-              <label><input type="radio" name="gls" id="gls-100" checked><b>100 %</b></label>
+              <label><input type="radio" name="gls" id="gls-100" checked><b>100</b></label>
             </div>
             <!-- EN MOUVEMENT : le shader descend &#224; cette r&#233;solution pendant que
                  la carte glisse, puis revient &#224; celle du dessus &#224; l'arr&#234;t. -->
-            <div class="choice cut">
-              <span>en mouvement</span>
+            <div class="choice cut stack">
+              <span>en mouvement, %</span>
               <label><input type="radio" name="glm" id="glm-30"><b>30</b></label>
               <label><input type="radio" name="glm" id="glm-45"><b>45</b></label>
               <label><input type="radio" name="glm" id="glm-60"><b>60</b></label>
@@ -523,48 +527,53 @@
             </div>
             <!-- PIXEL : la tache calcul&#233;e par blocs, le fond reste net.
                  &#171; direct &#187; = chaque pixel, comme avant. M&#233;moris&#233;. -->
-            <div class="choice cut">
-              <span>tache</span>
+            <div class="choice cut stack">
+              <span>tache, en px</span>
               <label><input type="radio" name="pix" id="pix-1" checked><b>direct</b></label>
               <label><input type="radio" name="pix" id="pix-4"><b>4</b></label>
               <label><input type="radio" name="pix" id="pix-6"><b>6</b></label>
               <label><input type="radio" name="pix" id="pix-8"><b>8</b></label>
-              <label><input type="radio" name="pix" id="pix-12"><b>12 px</b></label>
-            </div>
-            <!-- LES C&#212;TES : trac&#233;es par l'encre (lacs compris, lourd sur le
-                 Pi) ou par le shader (iso-ligne du relief, presque gratuite). -->
-            <div class="choice cut">
-              <span>c&#244;tes</span>
-              <label><input type="radio" name="cote" id="cote-aucune" checked><b>aucune</b></label>
-              <label><input type="radio" name="cote" id="cote-encre"><b>encre</b></label>
-              <label><input type="radio" name="cote" id="cote-shader"><b>shader</b></label>
+              <label><input type="radio" name="pix" id="pix-12"><b>12</b></label>
             </div>
             <!-- PALETTE : l'irisation en N teintes franches. -->
-            <div class="choice cut">
+            <div class="choice cut stack">
               <span>palette</span>
               <label><input type="radio" name="pal" id="pal-0" checked><b>continue</b></label>
               <label><input type="radio" name="pal" id="pal-6"><b>6</b></label>
               <label><input type="radio" name="pal" id="pal-8"><b>8</b></label>
               <label><input type="radio" name="pal" id="pal-12"><b>12</b></label>
             </div>
-            <div class="choice cut">
-              <span>couper</span>
+            <!-- LES C&#212;TES : trac&#233;es par l'encre (lacs compris, lourd sur le
+                 Pi) ou par le shader (iso-ligne du relief, presque gratuite). -->
+            <div class="choice cut stack">
+              <span>c&#244;tes</span>
+              <label><input type="radio" name="cote" id="cote-aucune" checked><b>aucune</b></label>
+              <label><input type="radio" name="cote" id="cote-encre"><b>encre</b></label>
+              <label><input type="radio" name="cote" id="cote-shader"><b>shader</b></label>
+            </div>
+
+            <!-- LES COUPURES : cocher, c'est NE PLUS dessiner ce poste. Pour
+                 savoir lequel co&#251;te, sur la machine m&#234;me. M&#233;moris&#233;. -->
+            <div class="part">couper, pour mesurer</div>
+            <div class="choice cut stack">
+              <span>tout</span>
               <label><input type="checkbox" id="cut-shader"><b>shader</b></label>
               <label><input type="checkbox" id="cut-ink"><b>encre</b></label>
             </div>
-            <div class="choice cut">
+            <div class="choice cut stack">
               <span>dans l'encre</span>
               <label><input type="checkbox" id="cut-places"><b>villes</b></label>
               <label><input type="checkbox" id="cut-callouts"><b>&#233;tiquettes</b></label>
             </div>
-            <div class="choice cut">
+            <div class="choice cut stack">
               <span>dans le shader</span>
               <label><input type="checkbox" id="cut-relief"><b>relief</b></label>
               <label><input type="checkbox" id="cut-tache"><b>tache</b></label>
               <label><input type="checkbox" id="cut-grain"><b>grain</b></label>
             </div>
+
+            <div class="part">&#233;cran</div>
             <div class="choice">
-              <span>&#233;cran</span>
               <button type="button" class="plain" id="plein-ecran">plein &#233;cran</button>
             </div>
         </div>
