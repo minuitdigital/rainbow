@@ -98,6 +98,14 @@ export const view = {
    * un réglage : rien n'est mémorisé, un rechargement remet tout. Une
    * carte laissée sans shader par mégarde ne doit pas survivre au soir.
    */
+  /**
+   * LA RÉSOLUTION DU SHADER, en fraction des pixels de l'encre : 1, 0,7
+   * ou 0,5. Le calque WebGL est calculé plus petit et le navigateur
+   * l'agrandit ; l'encre, elle, reste nette. 0,7 divise le travail du
+   * processeur graphique par deux, 0,5 par quatre. Admin, non mémorisé.
+   */
+  gls: 1,
+
   cut: { shader: false, ink: false, coast: false, places: false,
          callouts: false, icons: false, walker: false, panel: false },
 
@@ -227,7 +235,7 @@ export function noteLoad(nom, what) {
 }
 
 /** Les pixels réellement calculés par le shader, par image. */
-export const pixelCount = () => view.W * view.dpr * view.H * view.dpr;
+export const pixelCount = () => view.W * view.dpr * view.H * view.dpr * view.gls * view.gls;
 
 /**
  * Les trois poids ramenés à une somme de 1 : wM = m / (m + l + c).

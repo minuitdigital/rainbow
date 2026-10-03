@@ -339,7 +339,8 @@ export function paint(canvas, sun, slot) {
   gl.clearColor(1, 1, 1, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
   gl.uniform2f(U.uRes, canvas.width, canvas.height);
-  gl.uniform1f(U.uScale, scale() * view.dpr);
+  // Pixels du calque par pixel de page : dpr, réduit par `gls` s'il y a lieu.
+  gl.uniform1f(U.uScale, scale() * canvas.width / view.W);
   gl.uniformMatrix3fv(U.uRot, false, view.R);
   gl.uniform1f(U.uDecl, sun.decl);
   gl.uniform1f(U.uSublon, sun.sublon);

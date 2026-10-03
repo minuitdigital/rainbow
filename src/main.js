@@ -42,10 +42,11 @@ const inkCv = document.getElementById('ink');
 
 function resize() {
   measure(glCv.clientWidth, glCv.clientHeight);
-  for (const c of [glCv, inkCv]) {
-    c.width = Math.round(view.W * view.dpr);
-    c.height = Math.round(view.H * view.dpr);
-  }
+  // Le shader peut tourner à une résolution moindre que l'encre — `gls`.
+  glCv.width = Math.round(view.W * view.dpr * view.gls);
+  glCv.height = Math.round(view.H * view.dpr * view.gls);
+  inkCv.width = Math.round(view.W * view.dpr);
+  inkCv.height = Math.round(view.H * view.dpr);
   rescale();
   invalidate();
 }

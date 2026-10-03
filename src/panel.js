@@ -1393,6 +1393,12 @@ export function initPanel(invalidate, resize) {
     input.addEventListener('change', () => { view.cut[key] = input.checked; repaint(); });
   }
 
+  // LA RÉSOLUTION DU SHADER — voir `view.gls`. Retaille les calques.
+  for (const [id, k] of [['gls-100', 1], ['gls-70', 0.7], ['gls-50', 0.5]]) {
+    byId(id).checked = view.gls === k;
+    byId(id).addEventListener('change', () => { view.gls = k; remeasure(); });
+  }
+
   // LE PLEIN ÉCRAN, pour le Pi qui n'a pas de clavier (la touche « f ») :
   // un bouton dans l'admin, un autre dans le coin de la carte. Celui du
   // coin s'efface une fois en plein écran, et n'existe pas si le
