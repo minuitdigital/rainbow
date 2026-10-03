@@ -26,7 +26,7 @@
 //  Citer une croyance sans dire d'où elle vient, sur un mur, sous un nom
 //  propre, c'est de l'appropriation avec une jolie police. La pièce affiche
 //  donc la provenance de chaque phrase, et quand il n'y en a pas, elle
-//  l'écrit : « source non établie ». Un point dont on ne sait pas d'où il
+//  l'écrit : « (sans source) ». Un point dont on ne sait pas d'où il
 //  vient reste sur la carte — mais il le dit.
 //
 //    src: { qui: '…', url: '…' }   une référence qu'on peut ouvrir

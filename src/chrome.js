@@ -1,19 +1,9 @@
 // =========================================================================
 //  LA MAIN
 //
-//  Le geste, et rien d'autre : le glissé, la molette, les touches, la
-//  feuille d'explication, et la mise en veille. Tout ce qui s'AFFICHE vit
-//  maintenant dans panel.js — ce fichier ne lit aucune donnée du ciel et
-//  n'écrit dans aucun champ.
-//
-//  La navigation est une ROTATION LIBRE DE LA SPHÈRE, façon boule de
-//  commande : le point saisi reste sous le doigt, partout, y compris aux
-//  pôles. Aucune singularité, aucune butée. Le nord ne reste pas en haut —
-//  c'est assumé, c'est le comportement d'un globe, pas d'un plan.
-//
-//  Les flèches du clavier déplacent par pas depuis le centre : c'est déjà
-//  le geste du futur mini-joystick du tableau, où l'e-ink interdira tout
-//  glissement fluide.
+//  Le geste seul : glissé, molette, touches, feuille d'explication, veille.
+//  Rien ne s'affiche ici (voir panel.js). Rotation libre de la sphère :
+//  le point saisi reste sous le doigt, le nord ne reste pas en haut.
 // =========================================================================
 
 import { between } from './projection.js';
@@ -23,18 +13,11 @@ import {
 
 const el = id => document.getElementById(id);
 
-/**
- * `invalidate` est passé par main.js : la main ne connaît pas la boucle
- * d'images, elle se contente de dire « quelque chose a bougé ».
- */
+/** `invalidate`, fourni par main.js, dit « quelque chose a bougé ». */
 export function bind(canvas, invalidate) {
   let idleTimer = 0;
 
-  /**
-   * Au repos, le mobilier s'estompe et il ne reste que la carte. Sur un
-   * mur, c'est l'état normal de la pièce : l'instrument est là pour qui
-   * s'approche, pas pour qui passe.
-   */
+  /** Au repos, le mobilier s'estompe et il ne reste que la carte. */
   const wake = () => {
     document.body.classList.remove('idle');
     clearTimeout(idleTimer);
@@ -146,10 +129,8 @@ export function bind(canvas, invalidate) {
   el('help-close').addEventListener('click', closeHelp);
   sheet.addEventListener('click', e => { if (e.target === sheet) closeHelp(); });
 
-  // N'IMPORTE QUELLE feuille ouverte endort le globe, pas seulement
-  // l'explication : le panneau en a une aussi, pour la provenance des
-  // légendes. Chacune referme la sienne sur Échap ; ici on se contente de
-  // ne pas faire tourner la Terre pendant qu'on lit.
+  // N'IMPORTE QUELLE feuille ouverte (le panneau a la sienne) coupe le
+  // clavier ; chacune se referme elle-même sur Échap.
   const anySheet = () => document.querySelector('.sheet:not([hidden])');
 
   window.addEventListener('keydown', e => {

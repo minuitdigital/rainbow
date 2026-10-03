@@ -1,16 +1,9 @@
 """
-Carte du sol, pour les étiquettes : accessibilité et dégagement de l'horizon.
-
-Un arc-en-ciel n'existe pas à un endroit, il existe pour un observateur. Deux
-facteurs en découlent :
-
-  accessibilité  peut-on seulement être là ? pleine mer, calotte, haute
-                 altitude comptent contre
-  dégagement     l'horizon est-il ouvert ? une plaine ou une côte valent mieux
-                 qu'une vallée encaissée
-
-Sortie : terrain.js, 360 x 180 octets encodés en base64, un octet par degré
-carré — quartet haut = accessibilité, quartet bas = dégagement.
+Carte du sol pour les étiquettes : un arc existe pour un observateur.
+  accessibilité  peut-on être là ? (pleine mer, calotte, haute altitude : non)
+  dégagement     l'horizon est-il ouvert ? (plaine, côte : oui ; vallée : non)
+Sortie : terrain.js, 360 x 180 octets en base64, un par degré carré ;
+quartet haut = accessibilité, quartet bas = dégagement.
 """
 import base64, json
 import numpy as np
@@ -58,7 +51,7 @@ del src
 print('  grille de travail', elev.shape)
 
 # ------------------------------------------------------------------ dégagement
-# amplitude du relief dans un voisinage de 5 cases (~1000 km... non : ~90 km)
+# amplitude du relief dans un voisinage de 5 cases (~90 km)
 print('relief local ...')
 hi = elev.copy()
 lo = elev.copy()

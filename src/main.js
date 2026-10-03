@@ -1,27 +1,8 @@
 // =========================================================================
 //  L'ASSEMBLAGE
 //
-//  Le seul fichier qui connaisse tous les autres, et le seul qui touche
-//  au document. Il fait trois choses : il branche, il mesure, et il tient
-//  la boucle d'images.
-//
-//  L'ordre de dépendance de tout le programme, de haut en bas, sans
-//  jamais de retour en arrière :
-//
-//      projection   maths pures, ne connaît personne
-//      legends      les hauts lieux de la croyance, écrits à la main
-//      weather      la grille Open-Meteo : chargement, fraîcheur, lecture
-//      sky          la porte du soleil, et le partage de la croyance
-//      ground       le relief et les lieux
-//      view         le seul état mutable : où, de quelle distance, quand
-//      history      les 24 dernières heures, recalculées et non mémorisées
-//      zones        ce qui vit d'une image à l'autre
-//      shader       le GLSL
-//      map          la carte peinte
-//      ink          le calque 2D
-//      panel        les cinq registres de droite
-//      chrome       la main
-//      main         ici
+//  Le seul module qui connaisse tous les autres et touche au document :
+//  il branche, il mesure, il tient la boucle d'images.
 // =========================================================================
 
 import { view, measure, centre, centreVec, coast, anchorTo, simDate, elapsedHours,
@@ -41,15 +22,12 @@ const inkCv = document.getElementById('ink');
 // --------------------------------------------------------------- la mesure
 
 function resize() {
-  // Le piéton au milieu de la carte LIBRE : la moitié du panneau en moins,
-  // tant qu'il est là et qu'il ne prend pas tout l'écran (téléphone).
-  // Avant `measure`, qui en tient compte pour que la carte couvre encore
-  // tout l'écran.
+  // Le piéton au milieu de la carte libre : décalé de la moitié du panneau,
+  // sauf si le panneau prend tout l'écran. Avant `measure`, qui en tient compte.
   const rail = document.querySelector('.rail');
   const rw = rail && !document.body.classList.contains('bare') ? rail.offsetWidth : 0;
   view.ox = rw && rw < glCv.clientWidth * 0.6 ? -Math.round(rw / 2) : 0;
   measure(glCv.clientWidth, glCv.clientHeight);
-  // Le shader peut tourner à une résolution moindre que l'encre — `gls`.
   glSize(view.gls);
   inkCv.width = Math.round(view.W * view.dpr);
   inkCv.height = Math.round(view.H * view.dpr);
@@ -63,11 +41,8 @@ function glSize(k) {
   if (glCv.width !== w || glCv.height !== h) { glCv.width = w; glCv.height = h; }
 }
 
-// LA RÉSOLUTION EN MOUVEMENT. Tant que la carte glisse, le shader peut
-// descendre à `glsMove` ; dès qu'elle s'arrête, une dernière image à la
-// pleine résolution choisie (`gls`). L'œil ne lit pas le détail d'une
-// carte qui bouge — il le lit quand elle s'arrête. `glsMove` égal à 1 :
-// rien ne change (le défaut, tant que l'auteur ne l'a pas vu).
+// En mouvement, le shader peut descendre à `glsMove` ; à l'arrêt, une image
+// à `gls`. L'œil ne lit pas le détail d'une carte qui bouge.
 const SETTLE_MS = 140;
 let lastR = null, lastZoom = 0, movedAt = -1e9, wasMoving = false;
 
@@ -82,9 +57,8 @@ function trackMotion(now) {
 }
 
 // -------------------------------------------------------- la boucle d'images
-// On ne redessine que si quelque chose a changé : un geste, une animation
-// en cours, ou le temps qui avance. Une carte figée ne consomme rien —
-// c'est ce qui la rend supportable sur un mur, des années durant.
+// On ne redessine que si quelque chose a changé. Une carte figée ne
+// consomme rien : c'est ce qui la rend supportable sur un mur.
 
 let dirty = true, rafId = 0, last = performance.now(), lastScan = -1e9;
 
@@ -112,7 +86,7 @@ function frame(now) {
   // L'horloge simulée s'accumule ici, et nulle part ailleurs.
   advanceClock(dt);
 
-  // Le zoom glisse vers sa cible, en gardant le point visé sous le curseur.
+  // Le zoom glisse vers sa cible en gardant le point visé sous le curseur.
   const zooming = ease('zoom', view.zoomTarget, 16, dt, 1e-4);
   if (zooming) {
     if (view.anchor) anchorTo(view.anchor.lon, view.anchor.lat, view.anchor.px, view.anchor.py);
@@ -124,34 +98,21 @@ function frame(now) {
 
   // La foulée se mesure APRÈS toutes les rotations : elle lit le
   // déplacement, elle ne le décide pas.
-  //
-  // LE PIÉTON SEUL N'APPELLE QUE L'ENCRE. Après un glissé, il finit son pas
-  // et se retourne pendant deux ou trois secondes ; la carte, elle, ne
-  // bouge plus. Redessiner le shader à chaque image pour ses jambes, c'est
-  // ce qui saccadait au lâcher sur le Pi (3 octobre).
   const walking = stride(dt);
 
-  // LE TEMPS AVANCE — mais pas à la même cadence selon d'où il vient.
-  //
-  // En dev, le curseur multiplie le temps par mille ou par cent mille : la
-  // carte doit alors suivre image par image, sinon le soleil saute.
-  //
-  // En météo, une seconde vaut une seconde. Le soleil avance de quatre
-  // centièmes de degré en dix secondes, et redessiner soixante fois par
-  // seconde pour ça ferait chauffer un Raspberry Pi toute l'année sans que
-  // personne ne voie la différence. La minuterie posée au démarrage réveille
-  // la boucle de loin en loin ; entre deux, la carte dort pour de bon.
+  // En dev, le temps accéléré exige chaque image. En météo, une seconde vaut
+  // une seconde : le battement de dix secondes (plus bas) suffit.
   if (view.clock === 'dev' && view.speed > 0) animating = true;
 
-  // En mouvement, et pour SETTLE_MS après : la boucle continue, pour que
-  // l'image nette tombe d'elle-même quand le doigt s'arrête.
+  // La boucle continue SETTLE_MS après le mouvement, et l'image nette est
+  // demandée explicitement à l'image où il cesse.
   const moving = trackMotion(now);
   if (moving && view.glsMove < view.gls) animating = true;
-  // L'image nette tombe à l'image où le mouvement cesse — c'était le pas
-  // du piéton qui la provoquait, par hasard ; elle est demandée ici.
   if (wasMoving && !moving) dirty = true;
   wasMoving = moving;
 
+  // Le piéton seul (il finit son pas après un glissé) ne redessine que
+  // l'encre : refaire le shader pour ses jambes saccadait sur le Pi.
   const legsOnly = walking && !dirty && !animating;
   if (walking) animating = true;
 
@@ -162,22 +123,16 @@ function frame(now) {
     const when = simDate();
     const sun = solar(when);
 
-    // Les zones ne sont ré-examinées que quelques fois par seconde — la
-    // machine dit combien. Le tracé, lui, suit chaque image : les points
-    // sont rangés en coordonnées géographiques, pas en pixels.
-    //
-    // `centreVec` est le centre de la flaque de chance : le balayage doit
-    // savoir où se tient le piéton, puisque sa chance le suit.
+    // Les zones sont ré-examinées quelques fois par seconde (`rig().scanMs`) ;
+    // le tracé suit chaque image, les points étant rangés en géographique.
+    // `centreVec` : la chance suit le piéton.
     if (now - lastScan > rig().scanMs) {
       lastScan = now;
       scan(sun, drift(), driftChance(), elapsedHours(), beliefWeights(), centreVec());
     }
 
-    // LES TROIS CHRONOMÈTRES. Ils ne mesurent que le JavaScript — le
-    // shader, lui, est encore en train de travailler quand `paint` rend la
-    // main, et c'est le chronomètre du pilote qui le relève (voir map.js).
-    // Le coût des `performance.now()` eux-mêmes est de l'ordre du dixième
-    // de microseconde : quatre par image, c'est sous le bruit.
+    // Chronomètres JavaScript seulement : le shader travaille encore quand
+    // `paint` rend la main (le temps GPU est relevé dans map.js).
     const c = centre();
     const t0 = performance.now();
     paint(glCv, sun, slotNow());
@@ -189,32 +144,22 @@ function frame(now) {
 
     beatFrame(now, t3 - t0, t1 - t0, t2 - t1, t3 - t2);
 
-    // La fraîcheur se regarde ICI, dans la boucle, et pas sur une
-    // minuterie : une page qui se réveille après trois jours de veille
-    // aurait vu passer douze réveils pour rien. L'appel ne fait rien
-    // pendant six heures, puis une requête.
+    // Dans la boucle et non sur une minuterie : une page qui sort de veille
+    // n'accumule pas de réveils. Ne fait rien pendant six heures.
     keepFresh();
   }
 
   if (animating) rafId = requestAnimationFrame(frame);
 }
 
-/**
- * LE BATTEMENT LENT du mode météo. Dix secondes : le soleil a bougé de
- * quatre centièmes de degré, ce qui est déjà plus fin que ce que la carte
- * sait montrer. Entre deux battements la boucle d'images est à l'arrêt
- * complet — c'est l'état normal d'un tableau sur un mur.
- */
+/** Le battement lent du mode météo. Entre deux, la boucle est à l'arrêt. */
 setInterval(() => { if (wxOn()) invalidate(); }, 10000);
 
 // ------------------------------------------------------------ le démarrage
-// En dernier, et pas par coquetterie : les déclarations ci-dessus vivent
-// dans leur zone morte temporelle tant que le module n'a pas fini de
-// s'évaluer. Démarrer plus haut ferait lire `dirty` avant qu'il existe.
+// En dernier : les déclarations ci-dessus sont en zone morte temporelle
+// tant que le module n'a pas fini de s'évaluer.
 
-// La veille inscrite dans index.html attend ce drapeau : il dit « les
-// modules sont arrivés ». Ce qui échoue ensuite a le droit de s'expliquer ;
-// ce qui échoue avant ne le peut pas, d'où la veille.
+// La veille d'index.html attend ce drapeau : « les modules sont arrivés ».
 window.__rainbow = true;
 
 const fallback = document.getElementById('fallback');
@@ -226,25 +171,17 @@ if (!initMap(glCv, invalidate, noteLoad)) {
 } else {
   initInk(inkCv);
   // Le panneau avant la main : les réglages mémorisés doivent être posés
-  // (vitesse, allure, croyance) avant la première image.
-  // Deux fonctions et non une : le panneau redessine la plupart du temps,
-  // mais changer de machine change le nombre de pixels réels et demande de
-  // retailler les deux calques.
+  // avant la première image. `resize` sert au changement de machine (dpr).
   initPanel(invalidate, resize, () => profileShader(glCv, solar(simDate()), slotNow()));
   bind(inkCv, invalidate);
 
-  // LA PLAQUE, à portée du Raspberry Pi. Une entrée par commande gravée —
-  // voir `plaque` dans src/panel.js. Le Pi n'aura qu'à appeler, par
-  // exemple, window.plaque.maison() ou window.plaque.meteo(40).
+  // La plaque, appelable par le Pi : window.plaque.maison(), .meteo(40)…
   window.plaque = plaque;
   window.addEventListener('resize', resize);
   resize();
 
-  // LA MÉTÉO ARRIVE QUAND ELLE ARRIVE, et le plus souvent jamais du
-  // premier coup : il faut aller chercher un fichier, le décoder, le
-  // verser au processeur graphique. On ne conditionne donc rien à sa
-  // présence — même règle que les textures, piège n°2. Quand elle tombe,
-  // on la verse, le panneau passe en météo, et on redessine.
+  // Rien n'attend la météo (piège n°2) : quand elle arrive, on la verse,
+  // le panneau passe en météo, on redessine.
   initWeather(() => {
     if (uploadWeather()) {
       weatherArrived();

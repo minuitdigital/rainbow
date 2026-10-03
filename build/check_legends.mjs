@@ -1,33 +1,11 @@
-// =========================================================================
-//  LES HAUTS LIEUX SE VOIENT-ILS ?
+// Les hauts lieux se voient-ils ? `node build/check_legends.mjs`.
 //
-//      node build/check_legends.mjs
-//
-//  Un point de légende peut être parfaitement écrit dans src/legends.js et
-//  n'apparaître JAMAIS à l'écran : il suffit que sa force, multipliée par
-//  la porte du soleil et passée au seuil, ne franchisse pas la barre. La
-//  carte ne le dit pas — elle montre du papier blanc, exactement comme
-//  s'il n'y avait pas de croyance là-bas.
-//
-//  Ce fichier va donc voir. Pour chaque haut lieu, il balaie une journée
-//  entière à quatre dates de l'année, en croyance « légende pure », et
-//  répond à deux questions :
-//
-//      1. le lieu s'allume-t-il, à un moment quelconque ?
-//      2. combien de temps par jour, et dans quelle tranche de hauteur ?
-//
-//  La réponse à la deuxième est le vrai sujet. Un arc-en-ciel demande un
-//  soleil bas : la couleur ne vit donc que dans un COULOIR, une bande
-//  étroite qui suit le terminateur autour du globe. Un lieu « invisible »
-//  est presque toujours un lieu qu'on regarde à la mauvaise heure — et
-//  c'est ce que le pointillé du réglage « couloir » montre à l'écran.
-//
-//  ATTENTION : le dernier étage du calcul — la puissance 1,15, le seuil,
-//  le ré-étalement — vit dans src/shader.js et nulle part ailleurs, parce
-//  qu'il ne concerne que la COULEUR et pas la présence. Il est donc
-//  recopié ici, et c'est la seule copie du projet que le miroir ne garde
-//  pas. Si le bloc « LE SEUIL » du shader bouge, ce fichier ment.
-// =========================================================================
+// Une légende bien écrite peut ne jamais franchir le seuil, sans que la carte
+// le dise. Pour chaque lieu, balaie une journée à quatre dates : s'allume-t-il,
+// combien de temps, à quelle hauteur de soleil (la couleur vit dans un couloir
+// le long du terminateur).
+// ATTENTION : le dernier étage (puissance 1,15, seuil, ré-étalement) est
+// recopié de src/shader.js, hors du miroir. Si « LE SEUIL » y bouge, ce fichier ment.
 
 import { LEGENDS } from '../src/legends.js';
 import { solar, sunElev, sunGate, legendAt, GAIN } from '../src/sky.js';

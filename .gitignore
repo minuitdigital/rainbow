@@ -1,25 +1,10 @@
-# ATTENTION — data/ N'EST PAS ignoré, et ne doit jamais le redevenir.
+# ATTENTION — data/ N'EST PAS ignoré, et ne doit jamais le redevenir :
+# c'est le site (field.png, earth.jpg, coast.js…). L'ignorer donne une
+# page blanche en ligne, sans message. Les sources lourdes vivent dans build/.
 #
-# Ce dossier contenait autrefois les sources lourdes, et il était ignoré
-# à ce titre. Il contient maintenant LE SITE : field.png, earth.jpg,
-# mask.png, coast.js, terrain.js, cities.js. L'oubli a coûté une page
-# blanche en ligne, sans le moindre message pour l'expliquer.
-#
-# Les sources lourdes vivent désormais dans build/, à côté des scripts
-# qui les consomment. Voir REPRISE.md §3 pour où les retrouver.
-#
-# data/weather.png EST L'EXCEPTION, et pour une raison qui n'a rien à voir
-# avec les précédentes : il n'est pas ignoré parce qu'il serait lourd, mais
-# parce qu'il est FABRIQUÉ À CHAQUE PUBLICATION.
-#
-# Il change entièrement tous les jours, et git ne sait pas compresser la
-# différence entre deux PNG : il en garderait chaque version en entier,
-# soit environ 250 Mo par an, indéfiniment. Le robot de .github/workflows/
-# le fabrique, le publie sur GitHub Pages et l'oublie — le dépôt ne le voit
-# jamais passer. Voir REPRISE.md §7.
-#
-# Sur ton poste, `python build/make_weather.py` l'écrit dans data/ pour
-# que la carte ait sa météo en local. C'est cette copie-là qui est ignorée.
+# Seule exception : data/weather.png, refait chaque jour par le robot et
+# publié sans passer par git (un PNG par jour ≈ 250 Mo par an). Ici, c'est
+# la copie locale de `python build/make_weather.py` qui est ignorée.
 
 data/weather.png
 data/weather.json
@@ -38,14 +23,8 @@ __pycache__/
 *.pyc
 *.zip
 
-# Les notes de travail vivent hors du depot depuis le 28/09/2026, dans
-# E:\00 - CREATION\20260101 ATELIER\RAINBOW ESTIMATEUR\CLAUDE. Seul
-# CLAUDE.md reste ici, et reste ignore : c'est une consigne d'atelier,
-# pas une piece de l'oeuvre.
-#
-# build/ N'EST PAS ici, et ne doit pas y venir : le robot GitHub execute
-# build/make_weather.py sur ses serveurs. L'ignorer couperait la meteo.
-#
-# README.md reste suivi : c'est la facade du depot sur GitHub.
+# build/ N'EST PAS ici, et ne doit pas y venir : le robot GitHub exécute
+# build/make_weather.py. L'ignorer couperait la météo.
+# CLAUDE.md est une consigne d'atelier, pas une pièce de l'oeuvre.
 
 CLAUDE.md

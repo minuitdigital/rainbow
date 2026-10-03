@@ -1,24 +1,9 @@
-// =========================================================================
-//  LE MIROIR
+// Le miroir : `node build/check_mirror.mjs`.
 //
-//      node build/check_mirror.mjs
-//
-//  src/shader.js calcule la présence POUR CHAQUE PIXEL, sur le processeur
-//  graphique. src/sky.js la recalcule AU RÉTICULE, en JavaScript. Les deux
-//  doivent dire exactement la même chose : sinon le chiffre affiché cesse
-//  de décrire la couleur qu'on a sous les yeux, et la pièce ment.
-//
-//  Cette duplication ne peut pas être supprimée — on ne fait pas tourner
-//  du GLSL au réticule, et on ne fait pas tourner du JavaScript par pixel.
-//  Elle peut en revanche être SURVEILLÉE : ce fichier lit les deux sources
-//  comme du texte et vérifie que toutes les constantes de la formule y
-//  sont les mêmes. Changer un seuil d'un côté et pas de l'autre devient
-//  une erreur bruyante au lieu d'une dérive silencieuse.
-//
-//  Ce n'est pas une preuve d'égalité : c'est un garde-fou sur les nombres,
-//  qui sont ce qui dérive en pratique. La forme des formules, elle, se
-//  relit à l'œil — les deux fichiers sont écrits pour ça.
-// =========================================================================
+// src/shader.js calcule la présence par pixel, src/sky.js au réticule. Les
+// deux doivent dire la même chose, sinon le chiffre affiché ment sur la
+// couleur. Ce script compare les CONSTANTES des deux sources, lues comme du
+// texte ; la forme des formules, elle, se relit à l'œil.
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -31,11 +16,7 @@ const GLSL = src('src/shader.js');
 const SKY  = src('src/sky.js');
 const LEG  = src('src/legends.js');
 
-/**
- * Chaque règle : un nom, un motif côté GLSL, un motif côté JavaScript.
- * Tous les nombres capturés par l'un doivent égaler ceux capturés par
- * l'autre, dans l'ordre.
- */
+/** Règle : nom, motif GLSL, motif JS ; les nombres capturés doivent être égaux, dans l'ordre. */
 const RULES = [
   ['la porte, hauteur maximale',
     /const float SUN_MAX = ([\d.]+);/,
@@ -105,12 +86,8 @@ const RULES = [
     /1\.0 - exp\(-rain \* \(gap \/ ([\d.]+)\) \* ([\d.]+)\)/,
     /1 - Math\.exp\(-rain \* \(gapAt\(lon, lat, sun, slot\) \/ ([\d.]+)\) \* ([\d.]+)\)/],
 
-  // LA BRANCHE MÉTÉO. Depuis qu'Open-Meteo remplace le bruit, la trouée a
-  // DEUX formules selon le mode, et il faut que les deux tiennent le
-  // miroir. Celle-ci remet la clarté mesurée sur la course exacte de
-  // l'ancienne climatologie — même plancher, même amplitude — pour que
-  // basculer de « dev » à « météo » ne change pas l'échelle de la carte,
-  // seulement ce qu'elle raconte.
+  // Branche météo : la clarté mesurée est remise sur la course de la trouée
+  // climatologique, pour que basculer de mode ne change pas l'échelle.
   ['la trouée mesurée',
     /gap = ([\d.]+) \+ ([\d.]+) \* w\.g;/,
     /if \(slot != null\) return ([\d.]+) \+ ([\d.]+) \* wxClear\(lon, lat, slot\);/],

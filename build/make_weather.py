@@ -1,54 +1,11 @@
-# =========================================================================
-#  LA VRAIE MÉTÉO
+# La vraie météo : `python build/make_weather.py`.
 #
-#      python build/make_weather.py
-#
-#  Va chercher chez Open-Meteo la pluie et le rayonnement direct sur toute
-#  la Terre, et en fait UNE IMAGE que la page charge comme elle charge
-#  field.png. Rien d'autre ne change : pas de clé, pas de serveur, pas
-#  d'appel réseau depuis le tableau. Le Pi accroché au mur télécharge un
-#  fichier statique, une fois par jour, et c'est tout.
-#
-#  CE SCRIPT NE TOURNE JAMAIS SUR LE TABLEAU. Il tourne une fois par jour
-#  sur un robot GitHub, qui publie l'image avec le site. Tout ce qui est
-#  cher — les vingt et une requêtes, la hauteur du soleil en quatre cent
-#  mille points, la dilatation des averses — est payé là, une fois, par
-#  une machine qui n'a que ça à faire.
-#
-#  ----------------------------------------------------------------------
-#  POURQUOI CES DEUX VARIABLES, ET PAS LA COUVERTURE NUAGEUSE
-#
-#  Un arc-en-ciel demande deux choses en même temps : de l'eau en
-#  suspension EN FACE du soleil, et des rayons directs qui arrivent
-#  JUSQU'À L'OBSERVATEUR. La couverture nuageuse ne dit ni l'un ni
-#  l'autre — un ciel couvert à 90 % peut laisser passer un soleil rasant
-#  par une déchirure à l'ouest, et c'est très exactement la situation qui
-#  fabrique les plus beaux arcs.
-#
-#      precipitation      l'eau qui tombe, en millimètres par heure
-#      direct_radiation   les rayons DIRECTS reçus au sol, en W/m²
-#
-#  `direct_radiation` est la mesure de la trouée. Elle dit littéralement
-#  « des rayons non interceptés arrivent ici ». Elle remplace la
-#  climatologie inventée de gapAt() — deux gaussiennes sur la latitude,
-#  qui décrétaient qu'il fait beau sous les tropiques et sur les rails
-#  dépressionnaires. C'était joli et c'était faux.
-#
-#  ----------------------------------------------------------------------
-#  LA PLUIE EST DILATÉE, ET C'EST LE CŒUR DU SUJET
-#
-#  On ne voit pas d'arc-en-ciel DANS l'averse : on est dessous, il pleut,
-#  et le ciel est gris. On le voit À CÔTÉ — l'averse devant soi, le soleil
-#  derrière. Le canal rouge porte donc le maximum de la pluie sur les huit
-#  cases voisines et non la pluie locale : « il pleut quelque part dans
-#  les cent kilomètres, et le soleil arrive ici ».
-#
-#  La pluie locale, elle, est gardée à part dans le canal bleu : les
-#  étiquettes de la carte s'en serviront pour distinguer « averse en
-#  cours » de « l'averse s'éloigne ».
-#
-#  Dépendances : numpy, pillow. Rien d'autre — urllib suffit.
-# =========================================================================
+# Relève chez Open-Meteo la pluie et le rayonnement direct sur toute la Terre
+# et en fait une image (data/weather.png). Tourne sur le robot GitHub, jamais
+# sur le tableau. Pas la nébulosité : un ciel couvert peut laisser passer un
+# soleil rasant ; `direct_radiation` mesure la trouée.
+# Canal R : pluie DILATÉE (maximum des voisines) — l'arc se voit à côté de
+# l'averse, pas dessous. G : clarté directe. B : pluie locale.
 
 import json
 import math
@@ -68,37 +25,10 @@ OUT_JSON = ROOT / "data" / "weather.json"
 
 # --------------------------------------------------------------- la grille
 #
-# QUATRE DEGRÉS, soit 444 km. Ce n'est pas un choix esthétique : c'est le
-# plafond de ce qu'Open-Meteo laisse prendre en une passe.
-#
-# LA LEÇON QUI A COÛTÉ UNE SOIRÉE. Leur formule affichée — poids = nLieux
-# x (nJours/14) x (nVariables/10) — laisse croire qu'un point coûte 0,057
-# appel, donc qu'on pourrait en demander 64 800. En pratique le compteur
-# monte d'environ UN PAR COORDONNÉE : un lot de 400 points passe, le
-# suivant se fait refuser trois secondes plus tard par la limite de 600
-# appels/minute. Le plancher d'un appel par lieu ne se voit nulle part
-# dans la documentation ; il se découvre en se prenant des 429.
-#
-# ET IL Y A UN SECOND PLAFOND, celui qui a fait échouer le relevé de 3° :
-# 5 000 appels par HEURE. 7 200 points ne peuvent donc pas tenir dans une
-# heure, quelle que soit la pause — les 429 tombent en rafale au bout de
-# 5 000, c'est-à-dire aux trois quarts du travail.
-#
-#     10 000 appels/jour   ->  le quota quotidien
-#      5 000 appels/heure  ->  C'EST LUI QUI BORNE LA MAILLE
-#        600 appels/minute ->  le rythme, incompressible
-#
-# 4° donne 4 050 points : 81 % du plafond horaire, 40 % du quotidien, et
-# sept minutes de relevé. C'est le plus fin qui tienne en une seule passe.
-#
-# La finesse manquante est reprise par le bruit fractal, qui continue de
-# jouer par-dessus la grille comme texture haute fréquence — c'était déjà
-# le plan du §7 de REPRISE, qui visait 5°.
-#
-# POUR ALLER PLUS FIN, il faudra changer de source : les fichiers GRIB2 de
-# la NOAA (GFS, 0,25° natif) donnent tout ce qu'il faut sans quota par
-# point, au prix d'une bibliothèque de décodage. Cela ne toucherait QUE ce
-# fichier : le format de sortie et tout le reste du projet n'en savent rien.
+# QUATRE DEGRÉS : le plus fin qui tienne en une passe. Le serveur compte un
+# appel par coordonnée (pas ce que dit la formule publiée), et le plafond
+# qui borne la maille est celui de 5 000 appels/HEURE (10 000/jour, 600/min).
+# 4° = 4 050 points. Plus fin exigerait une autre source (GRIB2 de la NOAA).
 STEP_DEG = 4.0
 
 NX = int(round(360 / STEP_DEG))
@@ -107,40 +37,24 @@ NY = int(round(180 / STEP_DEG))
 LONS = np.arange(NX) * STEP_DEG - 180 + STEP_DEG / 2
 LATS = np.arange(NY) * STEP_DEG - 90 + STEP_DEG / 2
 
-# Quatre jours d'un coup : hier, aujourd'hui, et deux jours devant. Ça fait
-# 96 heures, et surtout ça laisse de la marge — si le robot rate un
-# passage, le tableau a encore de quoi tenir le lendemain sans rien dire.
+# Hier, aujourd'hui et deux jours devant : si le robot rate un passage,
+# le tableau tient encore le lendemain.
 PAST_DAYS, FORECAST_DAYS = 1, 3
 NHOURS = (PAST_DAYS + FORECAST_DAYS) * 24
 
-# PAS DE TROIS HEURES. Au pas horaire on téléchargerait trois fois plus
-# pour une carte qui ne bouge pas trois fois plus vite ; la page interpole
-# entre deux pas, et personne ne verra la différence. 96 h / 3 = 32 pas.
+# Pas de trois heures : la page interpole, 96 h / 3 = 32 pas.
 STEP_H = 3
 NT = NHOURS // STEP_H
 
-# COMBIEN DE POINTS PAR REQUÊTE. Mille est le maximum documenté côté
-# Open-Meteo — mais ce n'est pas la limite qui mord. Une coordonnée pèse
-# une douzaine de caractères dans l'URL (« -178.5 », « 48.5 », et leurs
-# virgules) : à mille points l'adresse fait douze mille caractères, et le
-# serveur répond 414, l'URL est trop longue. La limite usuelle est de huit
-# mille caractères.
-#
-# Deux cents laisse une marge confortable. Et si elle ne suffisait pas —
-# si Open-Meteo resserrait un jour — `fetch` coupe le lot en deux tout seul
-# plutôt que d'échouer.
+# 1000 points est le maximum documenté, mais l'URL dépasserait 8 000
+# caractères (414). 200 laisse de la marge ; `fetch` coupe sinon.
 CHUNK = 200
 
-# CE QUE PÈSE UN POINT : un appel. Voir le commentaire de la grille — ce
-# n'est pas ce que la formule publiée laisse croire, c'est ce que le
-# serveur compte.
+# Un point = un appel : c'est ce que le serveur compte (voir la grille).
 WEIGHT_PER_POINT = 1.0
 
-# LA LIMITE MINUTÉE, et la pause qui en découle. 600 appels par minute,
-# donc 600 points : une requête de 200 points doit être suivie de vingt
-# secondes de silence. Le facteur 1,15 est la marge — le compteur du
-# serveur et notre montre ne sont pas synchronisés, et se faire refuser
-# coûte une minute entière d'attente.
+# 600 appels/minute : 20 s de pause après 200 points ; 1,15 de marge, car
+# un refus coûte une minute entière.
 RATE_PER_MIN = 600
 PAUSE_S = CHUNK * WEIGHT_PER_POINT / RATE_PER_MIN * 60 * 1.15
 
@@ -149,21 +63,11 @@ HOURLY = "precipitation,direct_radiation"
 
 
 def fetch(lats, lons, tries=4):
-    """Un lot de coordonnées, rendu comme une LISTE de sites.
+    """Un lot de coordonnées, rendu comme une liste de sites.
 
-    Trois choses peuvent mal tourner, et chacune demande une réponse
-    différente — c'est tout l'objet de cette fonction :
-
-        414  l'URL est trop longue. Réessayer à l'identique ne servirait à
-             rien : on coupe le lot en deux et on recommence. Le script
-             s'adapte donc tout seul si Open-Meteo resserre sa limite.
-        429  le quota minuté est dépassé. Là il faut ATTENDRE, pas couper :
-             couper ferait deux fois plus de requêtes, donc exactement le
-             contraire de ce qu'il faut.
-        le reste  un hoquet réseau. On patiente et on retente.
-
-    Un robot qui abandonne au premier ennui ne sert à rien : il n'y aura
-    pas de seconde chance avant demain matin.
+        414  URL trop longue : on coupe le lot en deux.
+        429  quota minuté : on attend, on ne coupe pas (deux fois plus de requêtes).
+        le reste  hoquet réseau : on patiente et on retente.
     """
     url = (f"{API}?latitude={','.join(f'{v:.1f}' for v in lats)}"
            f"&longitude={','.join(f'{v:.1f}' for v in lons)}"
@@ -176,18 +80,13 @@ def fetch(lats, lons, tries=4):
         try:
             with urllib.request.urlopen(url, timeout=120) as r:
                 data = json.load(r)
-            # OPEN-METEO RÉPOND PARFOIS 200 AVEC UNE ERREUR DEDANS.
-            # {"error": true, "reason": "..."} arrive avec un code 200 et
-            # passerait ici pour une réponse valide — jusqu'à ce que
-            # `site["hourly"]` lève un KeyError six cents lignes plus loin,
-            # sans dire pourquoi. On la reconnaît tout de suite.
+            # Open-Meteo répond parfois 200 avec {"error": true} : le reconnaître
+            # ici plutôt qu'en KeyError bien plus loin.
             if isinstance(data, dict) and data.get("error"):
                 raise RuntimeError("Open-Meteo refuse : "
                                    + str(data.get("reason", "sans raison")))
 
-            # Un lot d'un seul point rend un objet et non une liste. On ne
-            # devrait jamais tomber dessus — mais la découpe récursive
-            # ci-dessous peut très bien y descendre.
+            # Un lot d'un seul point rend un objet (la découpe peut y descendre).
             return data if isinstance(data, list) else [data]
 
         except urllib.error.HTTPError as e:
@@ -198,13 +97,8 @@ def fetch(lats, lons, tries=4):
                 return (fetch(lats[:h], lons[:h], tries)
                         + fetch(lats[h:], lons[h:], tries))
             if e.code == 429:
-                # ATTENDRE N'EST PAS ÉCHOUER. Un quota qui se recharge n'est
-                # pas une panne, et compter ces pauses comme des tentatives
-                # faisait abandonner le relevé au bout de quatre minutes —
-                # alors qu'il suffisait de patienter. On attend donc aussi
-                # longtemps qu'il le faut, en allongeant la pause : soixante
-                # secondes si c'est la limite minutée, plusieurs minutes si
-                # c'est l'horaire.
+                # Attendre n'est pas échouer : pause croissante, non comptée
+                # comme tentative (60 s pour la limite minutée, plus pour l'horaire).
                 waited += 1
                 pause = min(60 * waited, 600)
                 print(f"    quota atteint, pause de {pause // 60} min "
@@ -237,9 +131,8 @@ def fetch(lats, lons, tries=4):
 
 def gather():
     """Les deux champs bruts, en (NY, NX, NHOURS), et l'heure du premier
-    pas. Les points sont demandés dans l'ordre de lecture de la grille, ce
-    qui permet de reverser les réponses sans chercher : la réponse d'un lot
-    arrive dans l'ordre où on a posé les coordonnées."""
+    pas. Les réponses arrivent dans l'ordre des coordonnées demandées, dans
+    l'ordre de lecture de la grille."""
     glat, glon = np.meshgrid(LATS, LONS, indexing="ij")
     flat_lat, flat_lon = glat.ravel(), glon.ravel()
     total = flat_lat.size
@@ -254,9 +147,6 @@ def gather():
     for c in range(nchunks):
         a, b = c * CHUNK, min((c + 1) * CHUNK, total)
 
-        # Le temps restant, estimé sur ce qui s'est passé. Sans lui on
-        # regarde défiler cent soixante-deux lignes sans savoir si l'on en
-        # a pour cinq minutes ou pour une heure.
         if c:
             left = (time.time() - started) / c * (nchunks - c) / 60
             eta = f"  ~{left:.0f} min restantes"
@@ -271,8 +161,7 @@ def gather():
                   file=sys.stderr)
 
         for i, site in enumerate(data):
-            # Un lot plus long que demandé déborderait le tableau. Mieux
-            # vaut jeter le surplus que planter sur un IndexError.
+            # Un lot plus long que demandé : on jette le surplus.
             if a + i >= total:
                 break
             h = site.get("hourly")
@@ -283,9 +172,7 @@ def gather():
             if t0 is None:
                 t0 = h["time"][0]
             n = min(NHOURS, len(h["time"]))
-            # `None` arrive sur les variables manquantes d'une maille, et
-            # np.float32(None) lève. On remplace par zéro : pas de pluie,
-            # pas de soleil — le neutre honnête.
+            # `None` sur une variable manquante : zéro, le neutre honnête.
             rain[a + i, :n] = [v or 0.0 for v in h["precipitation"][:n]]
             direct[a + i, :n] = [v or 0.0 for v in h["direct_radiation"][:n]]
 
@@ -299,10 +186,8 @@ def gather():
 
 # ------------------------------------------------------------- le soleil
 #
-# LA MÊME FORMULE QUE src/sky.js, au mot près. Si l'une bouge, l'autre
-# doit bouger : la clarté calculée ici est divisée par un maximum de ciel
-# clair qui dépend de la hauteur du soleil, et si les deux ne s'accordent
-# pas, la page éclaire des endroits où il fait nuit.
+# LA MÊME FORMULE QUE src/sky.js : si l'une bouge, l'autre aussi, sinon la
+# page éclaire des endroits où il fait nuit.
 
 def sun_elevation(lat, lon, when):
     """Hauteur du soleil en degrés, en (NY, NX)."""
@@ -318,19 +203,11 @@ def sun_elevation(lat, lon, when):
 
 
 def clear_sky_direct(elev_deg):
-    """Le rayonnement direct qu'on recevrait par ciel parfaitement clair,
-    sur plan horizontal, en W/m².
-
-    Modèle de masse d'air (Meinel) : plus le soleil est bas, plus ses
-    rayons traversent d'atmosphère, et moins il en arrive. Sans ce
-    dénominateur variable, la clarté serait faible PARTOUT au lever et au
-    coucher — c'est-à-dire très exactement dans la fenêtre où la porte est
-    ouverte, et la carte serait éteinte en permanence.
-
-    C'est le piège de tout ce fichier : normaliser, ou ne rien mesurer."""
+    """Rayonnement direct par ciel clair, sur plan horizontal, en W/m²
+    (masse d'air, Meinel). Sans ce dénominateur variable, la clarté serait
+    faible partout au lever et au coucher : justement l'heure des arcs."""
     s = np.sin(np.radians(np.clip(elev_deg, 0.0, 90.0)))
-    # Masse d'air bornée : à l'horizon 1/sin explose, et la formule perd
-    # tout sens en dessous d'un degré et demi.
+    # Masse d'air bornée : 1/sin explose à l'horizon.
     am = np.clip(1.0 / np.maximum(s, 1e-3), 1.0, 38.0)
     return 1361.0 * np.power(0.7, np.power(am, 0.678)) * s
 
@@ -348,24 +225,16 @@ def encode(rain, direct, t0_iso):
     for k in range(NHOURS):
         elev = sun_elevation(glat, glon, t0 + timedelta(hours=k))
         top = clear_sky_direct(elev)
-        # LE SEUIL EST BAS, ET C'EST DÉLIBÉRÉ. Sous ce plancher le rapport
-        # ne veut plus rien dire et l'on rend zéro. Mais il ne faut pas le
-        # monter : trois watts correspondent à un soleil à 2,7°, et la
-        # porte y est déjà ouverte à plus de moitié. Un seuil à huit watts
-        # l'aurait coupée jusqu'à 3,5° — c'est-à-dire qu'il aurait éteint
-        # la météo précisément à l'heure où les arcs se lèvent.
-        # np.where évalue ses DEUX branches : sans ce plancher au
-        # dénominateur, la division par zéro de la face nuit crierait à
-        # chaque pas de temps, pour un résultat de toute façon jeté.
+        # Seuil bas, délibéré : 3 W correspondent à un soleil à 2,7°, où les
+        # arcs se lèvent déjà. Le plancher du dénominateur évite la division
+        # par zéro de la face nuit (np.where évalue les deux branches).
         clear[:, :, k] = np.where(top > 3.0,
                                   np.clip(direct[:, :, k] / np.maximum(top, 1e-3),
                                           0.0, 1.0),
                                   0.0)
 
-    # --- la pluie dilatée : le maximum des huit voisines et d'elle-même.
-    # La longitude s'enroule (np.roll fait le tour), la latitude non — aux
-    # pôles on se contente de ce qu'on a plutôt que de recoller l'Arctique
-    # à l'Antarctique.
+    # --- la pluie dilatée : maximum des huit voisines et d'elle-même.
+    # La longitude s'enroule, la latitude non.
     spread = rain.copy()
     for dy in (-1, 0, 1):
         for dx in (-1, 0, 1):
@@ -381,15 +250,11 @@ def encode(rain, direct, t0_iso):
             spread = np.maximum(spread, shifted)
 
     # --- de millimètres par heure à une intensité de 0 à 1.
-    # Une exponentielle plutôt qu'un seuil : la bruine compte un peu, et
-    # le déluge ne compte pas dix fois plus qu'une bonne averse. À 1 mm/h
-    # on est à 0,57, à 3 mm/h à 0,92.
+    # Exponentielle plutôt que seuil : 1 mm/h -> 0,57 ; 3 mm/h -> 0,92.
     wet = lambda mm: 1.0 - np.exp(-np.maximum(mm, 0.0) / 1.2)
 
-    # --- le pas de trois heures. MAXIMUM pour la pluie, MOYENNE pour la
-    # clarté : une averse d'une heure dans un bloc de trois doit compter
-    # entièrement — c'est un événement — tandis qu'un rayon de soleil
-    # d'une heure sur trois ne fait pas un après-midi lumineux.
+    # --- pas de trois heures : MAXIMUM pour la pluie (une averse d'une heure
+    # compte entière), MOYENNE pour la clarté.
     fold = lambda a: a.reshape(NY, NX, NT, STEP_H)
     r = wet(fold(spread).max(axis=3))
     g = fold(clear).mean(axis=3)
@@ -402,31 +267,19 @@ def encode(rain, direct, t0_iso):
 
 
 def write(cube, t0_iso):
-    """L'atlas, empilé VERTICALEMENT : les 32 pas de temps l'un sous
-    l'autre, 360 de large sur 5 760 de haut.
+    """L'atlas, empilé verticalement (360 x 5 760) : chaque pas de temps
+    reste contigu, la page le découpe sans recopie.
 
-    Vertical et pas en damier, pour une raison qui n'a l'air de rien : un
-    empilement vertical laisse chaque pas de temps CONTIGU en mémoire. La
-    page n'a donc qu'à découper le tableau de pixels en tranches, sans
-    recopier ligne à ligne — une opération à coût nul là où un damier
-    aurait demandé 32 recopies sur un Raspberry Pi.
-
-    LA LIGNE 0 EST LA LATITUDE -89,5. L'image paraît donc à l'envers si on
-    l'ouvre dans une visionneuse : c'est VOULU. La page l'envoie telle
-    quelle au processeur graphique, sans retournement, et le shader lit
-    v = (lat + 90) / 180 — donc v = 0 doit être le sud. Retourner l'image
-    pour qu'elle soit « jolie » mettrait l'Australie au Groenland."""
+    La ligne 0 est la latitude -89,5 : l'image paraît à l'envers, c'est
+    voulu. Le shader lit v = (lat + 90) / 180 ; la retourner inverserait
+    les hémisphères."""
     # (NY, NX, NT, 3) -> (NT, NY, NX, 3) -> (NT*NY, NX, 3)
     atlas = np.transpose(cube, (2, 0, 1, 3)).reshape(NT * NY, NX, 3)
     OUT_PNG.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(atlas, mode="RGB").save(OUT_PNG, optimize=True)
 
-    # LE Z EST OBLIGATOIRE. Open-Meteo rend « 2026-09-21T00:00 » sans
-    # suffixe de fuseau, même interrogé en timezone=UTC. En JavaScript,
-    # Date.parse d'une chaîne pareille l'interprète comme une heure LOCALE
-    # — donc décalée d'autant que le fuseau du spectateur. Toute la météo
-    # glisse alors de deux heures à Paris, de neuf à Tokyo, et de rien du
-    # tout à Londres, ce qui est la pire des façons de s'en apercevoir.
+    # Le Z est obligatoire : Open-Meteo rend « 2026-09-21T00:00 » sans fuseau,
+    # et Date.parse le lirait en heure locale du spectateur.
     stamp = t0_iso
     if not stamp.endswith("Z"):
         if len(stamp) == 16:        # « 2026-09-21T00:00 », les secondes manquent
@@ -450,23 +303,14 @@ def write(cube, t0_iso):
 
 # ------------------------------------------------- ne pas relever pour rien
 #
-# LE QUOTA EST QUOTIDIEN, ET IL EST PARTAGÉ. Le robot tourne sur les
-# machines de GitHub, dont les adresses servent à des milliers d'autres :
-# Open-Meteo voit un compteur déjà entamé, et nos 4 050 appels peuvent
-# franchir le plafond au dernier lot — après neuf minutes de travail perdu.
-#
-# La parade n'est pas de demander moins, c'est de POUVOIR RÉESSAYER. Le
-# robot passe donc plusieurs fois dans la journée, et cette fonction fait
-# que seul le premier passage utile consomme quelque chose : si un relevé
-# frais est déjà là, on repart sans rien demander.
+# Le quota quotidien est partagé avec d'autres sur les machines GitHub : un
+# relevé peut échouer au dernier lot. Le robot repasse donc ; seul le premier
+# passage utile consomme.
 
 def already_fresh(max_age_h=20):
     """Un relevé de moins de vingt heures existe-t-il déjà ?
-
-    Vingt et non vingt-quatre : il faut que le passage du lendemain matin
-    trouve celui de la veille périmé, sans quoi un relevé pris à 4 h 10
-    bloquerait celui du jour suivant à la même heure.
-    """
+    Vingt et non vingt-quatre : sinon le relevé de 4 h 10 bloquerait celui
+    du lendemain à la même heure."""
     try:
         meta = json.loads(OUT_JSON.read_text(encoding="utf-8"))
         made = datetime.fromisoformat(meta["made"].replace("Z", "+00:00"))
@@ -477,8 +321,7 @@ def already_fresh(max_age_h=20):
 
 
 def main():
-    # Passé par le robot à ses passages de rattrapage. À la main, on relève
-    # toujours : c'est qu'on l'a demandé.
+    # Passages de rattrapage du robot. À la main, on relève toujours.
     if "--si-besoin" in sys.argv:
         fresh, age = already_fresh()
         if fresh:
@@ -509,12 +352,7 @@ def main():
 
 
 def guarded():
-    """POURQUOI ÇA A ÉCHOUÉ DOIT TENIR SUR UNE LIGNE.
-
-    Sur un robot GitHub, personne ne lit le journal : on voit une coche
-    rouge, et c'est tout. `::error::` place le message dans les annotations
-    du passage, visibles d'un coup d'oeil depuis la liste des exécutions.
-    """
+    """Une ligne `::error::` : sur GitHub, l'échec se lit dans les annotations."""
     try:
         main()
     except Exception as e:
@@ -524,14 +362,12 @@ def guarded():
 
 
 if __name__ == "__main__":
-    # UNE MAILLE PLUS GROSSIÈRE POUR VÉRIFIER LA CHAÎNE. Douze minutes
-    # pour découvrir qu'on s'est trompé d'un signe, c'est douze minutes de
-    # trop. `python build/make_weather.py 12` relève une grille de douze
-    # degrés en une poignée de secondes : la carte est inutilisable, mais
-    # tout le reste — le relevé, l'encodage, l'image, la page — se vérifie
-    # à l'identique.
-    if len(sys.argv) > 1:
-        STEP_DEG = float(sys.argv[1])
+    # Maille d'essai : `python build/make_weather.py 12` relève 12° en
+    # quelques secondes ; carte inutilisable, mais toute la chaîne se vérifie.
+    # Les drapeaux (--si-besoin, passé par le robot) ne sont pas une maille.
+    pas = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if pas:
+        STEP_DEG = float(pas[0])
         NX = int(round(360 / STEP_DEG))
         NY = int(round(180 / STEP_DEG))
         LONS = np.arange(NX) * STEP_DEG - 180 + STEP_DEG / 2

@@ -1,17 +1,9 @@
 // =========================================================================
 //  LES ZONES ET LEURS OBSERVATEURS
 //
-//  Ce qui vit d'une image à l'autre. Cinq fois par seconde, on balaie
-//  l'écran, on retient les sommets du champ, et on les APPARIE avec les
-//  zones déjà vivantes : une zone garde son identité tant qu'elle reste au
-//  même endroit du globe, si bien qu'elle apparaît et disparaît en fondu
-//  au lieu de clignoter.
-//
-//  Chaque zone porte de un à cinq points selon sa taille à l'écran. Ce ne
-//  sont pas cinq mesures du même endroit mais CINQ OBSERVATEURS : celui
-//  qui est sur la crête voit l'arc, celui du fond de la vallée non. C'est
-//  le sujet même du projet — un arc-en-ciel n'existe pas à un endroit, il
-//  existe pour un observateur.
+//  Cinq fois par seconde : balayer l'écran, retenir les sommets du champ,
+//  les apparier aux zones vivantes (fondu au lieu de clignotement). Chaque
+//  zone porte un à cinq OBSERVATEURS, chacun avec son propre chiffre.
 // =========================================================================
 
 import { DEG, wrap180, geoVec } from './projection.js';
@@ -19,7 +11,7 @@ import { view, scale, geoAt, slotNow, rig } from './view.js';
 import { rainbowIndex, ingredients, openFor, nearestLegend } from './sky.js';
 import { terrainAt } from './ground.js';
 
-/** Les zones vivantes. Réassigné à chaque passe : c'est une liaison vive. */
+/** Réassigné à chaque passe : liaison vive. */
 export let zones = [];
 
 let nextId = 1;
@@ -33,15 +25,9 @@ const hash01 = n => {
 // -------------------------------------------------------- le chiffre porté
 
 /**
- * Les ingrédients du pourcentage. Il est COMPOSITE ET VOLONTAIREMENT
- * POÉTIQUE : ce que la carte affiche, le dégagement de l'horizon,
- * l'accessibilité du lieu, et une part de chance propre à l'observateur
- * qui oscille sans raison. Il est fait pour osciller et déplacer le regard
- * d'une zone à l'autre. La durée, elle, est exacte.
- *
- * À ne pas confondre : la CHANCE du champ est un lieu du monde où la
- * chance se tient ; la chance d'ici est celle d'une personne. La première
- * se partage entre voisins, la seconde non.
+ * Pourcentage VOLONTAIREMENT POÉTIQUE : champ, horizon, accessibilité et
+ * une chance propre à l'observateur (`luck`, distincte de la CHANCE du
+ * champ) qui oscille sans raison. La durée, elle, est exacte.
  */
 export function estimate(lon, lat, sun, drift, driftC, w, seed, simH, here, slot) {
   const base = rainbowIndex(lon, lat, sun, drift, driftC, w, here, slot);
@@ -77,12 +63,8 @@ const pick = (k, seed) => {
 };
 
 /**
- * La phrase dit ce qui PORTE le chiffre, pas ce qu'il vaut.
- *
- * Quand c'est la légende qui le porte, c'est la légende qui parle : la
- * carte cite la croyance du lieu plutôt que de la résumer. « Au pied de
- * l'arc, le chaudron d'or du leprechaun » — voilà ce que dit une carte
- * dont le spectateur a poussé le curseur vers la légende.
+ * La phrase dit ce qui PORTE le chiffre, pas ce qu'il vaut. Si c'est la
+ * légende, on cite la croyance du lieu.
  */
 export function phraseFor(e, seed, w) {
   if (e.v > 0.95) return pick('imminent', seed);
@@ -120,9 +102,7 @@ function makePoints(id) {
 
 /** Les sommets du champ visibles à l'écran, espacés d'au moins 150 px. */
 function findPeaks(sun, drift, driftC, w, here, slot) {
-  // LE PAS VIENT DE LA MACHINE. Le coût monte comme son carré : trente
-  // pixels font deux fois plus d'appels que quarante-quatre, et sur un
-  // Raspberry Pi ces appels-là se comptent.
+  // LE PAS VIENT DE LA MACHINE : le coût monte comme son carré.
   const step = rig().probe, found = [];
   for (let py = step * 0.5; py < view.H; py += step) {
     for (let px = step * 0.5; px < view.W; px += step) {
@@ -162,14 +142,11 @@ function findPeaks(sun, drift, driftC, w, here, slot) {
 }
 
 /**
- * Une passe complète : détection, appariement, fondu, puis les cinq
- * observateurs de chaque zone. Appelée cinq fois par seconde — le TRACÉ,
- * lui, suit chaque image, parce que les points sont rangés en coordonnées
- * géographiques et non en pixels.
+ * Une passe : détection, appariement, fondu, observateurs. Cinq fois par
+ * seconde ; le tracé suit chaque image (points rangés en lon/lat).
  */
 export function scan(sun, drift, driftC, simH, w, here) {
-  // Un seul pas de temps pour toute la passe : le balayage décrit UN
-  // instant, et rien ne bouge entre deux points de la grille.
+  // Un seul pas de temps pour toute la passe : elle décrit UN instant.
   const slot = slotNow();
   const peaks = findPeaks(sun, drift, driftC, w, here, slot);
 
@@ -218,18 +195,9 @@ export function scan(sun, drift, driftC, simH, w, here) {
 }
 
 // ------------------------------------------------------------ l'arc-en-ciel
-// LE POINT LE PLUS FORT DE TOUTE LA TERRE, et pas seulement de l'écran —
-// c'est ce que promet le bouton « Arc-en-ciel » de la plaque. Le piéton
-// est supposé déjà sur place : la flaque y vaut donc 1, comme au réticule,
-// et le chiffre qu'on lira en arrivant est celui qu'on a trouvé.
-//
-// Un degré, puis un dixième autour du meilleur : 65 000 appels, une
-// quarantaine de millisecondes, une fois par appui. Aucune remise à
-// l'échelle — le maximum peut être faible, et on y va quand même.
-//
-// La présence plafonne à 1, et plusieurs endroits l'atteignent souvent
-// ensemble. Entre deux égaux, le plus proche du piéton : sans quoi le
-// bouton mènerait toujours au même coin du monde, le premier de la grille.
+// Le point le plus fort de TOUTE la Terre, flaque à 1 (`here` null).
+// Un degré, puis un dixième autour du meilleur : ~40 ms par appui.
+// Entre égaux (plafond à 1), le plus proche du piéton.
 
 export function brightest(sun, drift, driftC, w, here) {
   const slot = slotNow();

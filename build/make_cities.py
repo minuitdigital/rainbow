@@ -1,35 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-cities.js — les lieux habités, gradués par zoom.
+cities.js — les lieux habités, gradués par zoom (Natural Earth 1:10 m).
+Pas de frontières : « à 40 km de Valparaíso » dit où est quelqu'un.
 
-Le projet n'a pas de frontières : une frontière ne dit pas où est quelqu'un,
-une ville si. « L'arc est à 40 km de Valparaíso » est la phrase que la carte
-cherche ; « l'arc est au Chili » ne l'est pas.
-
-Source : Natural Earth 1:10 m populated places (domaine public), noms français
-quand ils existent, pays en français via ne_50m_admin_0_countries.
-
-Chaque ville reçoit un PALIER (0 à 5) qui dit à partir de quel zoom elle a le
-droit d'exister. Le palier vient du rang de la ville, pas de sa population
-brute : une capitale de 40 000 habitants est un repère, une banlieue d'un
-million n'en est pas un.
-
-    palier 0  capitales nationales, mégapoles      dès le monde entier
-    palier 1  > 1 M                                 à partir de ×1,8
-    palier 2  > 500 k                               à partir de ×3
-    palier 3  > 300 k                               à partir de ×5
-    palier 4  > 150 k                               à partir de ×9
-    palier 5  > 50 k                                à partir de ×16
-
-La page applique ensuite un écartement en pixels : le palier ne fait que
-limiter le vivier, c'est la densité à l'écran qui décide vraiment.
-
-Sortie : deux chaînes. La table des pays, un par ligne, et les villes, une
-par ligne :
-    nom\tlon\tlat\tpalier\tindex du pays en base 36
-lon/lat à trois décimales (110 m — sous le pixel même à ×32).
-Le pays n'est pas écrit en toutes lettres 4 000 fois : « Inde » reviendrait
-200 fois. Cinquante kilo-octets d'économie pour une ligne de code de plus.
+PALIER 0 à 5 = zoom à partir duquel la ville peut paraître. Il vient du rang,
+pas de la population brute : une capitale de 40 000 habitants est un repère.
+L'écartement en pixels, côté page, décide ensuite.
+Sortie : table des pays + une ville par ligne (nom, lon, lat, palier, pays en base 36).
 """
 
 import json
@@ -48,8 +25,7 @@ OUT       = os.path.join(DATA, 'cities.js')
 TIERS = [(3_000_000, 0), (1_000_000, 1), (500_000, 2),
          (300_000, 3), (150_000, 4), (50_000, 5)]
 
-# Le palier le plus fin embarqué. 5 => 4 235 villes (~110 Ko) ;
-# 4 => 2 512 villes (~65 Ko) si le poids devient un problème.
+# Palier le plus fin embarqué : 5 => ~110 Ko ; 4 => ~65 Ko.
 MAX_TIER = 5
 
 # Natural Earth donne le nom protocolaire. Sur une carte, on veut le nom court.

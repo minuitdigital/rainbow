@@ -1,25 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Le serveur de développement. À lancer depuis la racine du dépôt :
+Serveur de développement : `python serve.py`, puis http://localhost:8000.
 
-    python serve.py
-
-puis http://localhost:8000
-
-Pourquoi pas `python -m http.server` tout court : il laisse le navigateur
-mettre les fichiers en cache. Or la page est faite de douze modules qui
-s'importent les uns les autres — il suffit que le navigateur reprenne un
-seul d'entre eux dans son cache pendant qu'il recharge les autres pour
-que la page mélange deux versions et se comporte de façon absurde. On a
-perdu une heure là-dessus une fois.
-
-Ce serveur répond donc `no-store` : rien n'est jamais gardé, chaque
-rechargement lit le disque. Un peu plus lent, et ça ne ment jamais.
-
-Il fixe aussi les types MIME de `.js` et `.mjs`, parce que sous Windows
-`http.server` les lit dans la base de registre, où `.js` est parfois
-déclaré `text/plain` — et un module ES servi en `text/plain` est refusé
-par le navigateur, sans sniffing ni recours.
+Pas `python -m http.server` : son cache laisse le navigateur mélanger deux
+versions des modules. Ici tout est servi en `no-store`.
+Les types MIME de .js/.mjs sont fixés : sous Windows le registre les donne
+parfois en text/plain, et le navigateur refuse alors le module.
 """
 
 import http.server

@@ -1,18 +1,9 @@
 // =========================================================================
 //  LA SPHÈRE ET SA MISE À PLAT
 //
-//  Mathématiques pures : aucun état, aucune dépendance, rien à initialiser.
-//  Tout le reste du programme part d'ici, et ce fichier ne connaît personne.
-//
-//  Deux sujets, inséparables en pratique :
-//
-//    — la projection Equal Earth (Šavrič, Patterson & Jenny, 2018), aller
-//      et retour. C'est celle que l'ONU a recommandée le 4 septembre 2026 :
-//      elle rend à chaque pays sa surface réelle. C'est le cœur du projet.
-//
-//    — l'algèbre des rotations de la sphère. La carte ne se déplace pas,
-//      elle tourne : on fait pivoter le globe sous un plan de projection
-//      fixe. D'où des matrices 3×3 plutôt que des décalages en pixels.
+//  Mathématiques pures, sans état ni dépendance. Projection Equal Earth
+//  (Šavrič, Patterson & Jenny, 2018), aller et retour, et rotations 3×3 :
+//  la carte ne glisse pas, le globe tourne sous un plan de projection fixe.
 // =========================================================================
 
 export const DEG = Math.PI / 180;
@@ -25,7 +16,7 @@ export const M = Math.sqrt(3) / 2;
 /** y de la projection, en fonction de l'angle auxiliaire θ. */
 export const fy = t => { const a = t*t, b = a*a*a; return t * (A1 + A2*a + b*(A3 + A4*a)); };
 
-/** Sa dérivée — Newton en a besoin pour inverser, le tracé pour l'échelle. */
+/** Sa dérivée : pour Newton et pour l'échelle. */
 export const fyp = t => { const a = t*t, b = a*a*a; return A1 + 3*A2*a + b*(7*A3 + 9*A4*a); };
 
 /** Demi-largeur et demi-hauteur du monde entier, en unités de projection. */
@@ -38,12 +29,8 @@ export const clamp1 = v => v < -1 ? -1 : v > 1 ? 1 : v;
 export const wrap180 = d => { d = (d + 180) % 360; return (d < 0 ? d + 360 : d) - 180; };
 
 /**
- * Inverse de la projection : un point du plan vers (longitude, latitude) en
- * radians, dans le repère de la projection — avant toute rotation.
- *
- * Il n'existe pas de forme close : six pas de Newton sur θ suffisent
- * largement, et c'est ce que fait aussi le shader.
- * null si le point tombe hors de la silhouette du monde.
+ * Plan → (longitude, latitude) en radians, avant toute rotation. Pas de
+ * forme close : Newton sur θ, comme le shader. null hors du monde.
  */
 export function inverseEE(x, y) {
   let th = Math.asin(clamp1(y / YMAX) * M);
@@ -62,12 +49,8 @@ export const geoVec = (lon, lat) => {
 };
 
 /**
- * Le chemin que suit tout point tracé à l'encre : un vecteur géographique,
- * ramené dans le repère de la vue par Rt, puis mis à plat.
- *
- * Rend [x, y, longitude relative en degrés]. Le troisième terme sert aux
- * tracés continus : quand il saute de +180 à −180, le trait passe derrière
- * le méridien opposé et il faut lever le crayon.
+ * Vecteur géographique → repère de la vue (Rt) → plan. Rend [x, y, lon
+ * relative en degrés] ; un saut de +180 à −180 dit de lever le crayon.
  */
 export function flatten(Rt, v) {
   const q = matVec(Rt, v);
@@ -84,8 +67,7 @@ export function angDist(lon, lat, c) {
 }
 
 // ------------------------------------------------------------- algèbre 3×3
-// Matrices en colonnes majeures : c'est ce qu'attend uniformMatrix3fv, on
-// évite ainsi de transposer à chaque image.
+// Colonnes majeures, comme uniformMatrix3fv : pas de transposition.
 
 export const matMul = (A, B) => {
   const O = new Float32Array(9);
@@ -127,9 +109,8 @@ export const rodrigues = (n, th) => {
 };
 
 /**
- * La composition répétée dérive : au bout de quelques milliers de rotations
- * la matrice n'est plus tout à fait orthonormale et le globe se met à
- * cisailler. On la redresse de temps en temps (voir view.bump).
+ * Les rotations composées dérivent et le globe finit par cisailler :
+ * on redresse de temps en temps (voir view.bump).
  */
 export function orthonormalize(A) {
   let c0 = [A[0], A[1], A[2]], c1 = [A[3], A[4], A[5]];
@@ -141,10 +122,8 @@ export function orthonormalize(A) {
 }
 
 /**
- * La rotation minimale qui amène le vecteur a sur le vecteur b.
- * C'est tout le secret de la navigation : le point saisi reste sous le
- * doigt, partout, y compris aux pôles, sans singularité ni butée.
- * null si les deux vecteurs sont déjà confondus.
+ * Rotation minimale de a vers b : le point saisi reste sous le doigt,
+ * pôles compris. null si a et b sont confondus.
  */
 export function between(a, b) {
   const ax = cross(a, b), s = Math.hypot(...ax), d = dot3(a, b);

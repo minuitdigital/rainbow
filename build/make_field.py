@@ -1,16 +1,9 @@
 """
-Champ scalaire des aplats, à partir des altitudes réelles (ETOPO 2022, 60").
+Champ des aplats, depuis ETOPO 2022 : 0 fosses, 0,5 côte, 1 sommets.
 
-  0.0 ............ 0.5 ............ 1.0
-  fosses          côte          sommets
-
-Les seuils hypsométriques sont cuits DANS le champ : la valeur stockée est
-déjà la fraction de palier, si bien que le découpage uniforme du shader tombe
-exactement sur les altitudes voulues. Changer les paliers, c'est changer deux
-listes ici — rien à toucher dans le shader.
-
-Le trait de côte vient de Natural Earth, pas du signe de l'altitude : les
-polders et la vallée de la Mort restent des terres, la Caspienne reste une eau.
+Les paliers sont cuits dans le champ : le découpage uniforme du shader tombe
+sur les altitudes voulues. Changer les paliers = changer LAND et SEA ici.
+La côte vient de Natural Earth, pas du signe de l'altitude (polders, Caspienne).
 """
 import json
 import numpy as np

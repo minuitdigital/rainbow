@@ -1,33 +1,9 @@
 // =========================================================================
-//  LE PANNEAU
-//
-//  Quatre registres dans une colonne à droite, un cinquième caché.
-//  Une boîte, une tâche :
-//
-//      ESTIMATEUR  montre      où l'on vise, le soleil
-//      ALGORITHME  montre      la présence, et la formule qui la fait
-//      LÉGENDES    situe       les hauts lieux et ce qu'on y croit
-//      RÉGLAGES    règle       les commandes de la plaque, et elles seules
-//      ADMIN       ajuste      tout le reste — n'apparaît que par /admin
-//
-//  CHAQUE COMMANDE DE LA PLAQUE A UN POINT D'ENTRÉE, et un seul : l'objet
-//  `plaque`, plus bas. La page l'appelle quand on touche un curseur ; le
-//  Raspberry Pi l'appellera quand on tournera un bouton. Chaque entrée
-//  pose l'état ET remet le curseur de la page à la bonne place.
-//
-//  Tout ce qu'il affiche décrit LE RÉTICULE — le centre exact de l'écran.
-//  Le panneau ne choisit pas un lieu : il décrit celui qu'on regarde. Les
-//  pastilles des hauts lieux ne sélectionnent rien, elles amènent le
-//  réticule là-bas.
-//
-//  Les graphes empruntent leur structure aux moniteurs de débit : axe du
-//  temps logarithmique, remplissage sous la courbe, étiquette de pic en
-//  boîte à tige, valeur courante en chevron, graduations en bordure
-//  droite. Les trois parts de la croyance sont des DENSITÉS D'ENCRE et
-//  non des couleurs : elles doivent survivre au tramage de l'e-ink.
-//
-//  Ce fichier ne calcule rien du ciel : il lit `history.past` et le pose
-//  à l'écran.
+//  LE PANNEAU — estimateur, algorithme, légendes, réglages ; admin par /admin.
+//  Tout ce qu'il affiche décrit LE RÉTICULE, le centre de l'écran.
+//  Chaque commande de la plaque a une seule entrée : l'objet `plaque`, que
+//  la page et le Raspberry Pi appellent. Ne calcule rien du ciel : lit
+//  `history.past` et le pose à l'écran.
 // =========================================================================
 
 import { view, beliefWeights, faceNorth, centre, centreVec, sx, sy,
@@ -51,26 +27,19 @@ const tween = (a, b, t) => a + (b - a) * t;
 /** Posé par initPanel : le panneau ne connaît pas la boucle d'images. */
 let repaint = () => {};
 
-/**
- * Posé par initPanel également. Changer de machine change le nombre de
- * pixels réels : il faut remesurer les deux calques, pas seulement
- * redessiner. C'est la seule chose du panneau qui touche à la taille.
- */
+/** Posé par initPanel : retaille les deux calques (pixels réels changés). */
 let remeasure = () => {};
 
 /** Posé par initPanel : le détail du shader, mesuré à la demande (admin). */
 let profile = () => null;
 
 // ================================================================ LA CROYANCE
-// Trois boutons INDÉPENDANTS : aucun ne pousse les autres. Chacun donne un
-// poids brut, de 0 à 100 %, et c'est `beliefWeights` qui les ramène à une
-// somme de 1. La plaque est en métal : un bouton rotatif ne bouge pas
-// tout seul, et une page qui déplacerait ses poignées dirait autre chose
-// que le tableau. Tous à zéro, la carte ne montre rien.
+// Trois boutons INDÉPENDANTS : aucun ne pousse les autres, comme les
+// boutons rotatifs de la plaque. `beliefWeights` normalise.
 
 const SHARES = [['w-m', 'm', 'o-m'], ['w-l', 'l', 'o-l'], ['w-c', 'c', 'o-c']];
 
-/** Les fonctions de rafraîchissement des curseurs, posées par initPanel. */
+/** Le `sync` de chaque curseur, posé par initPanel. */
 const SYNCS = {};
 
 function setBelief(key, v) {
@@ -90,21 +59,8 @@ function showBelief() {
 }
 
 // ================================================================ LES PLIS
-// Chaque registre se replie sur son bandeau. Au démarrage, seuls
-// l'estimateur et la croyance sont ouverts : ce sont eux qu'on lit. Les
-// légendes sont un index et les réglages un outil — ils s'appellent, ils
-// ne s'imposent pas. Un bandeau replié ne dit QUE son nom : un chiffre
-// posé là (« foi 9 % ») se lisait comme un titre, et un titre qui change
-// tout seul fait du bruit — la croyance du lieu se dit dans le corps du
-// registre, où on est venu la chercher.
-
-// Les quatre registres, puis l'admin sur DEUX niveaux : trois familles —
-// graphisme, données, performance — et sous chacune ce sur quoi les
-// curseurs agissent. Les groupes de la plaque, eux, ne se replient pas :
-// le métal n'a pas de pli.
-//
-// L'ordre compte : un parent replié cache ses enfants, mais leur propre
-// état de pli est conservé et retrouvé tel quel à la réouverture.
+// [bouton, corps, ouvert d'usine]. Les registres, puis l'admin sur deux
+// niveaux. Un parent replié cache ses enfants sans toucher à leur état.
 const FOLDS = [
   ['pli-est',        'corps-est',        true ],
   ['pli-croy',       'corps-croy',       true ],
@@ -129,8 +85,7 @@ const folded = {};
 function showFold(btnId, bodyId) {
   const body = byId(bodyId), open = !folded[bodyId];
   body.hidden = !open;
-  // Un sous-registre replie son `.sub` ; un registre replie sa boîte. Sans
-  // ce premier terme, plier « le fond » plierait tous les réglages.
+  // `.sub` d'abord : sinon plier un sous-registre plierait toute la boîte.
   (body.closest('.sub') || body.closest('.box')).classList.toggle('folded', !open);
   const b = byId(btnId);
   b.textContent = open ? '−' : '+';
@@ -139,9 +94,6 @@ function showFold(btnId, bodyId) {
 }
 
 // ============================================================ LES RÉGLAGES
-// Ils ne disent rien du ciel : ils disent comment on le regarde. Deux
-// réglages différents décrivent le même monde — d'où la boîte à part, et
-// le titre volontairement discret.
 
 /** Le contraste déplace toute la gamme d'encres d'un coup. */
 function setContrast(t) {
@@ -156,15 +108,9 @@ function setContrast(t) {
 }
 
 /**
- * Le curseur des aplats, en deux moitiés : de 0 à 50 % on va du papier nu
- * au tirage d'origine, de 50 à 100 % on charge jusqu'à INK_MAX. Une
- * course linéaire de 0 à INK_MAX aurait mis l'origine à 38 % du rail —
- * introuvable à la main, et impossible à retrouver.
- *
- * Les deux surfaces n'ont pas la même course : la gamme de la mer est
- * bien plus courte que celle des terres — huit paliers contre sept, sur
- * un écart d'encre deux fois moindre — donc le même facteur l'aurait
- * laissée grise clair à fond de curseur.
+ * Curseur des aplats en deux moitiés : 0–50 % du papier nu au tirage
+ * d'origine, 50–100 % jusqu'à INK_MAX — l'origine tombe au milieu du rail.
+ * La mer a une gamme d'encre plus courte, d'où une course plus longue.
  */
 const INK_MAX = { land: 2.4, sea: 4.0 };
 const inkDepth = (t, kind) =>
@@ -182,45 +128,31 @@ const KNOBS = {
   's-tache':    { fmt: t => Math.round(tween(0.3, 1.6, t) * 100) + ' %',
                   apply: t => { view.look.tache = tween(0.3, 1.6, t); repaint(); } },
 
-  // COMBIEN DE FOIS LA PALETTE FAIT LE TOUR. C'est l'ordre
-  // d'interférence, et c'est le réglage le plus brutal de la page :
-  // au-delà de deux tours on voit un arc-en-ciel par-dessus le sujet,
-  // et la carte n'est plus lisible. En deçà d'un, la tache tend vers une
-  // seule teinte qui se contente de foncer.
-  // Sur la plaque, 0 à 100 % : on affiche la position du bouton.
+  // COMBIEN DE FOIS LA PALETTE FAIT LE TOUR (ordre d'interférence).
+  // Au-delà de deux tours la carte devient illisible.
   's-franges':  { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.franges = tween(0.30, 3.50, t); repaint(); } },
 
-  // LA SENSIBILITÉ — le seuil. Sous cette présence, du papier. C'est le
-  // réglage qui décide si la carte est une nappe teintée ou un semis de
-  // taches, et il agit à toute échelle. À 0 % de la couleur partout, à
-  // 100 % seulement les endroits les plus forts : la course s'arrête à
-  // SEUIL_MAX et non à 1, où plus rien ne s'allumait.
+  // LA SENSIBILITÉ — le seuil : sous cette présence, du papier. La course
+  // s'arrête à SEUIL_MAX et non à 1, où plus rien ne s'allumait.
   's-seuil':    { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.seuil = t * SEUIL_MAX; repaint(); } },
 
-  // LA FINESSE ne dit rien au monde entier : c'est un gain sur ce que le
-  // zoom révèle. Le milieu du rail est le réglage d'usine.
+  // LA FINESSE : un gain sur ce que le zoom révèle ; sans effet au monde
+  // entier. Milieu du rail = usine.
   's-fine':     { fmt: t => (t <= 0.005 ? 'aplat' : Math.round(t * 200) + ' %'),
                   apply: t => { view.look.fine = t * 2; repaint(); } },
 
-  // LE COULOIR A DEUX MESURES, et elles n'ont rien à voir l'une avec
-  // l'autre : l'écart entre les points, et l'épaisseur du trait. Un seul
-  // curseur pour les deux ferait grossir les points en les écartant, ce
-  // qui est exactement ce qu'on ne veut pas quand on cherche le juste
-  // pointillé. Les chiffres affichés sont ceux du MONDE ENTIER — de près,
-  // l'écart s'allonge tout seul, voir le bloc uPorte du shader.
+  // LE COULOIR : écart des points et épaisseur du trait, indépendants.
+  // Chiffres valables au monde entier ; de près l'écart s'allonge (uPorte).
   's-ecart':    { fmt: t => Math.round(tween(0.5, 3.0, t) * 12) + ' px',
                   apply: t => { view.look.pas = tween(0.5, 3.0, t); repaint(); } },
 
   's-trait':    { fmt: t => (tween(0.5, 3.0, t) * 1.6).toFixed(1) + ' px',
                   apply: t => { view.look.trait = tween(0.5, 3.0, t); repaint(); } },
 
-  // LA PROFONDEUR D'ENCRE des aplats. Le milieu du curseur EST le tirage
-  // d'origine — c'est ce qui permet de revenir à la carte connue sans
-  // chercher, et de voir d'un coup d'œil si on s'en est écarté. En deçà
-  // l'encre s'allège jusqu'au papier nu, au-delà elle se charge.
-  // Sur la plaque, 0 à 100 % : on affiche la position du bouton.
+  // LA PROFONDEUR D'ENCRE des aplats : le milieu du curseur est le tirage
+  // d'origine (voir inkDepth).
   's-terres':   { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.land = inkDepth(t, 'land'); repaint(); } },
 
@@ -230,45 +162,36 @@ const KNOBS = {
   's-text':     { fmt: t => tween(9, 14, t).toFixed(0) + ' px',
                   apply: t => root.style.setProperty('--ui-pt', tween(9, 14, t).toFixed(1) + 'px') },
 
-  // ICÔNES, sur la plaque : la taille de toutes les icônes de la carte —
-  // hauts lieux, repères, le piéton et son point. On affiche la position
-  // du bouton, 0 à 100 %.
+  // ICÔNES : la taille de toutes les icônes de la carte.
   's-icon':     { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.icon = tween(9, 28, t); repaint(); } },
 
-  // LE POINT DU RÉTICULE. Zéro le laisse à l'encre — c'est le réglage
-  // d'usine et celui qui part sur l'e-ink, où il n'y aura pas de teinte.
-  // Au-delà, il parcourt le cercle des teintes : sur l'écran d'atelier,
-  // une couleur franche est le seul moyen de garder le point visible
-  // par-dessus une tache irisée.
+  // LE POINT DU RÉTICULE. Zéro : à l'encre (usine). Au-delà, une teinte
+  // franche, pour rester visible par-dessus une tache irisée.
   's-point':    { fmt: t => (t <= 0.02 ? 'encre' : Math.round(t * 360) + '°'),
                   apply: t => { view.look.dot = t; repaint(); } },
 
-  // LA VITESSE, en dev seulement : cinq décades, de la seconde à
-  // l'année. En météo elle n'a aucun sens — une prévision ne s'accélère
-  // pas — et elle s'éteint ; c'est Temps, sur la plaque, qui dit quand.
+  // LA VITESSE, en dev seulement : cinq décades. En météo elle s'éteint
+  // et c'est Temps qui dit quand.
   's-time':     { fmt: t => (t <= 0 ? 'figé'
                              : '×' + Math.round(Math.pow(10, t * 5)).toLocaleString('fr-FR')),
                   apply: t => { view.speed = t <= 0 ? 0 : Math.pow(10, t * 5); repaint(); } }
 };
 
 /**
- * Le haut de la course de Sensibilité. Mesuré sur la présence du globe
- * entier, en dev, le 30 septembre 2026 : le 99e centile des points allumés
- * tourne autour de 0,70. À 100 %, il reste donc à peu près le centième le
- * plus fort. À revoir devant la vraie météo.
+ * Haut de la course de Sensibilité : ~99e centile de la présence du globe
+ * (mesuré en dev). À 100 %, il reste le centième le plus fort. À revoir
+ * devant la vraie météo.
  */
 const SEUIL_MAX = 0.7;
 
-// COULEUR. ON, l'irisation ; OFF, le dégradé — un ENCODAGE, pas une
-// teinte en moins : la force passe alors par la densité, en paliers et en
-// points.
+// COULEUR. ON, l'irisation ; OFF, le dégradé : la force passe par la
+// densité, en paliers et en points.
 function showCouleur() {
   const on = byId('s-couleur').checked;
   view.look.grey = on ? 0 : 1;
   byId('o-couleur').textContent = on ? 'ON' : 'OFF';
-  // En dégradé il n'y a plus de teinte : ni saturation, ni ordre
-  // d'interférence. Les deux curseurs s'éteignent plutôt que de mentir.
+  // Sans teinte, saturation et irisation n'agissent plus : on les éteint.
   for (const k of ['colour', 'franges']) {
     byId('s-' + k).disabled = !on;
     byId('l-' + k).classList.toggle('off', !on);
@@ -277,21 +200,14 @@ function showCouleur() {
   saveKnobs();
 }
 
-// LE COULOIR. Deux pointillés, à 0° et à 42° de hauteur du soleil. Ce
-// n'est pas une donnée de plus : c'est la fenêtre elle-même, rendue
-// visible. Toute la couleur de la carte vit entre ces deux traits, et
-// quand une région reste éteinte, ils disent laquelle des deux raisons
-// est la bonne — pas de pluie, ou pas la bonne heure.
-//
-// Éteint par défaut : la pièce se regarde sans ses coutures. On l'allume
-// pour comprendre, puis on l'éteint.
+// LE COULOIR. Deux pointillés, soleil à 0° et à 42° : la fenêtre rendue
+// visible. Une région éteinte entre eux manque de pluie ; dehors, d'heure.
+// Éteint par défaut.
 function showPorte() {
   const on = byId('s-porte').checked;
   view.look.porte = on ? 1 : 0;
   byId('o-porte').textContent = on ? 'ON' : 'OFF';
-  // Couloir éteint, ses deux mesures ne décrivent plus rien : elles
-  // s'éteignent aussi, plutôt que de laisser croire qu'on règle quelque
-  // chose. Même geste que Couleur avec la saturation et l'irisation.
+  // Couloir éteint, ses deux mesures s'éteignent aussi.
   for (const k of ['ecart', 'trait']) {
     byId('s-' + k).disabled = !on;
     byId('l-' + k).classList.toggle('off', !on);
@@ -301,27 +217,18 @@ function showPorte() {
 }
 
 // ============================================================ LA PERFORMANCE
-// Ce que la page coûte, et sur quelle machine. Ce registre ne dit rien du
-// ciel : c'est un instrument d'atelier, replié par défaut, qu'on ne trouve
-// que si on le cherche.
 
 function showRig() {
   view.rig = byId('rig-mini').checked ? 'mini' : 'laptop';
-  // Changer de machine change le nombre de pixels RÉELS : les deux calques
-  // doivent être retaillés, un simple redessin n'y suffirait pas.
+  // Pixels réels changés : retailler, un redessin ne suffit pas.
   remeasure();
   saveKnobs();
 }
 
 // ================================================================ L'HORLOGE
-// D'où vient l'heure, et donc d'où vient la pluie. Les deux vont ensemble :
-// un temps inventé ne peut pas aller chercher une prévision, et une vraie
-// prévision ne se laisse pas accélérer dix mille fois.
-//
-// LA PAGE PUBLIQUE EST EN MÉTÉO dès que data/weather.png est arrivé. Le
-// dev ne se choisit que dans l'admin, et le choix est mémorisé : c'est
-// `clockWanted`. Tant que le fichier n'est pas là, la page reste en dev —
-// une case qui prétendrait brancher des données absentes mentirait.
+// L'heure et la pluie vont ensemble : dev (temps inventé, pluie simulée)
+// ou météo (temps réel, vraie prévision). `clockWanted` est le choix
+// mémorisé ; la page reste en dev tant que data/weather.png n'est pas là.
 
 let clockWanted = 'meteo';
 
@@ -342,9 +249,8 @@ export function weatherArrived() {
   }
 }
 
-// TEMPS — le bouton à trois positions de la plaque. Il n'a de sens
-// qu'avec la vraie météo : en dev il s'éteint, et c'est la vitesse de
-// l'admin qui reprend la main. « Après-demain » n'existe plus.
+// TEMPS — le bouton à trois positions, en heures. En dev il s'éteint et
+// la vitesse de l'admin reprend la main.
 const TEMPS = { hier: -24, maintenant: 0, demain: 24 };
 
 function showTemps() {
@@ -362,12 +268,8 @@ function showTemps() {
 }
 
 /**
- * Les jauges, quatre fois par seconde et pas davantage.
- *
- * Écrire dans le document force un recalcul de mise en page. Le faire
- * soixante fois par seconde ralentirait très exactement ce qu'on essaie de
- * mesurer — l'instrument fausserait sa propre lecture. Et à soixante hertz,
- * un chiffre ne se lit de toute façon pas.
+ * Les jauges, quatre fois par seconde au plus : écrire dans le document à
+ * chaque image fausserait la mesure elle-même.
  */
 let gaugeAt = 0;
 
@@ -379,13 +281,10 @@ function showBeat() {
   const rest = beatIdle();
   const ms = v => v.toFixed(v < 10 ? 2 : 1) + ' ms';
 
-  // LE REPOS EST UN ÉTAT, PAS UNE PANNE. La boucle s'arrête quand rien ne
-  // bouge — c'est ce qui rend la pièce supportable sur un mur des années
-  // durant. Afficher une cadence figée ferait croire à un gel.
+  // La boucle s'arrête quand rien ne bouge : « repos », pas une cadence figée.
   byId('g-fps').textContent = rest ? 'repos' : Math.round(beat.fps) + ' im/s';
 
-  // Le seul chiffre qui dise vraiment ce que le shader coûte. Un tiret
-  // veut dire que le navigateur refuse l'extension, pas que c'est gratuit.
+  // Tiret : le navigateur refuse l'extension de mesure, pas un coût nul.
   const gpu = view.cut.shader ? null : gpuMs();
   byId('g-gpu').textContent = gpu == null ? '—' : ms(gpu);
 
@@ -397,17 +296,8 @@ function showBeat() {
 }
 
 // ============================================================== LES DONNÉES
-//  L'ÉTAT DE CE QUE LA PAGE A SOUS LA MAIN, en permanence.
-//
-//  Un indicateur qui disparaît quand tout va bien ne dit rien : il dit
-//  seulement qu'il a fini de regarder. Celui-ci reste, et il répond aux
-//  trois questions qu'on se pose vraiment quand la carte paraît bizarre —
-//  qu'est-ce qui est arrivé, de quand date la météo, et d'où tout ça vient.
-//
-//  LES TAILLES NE SONT PAS MESURÉES À LA MAIN. Le navigateur les tient
-//  déjà dans `performance.getEntriesByType('resource')`, avec les durées
-//  de transfert, et les modules chargés par `import` y figurent aussi.
-//  Rien à instrumenter, et le chiffre est celui du réseau, pas le nôtre.
+// Ce qui est arrivé, de quand date la météo, d'où la page est servie.
+// Les tailles viennent de `performance.getEntriesByType('resource')`.
 
 /** Les fichiers qui portent le monde, et le nom qu'on leur donne ici. */
 const DATA_FILES = [
@@ -441,11 +331,9 @@ function dataRow(nom, val, mood) {
 }
 
 /**
- * Reconstruit la liste. Appelée une fois par seconde au plus — voir la
- * minuterie d'`initPanel`, qui s'arrête quand le registre est replié.
- *
- * On refabrique les nœuds ici, à rebours du piège n°22 : rien n'y est
- * cliquable, et une fois par seconde n'est pas soixante fois.
+ * Reconstruit la liste, une fois par seconde au plus (minuterie
+ * d'initPanel). Refabriquer les nœuds est sans risque : rien n'y est
+ * cliquable.
  */
 function showData() {
   const box = byId('data-list');
@@ -457,10 +345,9 @@ function showData() {
   let manque = 0;
 
   for (const [path, nom] of DATA_FILES) {
-    // D'ABORD CE QUI EST EN ROUTE. `performance` ne connaît une ressource
-    // qu'une fois qu'elle est arrivée : pendant les secondes où les huit
-    // mégaoctets de relief descendent, elle n'en dit rien du tout. C'est
-    // map.js et weather.js qui comptent les octets au passage.
+    // D'abord ce qui est en route : `performance` ignore une ressource
+    // tant qu'elle n'est pas arrivée. map.js et weather.js comptent les
+    // octets au passage.
     const live = loadState.get(nom);
     if (live && live.err) {
       rows.push(dataRow(nom, live.err, 'bad'));
@@ -477,15 +364,13 @@ function showData() {
     // L'entrée peut être indexée par URL absolue selon le serveur.
     const hit = [...seen.entries()].find(([u]) => u.endsWith('/' + path));
     if (!hit) {
-      // La météo absente n'est pas une anomalie tant que le robot n'a pas
-      // publié : c'est le relevé, juste dessous, qui l'explique.
+      // Météo absente : pas une anomalie, le relevé dessous l'explique.
       rows.push(dataRow(nom, nom === 'météo' ? 'absente' : 'en attente',
                         nom === 'météo' ? 'deep' : 'deep'));
       continue;
     }
     const e = hit[1];
-    // transferSize vaut zéro quand le navigateur a servi depuis son cache :
-    // la taille décodée reste juste, et c'est elle qui intéresse.
+    // transferSize vaut zéro depuis le cache : se rabattre sur les autres.
     const size = e.transferSize || e.encodedBodySize || e.decodedBodySize || 0;
     rows.push(dataRow(nom, size ? ko(size) : 'en cache', ''));
   }
@@ -516,9 +401,7 @@ function showData() {
       'deep'));
   }
 
-  // ---- d'où la page est servie. « github.io » ou « localhost » répond à
-  // la question « est-ce que je regarde le site en ligne ou ma copie ? »,
-  // qu'on se pose plus souvent qu'on ne croit.
+  // ---- d'où la page est servie : site en ligne ou copie locale.
   rows.push(dataRow('servi par',
     location.protocol === 'file:' ? 'un fichier local'
       : (location.host || 'inconnu'), 'deep'));
@@ -531,12 +414,8 @@ function showData() {
 }
 
 // ================================================================= LA NOTE
-// Un chiffre en millisecondes ne dit rien tout seul. Il faut savoir ce
-// qu'il mesure, et SURTOUT ce qui le fait monter — sans quoi on optimise
-// au hasard, ce qui est la façon la plus sûre de perdre une semaine.
-//
-// D'où deux phrases par note, jamais une : `quoi` dit ce que le chronomètre
-// a mesuré, `pourquoi` dit sur quoi agir. La seconde est celle qui sert.
+// Les « ? » de l'admin : `quoi` dit ce qui est mesuré, `pourquoi` sur quoi
+// agir. `pre` et `defs` pour une formule.
 
 const NOTES = {
   fps: {
@@ -618,11 +497,7 @@ const NOTES = {
       ['flaque',   'décroît en s’éloignant du piéton'],
       ['fuite',    'ce que la porte laisse passer la nuit']
     ]
-    // PAS DE « POURQUOI » ICI. Toutes les autres notes en ont un, et c'est
-    // leur raison d'être : un chiffre ne dit rien sans ce qui le fait
-    // monter. Une formule, si — elle EST son propre commentaire, et le
-    // paragraphe qui la glosait ne faisait que repousser la liste des
-    // symboles plus bas. La feuille s'arrête donc sur les symboles.
+    // Pas de `pourquoi` : la formule se suffit, la feuille finit sur les symboles.
   },
 
   px: {
@@ -670,24 +545,16 @@ function openNote(key) {
   byId('note-nom').textContent = n.nom;
   byId('note-quoi').textContent = n.quoi;
 
-  // UNE FORMULE SE LIT EN BLOC. Noyée dans une phrase, elle ne se lit
-  // pas du tout — les parenthèses et les points médians n'ont plus de
-  // rang, et l'œil ne voit qu'une file de mots.
+  // Une formule se lit en bloc, et la feuille s'élargit pour elle : en
+  // colonne étroite, elle partirait en défilement horizontal.
   const pre = byId('note-pre');
   pre.textContent = n.pre || '';
   pre.hidden = !n.pre;
 
-  // ET LA FEUILLE S'ÉLARGIT POUR ELLE. Une note ordinaire tient dans une
-  // colonne courte, qui se lit mieux ; une formule, non — coupée, elle
-  // part dans une barre de défilement horizontale et le lecteur doit la
-  // faire glisser pour en voir la fin. C'est le contraire de ce qu'on lui
-  // demande. La feuille prend donc toute sa largeur quand il y a un bloc,
-  // et la reprend quand il n'y en a plus.
   byId('note-sheet').querySelector('.sheet-inner')
     .classList.toggle('narrow', !n.pre);
 
-  // Et les symboles juste dessous, un par ligne : le lecteur regarde la
-  // formule, bute sur un signe, descend d'un centimètre.
+  // Les symboles juste dessous, un par ligne.
   const defs = byId('note-defs');
   defs.replaceChildren();
   if (n.defs) {
@@ -699,9 +566,7 @@ function openNote(key) {
   }
   defs.hidden = !n.defs;
 
-  // Une note sans « pourquoi » n'affiche pas un paragraphe vide — et
-  // surtout pas le mot « undefined », qui est ce qu'écrivait la ligne
-  // précédente le jour où j'ai retiré celui de la formule.
+  // Sans `pourquoi`, le paragraphe se cache (sinon : « undefined »).
   const pq = byId('note-pourquoi');
   pq.textContent = n.pourquoi || '';
   pq.hidden = !n.pourquoi;
@@ -716,11 +581,8 @@ function closeNote() {
   showSwitch('p-formule', false);
 }
 
-// Sur un mur, on ne veut pas refaire ses réglages à chaque allumage. Tout
-// est enveloppé : le stockage peut être refusé, et la page doit tenir sans.
-// Le numéro fait partie de la clé : changer une valeur par défaut dans
-// index.html ne sert à rien si la page relit l'ancienne. Quand un défaut
-// bouge et qu'il doit s'imposer, on incrémente.
+// Réglages mémorisés. Le stockage peut être refusé : tout est enveloppé.
+// Pour imposer un nouveau défaut d'index.html, incrémenter le numéro.
 const STORE_KEY = 'estimateur.reglages.3';
 
 // PIXEL et PALETTE : les cases de l'admin, et seules valeurs admises.
@@ -755,10 +617,8 @@ function loadKnobs() {
   byId('p-poeme').checked = !!o.poeme;
   if (o.temps in TEMPS) byId('t-' + o.temps).checked = true;
   byId(o.rig === 'mini' ? 'rig-mini' : 'rig-laptop').checked = true;
-  // L'horloge voulue seulement : la case « météo » ne se coche qu'à
-  // l'arrivée du fichier, dans weatherArrived.
+  // L'horloge voulue seulement : « météo » se coche dans weatherArrived.
   clockWanted = o.clock === 'dev' ? 'dev' : 'meteo';
-  // Les coupures et la résolution du shader (admin, performance).
   if (o.cut) for (const k of Object.keys(view.cut))
     if (typeof o.cut[k] === 'boolean') view.cut[k] = o.cut[k];
   if ([0.8, 0.85, 0.9, 0.95, 1].includes(o.gls)) view.gls = o.gls;
@@ -834,11 +694,8 @@ function nowTag(g, w, y, text) {
 }
 
 // ------------------------------------------------------------- l'héliodon
-// L'ÉCHELLE SUIT LES DONNÉES. Une compression hors fenêtre était astucieuse
-// et illisible : on ne savait plus ce que valait une hauteur. L'axe est donc
-// linéaire et se recadre sur ce que la courbe parcourt, en gardant toujours
-// la fenêtre 0–42° dans le champ. Ce qui se passe dehors est en pointillé
-// léger : ça ne compte pas, mais ça dit que le soleil est passé par là.
+// Axe linéaire recadré sur la courbe, la fenêtre 0–42° toujours dans le
+// champ. Hors fenêtre : pointillé léger.
 
 function drawHeliodon() {
   const fitted = fitPlot(byId('p-sun'));
@@ -847,12 +704,8 @@ function drawHeliodon() {
 
   const plotW = w - 30, TOP = 4, BOT = h - 11;     // 11 px pour l'axe du temps
 
-  // Le cadre s'ouvre sur ce que la courbe parcourt, mais PAS jusqu'à la
-  // nuit profonde : à une latitude moyenne le soleil descend à −50°, et
-  // laisser l'échelle suivre écrasait la fenêtre 0–42° — la seule qui
-  // compte — sur un tiers de la hauteur. Au-delà des bornes, la courbe
-  // sort du cadre en pointillé : ça se lit « très bas », « très haut »,
-  // et c'est tout ce qu'on a besoin d'en savoir.
+  // Borné à −18°/60° : suivre la nuit profonde écraserait la fenêtre.
+  // Au-delà, la courbe sort du cadre.
   let lo = 0, hi = SUN_MAX;
   for (const s of past) { if (s.h < lo) lo = s.h; if (s.h > hi) hi = s.h; }
   const pad = Math.max(3, (hi - lo) * 0.07);
@@ -862,18 +715,11 @@ function drawHeliodon() {
 
   const y0 = yOf(0), y42 = yOf(SUN_MAX);
 
-  // CE QUE LA PORTE LAISSE FUIR. Deux bandes plus claires de part et
-  // d'autre de la fenêtre, d'autant plus marquées qu'on croit à la
-  // chance. Sans elles, une présence non nulle avec la courbe du soleil
-  // hors de la bande grise passerait pour un bug.
-  //
-  // Les bornes de la fuite tombent sur −17,6° et 60° : exactement le
-  // cadre que ce graphe se donnait déjà. Heureuse coïncidence, rien de
-  // plus — mais elle veut dire que la fuite est toujours dans le champ.
+  // CE QUE LA PORTE LAISSE FUIR : deux bandes autour de la fenêtre, selon
+  // la chance. Sans elles, une présence hors fenêtre passerait pour un bug.
   const wc = beliefWeights().c;
   if (wc > 0.02) {
-    // Bornées au cadre : sous les tropiques la courbe ne descend pas à
-    // −17°, et la bande déborderait sous l'axe du temps.
+    // Bornées au cadre, sinon elles débordent sous l'axe (tropiques).
     const yb = v => bound(yOf(v), TOP, BOT);
     g.fillStyle = `rgba(20,22,26,${(0.055 * wc).toFixed(3)})`;
     g.fillRect(0, yb(SUN_MAX + SPILL_DEG), plotW, y42 - yb(SUN_MAX + SPILL_DEG));
@@ -933,9 +779,8 @@ function drawHeliodon() {
   dashAcross(g, 0, y42, plotW, y42, cssOf('--ink-faint'));
   dashAcross(g, 0, y0,  plotW, y0,  cssOf('--ink-soft'));
 
-  // --- les ordonnées. Le pas se choisit sur la PLACE disponible et non
-  // sur l'amplitude : un graphe court ne peut pas porter cinq
-  // graduations, elles se chevauchent et on ne lit plus rien.
+  // --- les ordonnées. Le pas suit la PLACE disponible, pas l'amplitude :
+  // sinon les graduations se chevauchent.
   g.font = '9px ' + cssOf('--mono');
   g.textAlign = 'left';
   g.textBaseline = 'middle';
@@ -952,7 +797,7 @@ function drawHeliodon() {
   g.fillText('42°', plotW + 4, y42);
   g.fillText('0°',  plotW + 4, y0);
 
-  // --- les abscisses : sans ça, on ne sait pas que c'est un temps
+  // --- les abscisses
   g.textBaseline = 'top';
   g.fillStyle = cssOf('--ink-faint');
   g.fillText(AGE_MAX === 24 ? '1 j' : AGE_MAX + ' h', 0, BOT + 2);
@@ -962,9 +807,8 @@ function drawHeliodon() {
 }
 
 // ------------------------------------------------------------- la présence
-// Les trois croyances empilées, chacune déjà multipliée par la porte : ce
-// qu'on voit monter, c'est la part de chacune dans le résultat. La somme
-// est la courbe noire, et c'est elle que le chevron chiffre.
+// Les trois croyances empilées, chacune multipliée par sa porte. La somme
+// est la courbe noire, chiffrée par le chevron.
 
 function drawPresence() {
   const fitted = fitPlot(byId('p-idx'));
@@ -983,16 +827,14 @@ function drawPresence() {
   const now = past[past.length - 1].t;
   const X = s => plotW * posOf(now - s.t);
 
-  // Les poids sont appliqués ICI et non à l'échantillonnage : bouger un
-  // curseur repondère toute l'histoire d'un coup, sans rien recalculer.
+  // Poids appliqués ici, pas à l'échantillonnage : un curseur repondère
+  // toute l'histoire sans rien recalculer.
   const wt = beliefWeights();
   let base = past.map(() => 0);
   for (const [key, wk, colour] of [['m', wt.m, cssOf('--meteo')],
                                    ['l', wt.l, cssOf('--legende')],
                                    ['c', wt.c, cssOf('--chance')]]) {
-    // La chance a sa propre porte : celle du soleil, ou la fuite. C'est
-    // ce qui fait que la bande de chance dépasse maintenant la nuit,
-    // exactement comme la carte.
+    // La chance a sa propre porte : le soleil, ou la fuite — comme la carte.
     const gateOf = key === 'c'
       ? s => Math.max(s.gate, s.spill * wt.c)
       : s => s.gate;
@@ -1046,8 +888,6 @@ function drawPresence() {
     g.fillText(t, x, BOT + 4);
     dashAcross(g, x, TOP, x, BOT, 'rgba(20,22,26,0.07)');
   }
-  // Sans ce mot, personne ne devine que l'axe est un temps, ni dans quel
-  // sens il coule.
   g.textAlign = 'right';
   g.fillStyle = cssOf('--ink-soft');
   g.fillText('maintenant', plotW, BOT + 4);
@@ -1057,8 +897,7 @@ function drawPresence() {
 }
 
 // ============================================================== LES PASTILLES
-// Elles ne sélectionnent rien : elles amènent le réticule. Le sujet reste
-// le centre de l'écran, toujours.
+// Elles ne sélectionnent rien : elles amènent le réticule.
 
 function buildChips() {
   const box = byId('chips');
@@ -1073,19 +912,9 @@ function buildChips() {
 }
 
 // ============================================================ LA PROVENANCE
-// Citer une croyance sans dire d'où elle vient, sur un mur, sous un nom
-// propre, c'est de l'appropriation avec une jolie police. La phrase porte
-// donc un renvoi, et le renvoi dit d'où elle vient.
-//
-// LE MÊME MARQUEUR POUR TOUTES, sourcées ou non : un triangle avec un i.
-// Deux signes différents auraient trié les légendes à la lecture, avant
-// même qu'on ait cliqué — et fait du manque de source un défaut visible
-// plutôt qu'un fait à constater. Le triangle ne juge pas : il dit qu'il y
-// a quelque chose à savoir. Ce qu'on y trouve, c'est la boîte qui le dit.
-//
-// Dessiné au trait et non en caractère : « ⓘ » est un cercle, il n'existe
-// pas de triangle-i en Unicode, et un glyphe de police ne survivrait pas
-// au tramage de l'e-ink de la même façon qu'un tracé.
+// Chaque phrase porte un renvoi vers sa source. LE MÊME MARQUEUR POUR
+// TOUTES, sourcées ou non : le manque de source ne se voit qu'à l'ouverture.
+// En SVG : il n'existe pas de triangle-i en Unicode.
 const INFO_SVG =
   '<svg viewBox="0 0 12 11" aria-hidden="true">' +
     '<path d="M6 1 L11.2 10 L0.8 10 Z" fill="none" stroke="currentColor"' +
@@ -1101,10 +930,8 @@ const FLOOR_SAID = 'Partout on y croit un peu — c’est le plancher.';
 let shown = null;
 
 /**
- * Le dernier haut lieu écrit. `refreshPanel` passe soixante fois par
- * seconde : refabriquer le bouton à chaque image le rendrait incliquable
- * — le clic partirait sur un nœud déjà remplacé — en plus d'être du
- * gâchis. On ne réécrit que quand le lieu change.
+ * Le dernier haut lieu écrit. Ne réécrire qu'au changement de lieu :
+ * refabriqué à chaque image, le bouton deviendrait incliquable.
  */
 let saidFor;
 
@@ -1131,10 +958,7 @@ function openSrc(leg) {
   byId('src-nom').textContent = leg.nom;
   byId('src-dit').textContent = leg.dit;
 
-  // La boîte ne commente pas, elle cite. Un avertissement sur ce que la
-  // source atteste vraiment tenait ici : il pesait plus que la phrase
-  // qu'il accompagnait, et une œuvre n'a pas à se justifier dans sa
-  // propre marge. Ce travail-là vit dans LEGENDES.md.
+  // La boîte cite, elle ne commente pas : la critique vit dans LEGENDES.md.
   const qui = byId('src-qui');
   qui.textContent = 'Source : ';
   if (leg.src) {
@@ -1157,10 +981,8 @@ function closeSrc() {
 }
 
 // ================================================================ LA PLAQUE
-// Les commandes gravées dans l'inox, TEXTES.md §9. Une entrée par
-// commande, et c'est la seule : la page y passe, le Raspberry Pi y
-// passera. Chaque entrée pose l'état et remet le curseur de la page à sa
-// place — la page reste le miroir exact du métal.
+// Les commandes gravées (TEXTES.md §9). Une entrée par commande, pour la
+// page comme pour le Pi ; chacune pose l'état et remet le curseur.
 //
 //     boutons rotatifs 0–100 %     plaque.meteo(55), plaque.icones(32)…
 //     interrupteurs                plaque.couloir(true)
@@ -1179,9 +1001,8 @@ function turnKnob(id, p) {
   SYNCS[id]();
 }
 
-// INTERFACE. Éteinte, il ne reste que la carte — et, dans un navigateur,
-// un petit bouton en coin et la touche « i » pour la rallumer, puisque
-// l'interrupteur de la page est lui-même dans le panneau qu'on cache.
+// INTERFACE. Éteinte, il ne reste que la carte ; on la rallume par le
+// bouton en coin ou la touche « i », l'interrupteur étant caché avec elle.
 let bare = false;
 
 function showInterface() {
@@ -1203,8 +1024,7 @@ function showFormule() {
   else showSwitch('p-formule', false);
 }
 
-// POÈME. Par-dessus la carte. Le texte reste à écrire : index.html tient
-// la place.
+// POÈME. Par-dessus la carte ; le texte est dans index.html.
 function showPoeme() {
   const on = byId('p-poeme').checked;
   showSwitch('p-poeme', on);
@@ -1212,19 +1032,14 @@ function showPoeme() {
   saveKnobs();
 }
 
-/**
- * Le piéton est posé là, au centre de l'écran, la carte remise droite —
- * le nord en haut. Le zoom ne bouge pas.
- */
+/** Le piéton au centre, nord en haut ; le zoom ne bouge pas. */
 function walkTo(lon, lat) {
   faceNorth(lon, lat);
   repaint();
 }
 
-// ARC-EN-CIEL. Le point de plus haute présence de TOUTE la Terre, à
-// l'instant de l'appui — pas seulement de l'écran. Aucune remise à
-// l'échelle : le maximum peut être faible, on y va quand même. Si l'on ne
-// croit à rien, il n'y a nulle part où aller.
+// ARC-EN-CIEL. Le point de plus haute présence de TOUTE la Terre, même
+// faible. Présence nulle partout : on ne bouge pas.
 function arcEnCiel() {
   const best = brightest(solar(simDate()), drift(), driftChance(),
                          beliefWeights(), centreVec());
@@ -1245,10 +1060,8 @@ const MAISON = { lon: 2.3522, lat: 48.8566 };
 
 function maison() { walkTo(MAISON.lon, MAISON.lat); }
 
-// REPÈRE. Pose un repère sous le piéton ; si le piéton est déjà sur un
-// repère, l'efface. « Sur » se juge À L'ÉCRAN, à la taille du signe : ce
-// qu'on voit sous ses pieds, à n'importe quel zoom. Un jour au plus, en
-// temps réel, et mémorisé à part — ce n'est pas un réglage.
+// REPÈRE. Pose un repère sous le piéton, ou l'efface s'il y en a un —
+// jugé À L'ÉCRAN, à la taille du signe. Vit un jour, mémorisé à part.
 const REPERE_PX = 12;
 const REPERE_KEY = 'estimateur.reperes.1';
 
@@ -1310,12 +1123,8 @@ export const plaque = {
 
 const HHMM = n => String(n).padStart(2, '0');
 
-/**
- * Appelé à chaque image dessinée. `c` est le centre géographique de
- * l'écran — le réticule — et `sun` le soleil de l'instant simulé.
- */
+/** À chaque image. `c` : le réticule ; `sun` : le soleil de l'instant simulé. */
 export function refreshPanel(sun, c, now) {
-  // Interface éteinte, personne ne lit le panneau : on ne le calcule pas.
   if (bare) return;
   const [lon, lat] = c;
   recall(lon, lat);
@@ -1325,27 +1134,22 @@ export function refreshPanel(sun, c, now) {
   byId('f-pos').textContent =
     `${Math.abs(lat).toFixed(1)}° ${lat >= 0 ? 'N' : 'S'}  ` +
     `${Math.abs(lon).toFixed(1)}° ${lon >= 0 ? 'E' : 'O'}`;
-  // Date en chiffres : « 19 sept. » passait à la ligne et faisait sauter
-  // la boîte d'un pixel à chaque changement de mois.
+  // Date en chiffres : largeur fixe, la boîte ne saute pas.
   byId('f-clock').textContent =
     `${HHMM(now.getUTCHours())}:${HHMM(now.getUTCMinutes())} UTC · ` +
     `${HHMM(now.getUTCDate())}/${HHMM(now.getUTCMonth() + 1)}`;
 
-  // La durée restante est la SEULE valeur exacte de la page : elle ne
-  // dépend que du soleil.
   const mn = last.gate > 0 ? openFor(lon, lat, sun) : null;
   const reste = mn == null ? ''
     : ' ' + (mn >= 90 ? (mn / 60).toFixed(1) + ' h' : Math.round(mn) + ' min');
-  // Porte fermée, la chance peut encore passer — il faut le dire, sinon
-  // une présence non nulle en pleine nuit ressemble à une panne.
+  // Porte fermée, la chance peut passer : le dire, sinon on croit à une panne.
   const leak = last.gate <= 0 && last.spill * wt.c > 0.02;
   byId('h-sun').textContent = last.h.toFixed(1) + '° · ' +
     (last.gate > 0 ? 'ouverte' + reste
                    : (last.h <= 0.4 ? 'nuit' : 'trop haut') +
                      (leak ? ' · la chance passe' : ''));
 
-  // Même formule que le shader, au réticule : la flaque y vaut 1, et la
-  // chance a sa propre porte.
+  // Même formule que le shader, au réticule (flaque = 1).
   const gC = Math.max(last.gate, last.spill * wt.c);
   const idx = Math.min(1, ((last.m * wt.m + last.l * wt.l) * last.gate
                         + last.c * wt.c * gC) * GAIN);
@@ -1376,14 +1180,10 @@ export function initPanel(invalidate, resize, shaderProfile) {
   loadReperes();
   buildChips();
 
-  // L'ADMIN ne se montre que par /admin — admin/index.html renvoie ici
-  // avec « ?admin ». Caché, pas protégé.
+  // L'ADMIN par /admin, qui renvoie ici avec « ?admin ». Caché, pas protégé.
   const admin = new URLSearchParams(location.search).has('admin');
   byId('box-admin').hidden = !admin;
-  // La page publique ne garde que les trois boîtes du tableau — titre,
-  // héliodon, algorithme. LÉGENDES et RÉGLAGES ne restent que dans
-  // l'admin ; la plaque, elle, appelle toujours `plaque` (décision de
-  // l'auteur, 3 octobre).
+  // LÉGENDES et RÉGLAGES : admin seulement. La plaque passe toujours par `plaque`.
   byId('box-leg').hidden = !admin;
   byId('box-reg').hidden = !admin;
 
@@ -1393,22 +1193,13 @@ export function initPanel(invalidate, resize, shaderProfile) {
   }
   showBelief();
 
-  // LES DEUX CHOIX D'ABORD, ET L'ORDRE COMPTE.
-  //
-  // La machine, parce que `measure` lit son plafond de pixels : la poser
-  // après taillerait les deux calques une seconde fois au démarrage. D'où
-  // l'affectation directe plutôt qu'un appel à showRig, qui déclencherait
-  // très exactement ce second taillage.
-  //
-  // L'horloge, parce que le curseur du temps lui demande s'il est une
-  // vitesse ou un « quand ». Le synchroniser avant que `view.clock` soit
-  // restauré afficherait une vitesse là où un réglage mémorisé dit
-  // « maintenant ».
+  // L'ORDRE COMPTE. `view.rig` et `view.clock` sont posés plus bas avant
+  // les curseurs : rig par affectation directe (showRig retaillerait une
+  // seconde fois), clock parce que le curseur du temps en dépend.
   for (const id of ['rig-laptop', 'rig-mini'])
     byId(id).addEventListener('change', showRig);
 
-  // LES COUPURES. Une case par poste ; cochée, le poste n'est plus dessiné.
-  // Mémorisées comme le reste — voir `view.cut`.
+  // LES COUPURES — voir `view.cut`. Cochée, le poste n'est plus dessiné.
   for (const key of Object.keys(view.cut)) {
     const input = byId('cut-' + key);
     input.checked = view.cut[key];
@@ -1445,9 +1236,8 @@ export function initPanel(invalidate, resize, shaderProfile) {
     input.addEventListener('change', () => { view.pal = n; repaint(); saveKnobs(); });
   }
 
-  // LE SHADER EN DÉTAIL — voir profileShader dans src/map.js. Le texte
-  // est posé d'abord, la mesure part à l'image suivante : sinon la page
-  // se figerait sans avoir dit pourquoi.
+  // LE SHADER EN DÉTAIL. Le texte d'attente d'abord, la mesure à l'image
+  // suivante : sinon la page se fige sans rien dire.
   byId('gpu-prof').addEventListener('click', () => {
     const list = byId('gpu-parts');
     list.innerHTML = '<div class="gauge deep"><span>mesure en cours</span><em>…</em></div>';
@@ -1464,10 +1254,8 @@ export function initPanel(invalidate, resize, shaderProfile) {
     }), 30);
   });
 
-  // LE PLEIN ÉCRAN, pour le Pi qui n'a pas de clavier (la touche « f ») :
-  // un bouton dans l'admin, un autre dans le coin de la carte. Celui du
-  // coin s'efface une fois en plein écran, et n'existe pas si le
-  // navigateur ne sait pas le faire.
+  // LE PLEIN ÉCRAN, pour le Pi sans clavier. Le bouton du coin se cache
+  // en plein écran, ou si le navigateur ne sait pas le faire.
   const toggleFull = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen?.();
@@ -1495,17 +1283,14 @@ export function initPanel(invalidate, resize, shaderProfile) {
       knob.apply(t);
       saveKnobs();
     };
-    // Rangée pour que l'horloge puisse rejouer celle du temps : quand le
-    // rail change de signification, il faut relire sa valeur avec la
-    // nouvelle règle, sans attendre que la main y revienne.
+    // Rangée pour `plaque` et pour rejouer un rail dont le sens change.
     SYNCS[id] = sync;
     input.addEventListener('input', sync);
     sync();
   }
 
-  // LA PLAQUE. Les cases et les boutons de la page passent par `plaque`,
-  // comme le fera le Pi ; les curseurs, par leur `sync`, qui est ce que
-  // `plaque` appelle aussi.
+  // LA PLAQUE. Cases et boutons passent par `plaque`, comme le Pi ; les
+  // curseurs par leur `sync`, que `plaque` appelle aussi.
   byId('s-couleur').addEventListener('change', e => plaque.couleur(e.target.checked));
   byId('s-porte').addEventListener('change', e => plaque.couloir(e.target.checked));
   byId('p-interface').addEventListener('change', e => plaque.interface(e.target.checked));
@@ -1532,23 +1317,16 @@ export function initPanel(invalidate, resize, shaderProfile) {
   showInterface();
   showPoeme();
 
-  // LES APPELS DE NOTE, par délégation. Les boutons vivent dans index.html
-  // et ne sont jamais refabriqués — un seul écouteur sur le registre entier
-  // suffit, et il survivra aux lignes qu'on ajoutera.
+  // LES APPELS DE NOTE, par délégation : un écouteur par registre.
   for (const zone of ['corps-adm', 'corps-croy'])
     byId(zone).addEventListener('click', e => {
       const b = e.target.closest('.ask');
       if (b) openNote(b.dataset.note);
     });
 
-  // LE REGISTRE DES DONNÉES bat à sa propre cadence : une fois par
-  // seconde, et SEULEMENT s'il est ouvert. La boucle d'images, elle, peut
-  // dormir des heures — c'est tout l'intérêt de la pièce — et l'état des
-  // données doit rester vrai pendant ce temps. Replié sur le tableau du
-  // mur, il ne coûte plus rien du tout.
-  // La minuterie s'arrête dès que le registre est replié — À N'IMPORTE
-  // QUEL niveau — et hors de l'admin : sur le tableau du mur, elle ne
-  // coûtera plus rien.
+  // LE REGISTRE DES DONNÉES a sa propre minuterie (la boucle d'images peut
+  // dormir), une fois par seconde, seulement dans l'admin et s'il est
+  // ouvert à tous les niveaux.
   const dataSeen = () => admin && !bare && !folded['corps-data']
                        && !folded['corps-dat'] && !folded['corps-adm'];
   showData();
@@ -1559,10 +1337,8 @@ export function initPanel(invalidate, resize, shaderProfile) {
   note.addEventListener('click', e => { if (e.target === note) closeNote(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && noted) closeNote(); });
 
-  // La feuille de provenance. Même mécanique que l'explication : clic hors
-  // du cadre ou Échap. Elle vit ici et non dans chrome.js parce que son
-  // contenu est celui du registre — c'est le panneau qui sait quel haut
-  // lieu est sous le réticule.
+  // La feuille de provenance : clic hors du cadre ou Échap. Ici et non dans
+  // chrome.js : c'est le panneau qui sait quel haut lieu est au réticule.
   const sheet = byId('src-sheet');
   byId('src-close').addEventListener('click', closeSrc);
   sheet.addEventListener('click', e => { if (e.target === sheet) closeSrc(); });
@@ -1574,16 +1350,13 @@ export function initPanel(invalidate, resize, shaderProfile) {
       folded[bodyId] = !folded[bodyId];
       showFold(btnId, bodyId);
       saveKnobs();
-      // Le panneau a changé de hauteur : la carte peut regagner la place
-      // libérée pour y écrire des noms.
+      // Hauteur du panneau changée : la carte remesure sa place pour les noms.
       measureRail();
       repaint();
     });
   }
 
-  // Le contour de focus n'apparaît qu'au clavier. Chrome le dessine aussi
-  // au clic sur une case à cocher, ce qui salit le panneau sans rendre
-  // service à personne.
+  // Contour de focus au clavier seulement : Chrome le dessine aussi au clic.
   addEventListener('keydown', e => { if (e.key === 'Tab') root.classList.add('kbd'); });
   addEventListener('pointerdown', () => root.classList.remove('kbd'));
 }

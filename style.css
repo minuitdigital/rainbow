@@ -1,15 +1,7 @@
 /* =========================================================================
-   LE REGISTRE
-
-   Papier blanc, encre noire, le spectre comme seule couleur.
-
-   Un registre sombre — océan noir, terres lustrées — a été essayé puis
-   abandonné : spectaculaire, mais il ne servait pas la lecture de la
-   carte. La page assume donc un seul thème, clair, et le peint
-   explicitement plutôt que de suivre les préférences du système.
-
-   Les variables marquées « pilotée » sont réécrites en direct par la
-   boîte RÉGLAGES, et mémorisées d'une visite à l'autre.
+   LE REGISTRE — papier blanc, encre noire, le spectre comme seule couleur.
+   Un seul thème, clair, peint explicitement (pas de préférence système).
+   Les variables « pilotée » sont réécrites par RÉGLAGES et mémorisées.
    ========================================================================= */
 
 :root {
@@ -24,8 +16,7 @@
   --ui-pt:     10px;         /* pilotée — taille du texte */
   --body-bg:   235, 237, 240;
 
-  /* Les trois parts de la croyance sont des DENSITÉS D'ENCRE et non des
-     couleurs : elles doivent survivre au tramage de l'e-ink. */
+  /* Les trois parts de la croyance sont des densités d'encre, pas des couleurs. */
   --meteo:     #3b424b;      /* pilotée */
   --legende:   #828a94;      /* pilotée */
   --chance:    #c3c9d1;      /* pilotée */
@@ -77,16 +68,15 @@ body {
   pointer-events: none;               /* la carte reste saisissable */
   transition: opacity .9s ease;
 }
-/* Au repos, il ne reste que la carte. L'instrument est là pour qui
-   s'approche, pas pour qui passe. */
+/* Au repos, il ne reste que la carte. */
 body.idle .rail { opacity: .62; }
 @media (prefers-reduced-motion: reduce) {
   .rail { transition: none; }
   body.idle .rail { opacity: 1; }
 }
 
-/* Un registre : bandeau blanc, corps gris. Pas de flou — un flou rend
-   laiteux et simule une opacité qu'on n'a pas demandée. */
+/* Un registre : bandeau blanc, corps gris. Pas de flou : il simulerait une
+   opacité qu'on n'a pas demandée. */
 .box {
   pointer-events: auto;
   border: 1px solid var(--rule);
@@ -99,19 +89,12 @@ body.idle .rail { opacity: .62; }
   gap: 8px;
 }
 
-/* LES DEUX GRAPHES ONT CHACUN SA HAUTEUR, ÉCRITE ICI, EN CLAIR.
-   L'estimateur valait un tiers d'écran ferme tant qu'il tenait les DEUX
-   courbes, qui s'y partageaient la place en flex. La présence est partie
-   rejoindre l'algorithme ; l'héliodon restait seul à occuper ce tiers, et
-   il y était énorme. Un partage à un seul participant ne partage rien —
-   autant dire la hauteur qu'on veut, au lieu de la déduire d'un vh et
-   d'une somme de bandeaux. */
+/* Chaque graphe a sa hauteur, écrite ici en clair. */
 #box-est { display: flex; flex-direction: column; }
 #p-sun { height: 92px; flex: none; }
 #p-idx { height: 118px; flex: none; }
 
-/* Replié, un registre n'est plus que son bandeau : il ne garde pas le
-   filet qui séparait le titre d'un corps absent. */
+/* Replié, un registre n'est plus que son bandeau, sans filet. */
 .box.folded { flex: none; }
 .box.folded .head { border-bottom: 0; }
 .sub { display: flex; flex-direction: column; min-height: 0; }
@@ -131,8 +114,7 @@ body.idle .rail { opacity: .62; }
   text-transform: uppercase;
   letter-spacing: .16em;
 }
-/* Fragment Mono n'a qu'une graisse : on épaissit au trait plutôt que de
-   laisser le navigateur fabriquer un faux gras baveux à 10 px. */
+/* Fragment Mono n'a qu'une graisse : épaissir au trait plutôt qu'un faux gras. */
 .head > span:first-child {
   -webkit-text-stroke: .4px currentColor;
   font-size: calc(var(--ui-pt) + 1px);
@@ -178,22 +160,15 @@ body.idle .rail { opacity: .62; }
 }
 .sub:first-child .head { margin-top: -8px; border-top: 0; }
 
-/* Un sous-registre des réglages se replie comme un registre : le bandeau
-   reste, le filet du bas s'en va avec le corps qu'il séparait. Le corps
-   est ici un `.dials` et non un `.body` — il lui faut donc sa propre
-   respiration sous le bandeau. */
+/* Un sous-registre des réglages se replie comme un registre. Son corps est
+   un `.dials`, pas un `.body` : il lui faut sa propre marge sous le bandeau. */
 .sub.folded .head { border-bottom: 0; }
 .sub > .dials { padding-top: 8px; }
 .sub > .dials[hidden] { display: none; }
 
-/* --- DEUX NIVEAUX DANS LES RÉGLAGES, et il faut les distinguer à l'œil,
-   sinon on a treize bandeaux identiques et l'on ne range rien du tout.
-
-   Premier niveau — graphisme, données, performance : un vrai bandeau,
-   d'un bord à l'autre, en capitales espacées. C'est une famille.
-
-   Second niveau — la tache, le fond, le temps : un titre en retrait, sans
-   fond ni filet. C'est un rayon dans la famille, pas une famille. */
+/* --- deux niveaux dans les réglages, distincts à l'œil.
+   Famille (graphisme, données, performance) : bandeau plein, capitales espacées.
+   Rayon (la tache, le fond, le temps) : titre en retrait, sans fond ni filet. */
 .sub > .body { padding: 8px 10px 4px; }
 .sub .sub > .head,
 .sub .sub > .dials ~ .head {
@@ -228,9 +203,8 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   gap: 5px;
   white-space: nowrap;
 }
-/* Le piéton dit « c'est nous ». C'est la même figure que le réticule de
-   la carte. Silhouette pleine et non emoji : un emoji couleur devient un
-   pâté au tramage de l'e-ink, et sa forme dépend du système. */
+/* Le piéton dit « c'est nous » : même figure que le réticule. Silhouette
+   pleine plutôt qu'emoji, dont la forme dépend du système. */
 .walker {
   width: 9px;
   height: 14px;
@@ -246,9 +220,8 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   align-items: center;
   gap: 8px;
 }
-/* Un curseur dont la sortie est un MOT et non un nombre court. Le rail
-   cède la place, la colonne de droite s'élargit — « maintenant » et
-   « ×100 000 » ne tiennent pas dans 44 px. */
+/* Un curseur dont la sortie est un MOT : le rail cède la place à la colonne
+   de droite (« ×100 000 » ne tient pas dans 44 px). */
 .dial.wide { grid-template-columns: 88px 1fr 74px; }
 .dial label { color: var(--ink-soft); letter-spacing: .05em; }
 .dial label.off { opacity: .35; }
@@ -259,10 +232,8 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
 }
 .dial input:disabled { opacity: .35; cursor: default; }
 
-/* --- une jauge : un nom à gauche, un chiffre à droite. Pas de curseur, il
-   n'y a rien à régler — c'est une lecture, comme l'héliodon. Les lignes
-   `deep` détaillent celle qui les précède et se tiennent en retrait, pour
-   qu'on voie d'un coup d'œil qu'elles s'additionnent. */
+/* --- une jauge : nom à gauche, chiffre à droite, rien à régler. Les lignes
+   `deep` détaillent la précédente, en retrait : elles s'additionnent. */
 .gauge {
   display: flex;
   justify-content: space-between;
@@ -278,16 +249,13 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   white-space: nowrap;
 }
 .gauge em { margin-left: auto; }
-/* Une jauge SANS chiffre : il n'y a rien à lire à droite, seulement un
-   appel de note. C'est lui qui prend la place que le chiffre laisse. */
+/* Une jauge sans chiffre : l'appel de note prend sa place. */
 .gauge.lone .ask { margin-left: auto; }
 .gauge.deep { color: var(--ink-faint); }
 .gauge.deep span { padding-left: 11px; }
 .gauge.deep em { color: var(--ink-soft); }
 
-/* CE QUI MANQUE SE VOIT. La seule couleur franche d'une page qui n'a que
-   du gris, et elle ne sert qu'à ça : dire qu'une donnée n'est pas là.
-   Sur le tableau au mur, le registre sera replié et la couleur avec. */
+/* Ce qui manque se voit : la seule couleur franche, réservée à une donnée absente. */
 .gauge.bad, .gauge.bad em { color: #b4231f; }
 
 /* Ce qui est en route respire ; ce qui est arrivé ne bouge plus. */
@@ -302,10 +270,8 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   overflow: hidden;
 }
 
-/* --- un choix entre deux : DEUX CASES ET NON UNE À COCHER. Avec une
-   seule, il faut se souvenir de ce que « coché » voulait dire ; avec
-   deux, on lit ce qu'on a choisi. La première colonne fait la même
-   largeur que celle des curseurs, pour que les libellés s'alignent. */
+/* --- un choix entre deux : deux cases, pas une à cocher, pour lire ce qu'on
+   a choisi. Première colonne = celle des curseurs, pour aligner les libellés. */
 .choice {
   display: flex;
   align-items: center;
@@ -321,13 +287,11 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   color: var(--ink);
   cursor: pointer;
 }
-/* Éteint quand le choix n'est pas disponible — la case « météo » tant que
-   data/weather.png n'est pas à côté de la page. */
+/* Éteint quand le choix n'est pas disponible (« météo » sans data/weather.png). */
 .choice label.off { color: var(--ink-faint); cursor: default; }
 .choice b { font-weight: normal; }
 
-/* Carré comme la case à cocher : rien n'est arrondi dans cette page, pas
-   même les poignées des curseurs. */
+/* Carré comme la case à cocher : rien n'est arrondi dans cette page. */
 .choice input[type="radio"] {
   -webkit-appearance: none;
   appearance: none;
@@ -355,9 +319,8 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   cursor: pointer;
 }
 .choice.cut input[type="checkbox"]:checked { background: var(--ink); }
-/* L'étiquette AU-DESSUS de ses cases (admin, performance) : dans un
-   panneau de 272 px, la colonne de 88 px poussait les options à la ligne
-   n'importe où. Ici elles tiennent toutes sur la ligne d'en dessous. */
+/* L'étiquette au-dessus de ses cases (admin, performance) : à 272 px, une
+   colonne de 88 px faisait passer les options à la ligne n'importe où. */
 .choice.stack { flex-wrap: wrap; column-gap: 12px; row-gap: 3px; margin-top: 4px; }
 .choice.stack > span { width: 100%; }
 
@@ -377,8 +340,7 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
   background: none; border: 1px solid var(--ink); padding: 1px 6px; cursor: pointer;
 }
 
-/* L'appel de note, au bout de la ligne. Il ne doit pas peser plus que le
-   chiffre qu'il explique — même discrétion que le triangle des légendes. */
+/* L'appel de note, au bout de la ligne : pas plus lourd que le chiffre. */
 .ask {
   flex: none;
   margin-left: auto;
@@ -395,9 +357,7 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
 .ask:focus-visible { outline: 0; }
 .kbd .ask:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
 
-/* La note dit d'abord ce que le chiffre mesure, puis ce qui le fait
-   monter. C'est la seconde ligne qui sert : sans elle on optimise au
-   hasard. */
+/* La note dit ce que le chiffre mesure, puis ce qui le fait monter. */
 #note-pourquoi { margin: 14px 0 0; color: var(--ink-soft); }
 
 /* La case à cocher : un carré plein, du même dessin que les poignées. */
@@ -476,12 +436,9 @@ input[type="range"]::-moz-range-thumb {
   line-height: 1.6;
 }
 
-/* Le renvoi vers la provenance, au bout de la phrase : un triangle avec
-   un i, au trait. C'est un appel de note et pas un bouton — il ne doit
-   pas peser plus que le mot qui le précède.
-
-   Le MÊME pour toutes, sourcées ou non. Deux signes auraient trié les
-   légendes à la lecture, avant même qu'on ait cliqué. */
+/* Le renvoi vers la provenance : un triangle avec un i, au trait, appel de
+   note et non bouton. Le même pour toutes les légendes, sourcées ou non,
+   pour ne pas les trier à la lecture. */
 .src-mark {
   display: inline-block;
   vertical-align: baseline;
@@ -500,14 +457,8 @@ input[type="range"]::-moz-range-thumb {
 .kbd .src-mark:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
 
 /* ------------------------------------------------------ ce qui est en route
-
-   Sous les registres, et en rouge — la seule couleur franche de toute la
-   page, dans un registre qui n'a que du gris. C'est délibéré : ce texte
-   dit « attends », et il doit se distinguer de tout ce qui décrit le ciel.
-   Il disparaît quand tout est arrivé, et ne revient qu'au prochain relevé
-   météo, six heures plus tard.
-
-   Il ne prend pas les clics : la carte passe dessous. */
+   En rouge, seule couleur franche : ce texte dit « attends ». Il disparaît
+   quand tout est arrivé et ne prend pas les clics. */
 .loading {
   pointer-events: none;
   padding: 1px 2px;
@@ -520,13 +471,9 @@ input[type="range"]::-moz-range-thumb {
   0%, 100% { opacity: 1; }
   50%      { opacity: .45; }
 }
-/* CE QUI MANQUE NE RESPIRE PAS. Un téléchargement en route pulse, parce
-   qu'il va finir ; un constat reste immobile, parce qu'il ne bougera pas
-   tout seul. Faire clignoter un état stable en ferait une alarme, et ce
-   n'en est pas une : la carte marche, elle montre autre chose. */
+/* Ce qui manque ne respire pas : un état stable qui clignote ferait alarme. */
 .loading.stuck { animation: none; }
-/* Une respiration n'est pas une information : qui ne veut pas de mouvement
-   garde le texte, qui est tout ce qui compte. */
+/* Une respiration n'est pas une information. */
 @media (prefers-reduced-motion: reduce) {
   .loading { animation: none; }
 }
@@ -612,8 +559,7 @@ input[type="range"]::-moz-range-thumb {
 .sheet .terms dt { color: var(--ink); }
 .sheet .terms dd { margin: 0; }
 
-/* La feuille de provenance dit peu : elle n'a pas besoin de la largeur de
-   l'explication, et une colonne courte se lit mieux. */
+/* La feuille de provenance : une colonne courte se lit mieux. */
 .sheet-inner.narrow { max-width: 380px; }
 .sheet a { color: var(--ink); text-underline-offset: 3px; }
 .sheet a:hover { text-decoration-thickness: 2px; }
@@ -640,11 +586,9 @@ input[type="range"]::-moz-range-thumb {
 
 /* ------------------------------------------------------------ la plaque */
 
-/* Les labels gravés sont plus longs que ceux de l'atelier — « Contraste
-   Terre » ne tient pas dans 88 px. La colonne s'élargit pour eux seuls. */
+/* Les labels gravés sont plus longs (« Contraste Terre ») : colonne élargie. */
 .plaque .dial { grid-template-columns: 112px 1fr 44px; }
-/* Temps et ses trois positions ne tiennent pas derrière une colonne de
-   112 px : le libellé prend sa largeur, pas plus. */
+/* Temps et ses trois positions : le libellé prend sa largeur, pas plus. */
 .plaque .choice > span { width: auto; }
 
 /* Les quatre boutons poussoirs, deux par deux. */
@@ -708,9 +652,8 @@ body.bare .rail { display: none; }
   white-space: pre-line;
 }
 
-/* LE PETIT ÉCRAN — le LCD du tableau, 1024 × 600. Le panneau y mangeait
-   un tiers de la carte : plus étroit, plus serré, des graphes plus bas.
-   Le texte ne rapetisse pas : à 118 points par pouce, il est déjà petit. */
+/* LE PETIT ÉCRAN — le LCD du tableau, 1024 × 600 : panneau plus étroit,
+   graphes plus bas. Le texte ne rapetisse pas (118 ppp, déjà petit). */
 @media (max-width: 1100px) {
   .rail { width: 272px; padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
           padding-top: calc(8px + env(safe-area-inset-top, 0px)); gap: 6px; }

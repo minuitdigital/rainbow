@@ -1,4 +1,4 @@
-"""Equal Earth projection: forward + inverse, vectorised numpy."""
+"""Projection Equal Earth : directe et inverse, vectorisée (numpy)."""
 import numpy as np
 
 A1, A2, A3, A4 = 1.340264, -0.081106, 0.000893, 0.003796
@@ -33,8 +33,8 @@ def bounds():
 
 
 def inverse(x, y, iters=8):
-    """Returns lon_deg, lat_deg, valid_mask."""
-    th = np.arcsin(np.clip(y / bounds()[1], -1, 1) * M)  # decent seed
+    """Renvoie lon_deg, lat_deg, masque de validité."""
+    th = np.arcsin(np.clip(y / bounds()[1], -1, 1) * M)  # amorce suffisante
     th = th.astype(np.float64)
     for _ in range(iters):
         th = th - (_fy(th) - y) / _fyp(th)

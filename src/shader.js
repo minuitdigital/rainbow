@@ -1,22 +1,8 @@
 // =========================================================================
-//  LE SHADER
-//
-//  Deux chaînes de GLSL, rien d'autre. Aucune logique JavaScript ici : le
-//  fichier se lit comme le programme qu'il contient.
-//
-//  Le principe fondamental de toute la carte tient dans le fragment : pour
-//  CHAQUE PIXEL de l'écran, le processeur graphique remonte aux coordonnées
-//  Equal Earth, inverse la projection par Newton, applique la rotation de
-//  la sphère, obtient une latitude et une longitude, et va chercher les
-//  valeurs dans des textures en plate carrée.
-//
-//  Rien n'est déplacé, tout est recalculé. D'où : le zoom précise au lieu
-//  de flouter, et les aplats ont des bords calculés donc nets à toute
-//  échelle.
-//
-//  La deuxième moitié du fragment est le MIROIR de src/sky.js. Les deux
-//  doivent dire la même chose, sinon le chiffre lu sous le réticule cesse
-//  de décrire la couleur qu'on a sous les yeux.
+//  LE SHADER — deux chaînes de GLSL. Pour chaque pixel : Equal Earth
+//  inversée, rotation de la sphère, puis lecture des textures. Tout est
+//  recalculé, donc net à toute échelle.
+//  La porte et la croyance sont le MIROIR de src/sky.js (build/check_mirror.mjs).
 // =========================================================================
 
 /** Places réservées pour les hauts lieux de la croyance. */
@@ -29,12 +15,8 @@ void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
 export const FRAGMENT = `#version 300 es
 precision highp float;
 
-// LES TABLEAUX DE TEXTURES N'ONT PAS DE PRECISION PAR DEFAUT. En GLSL ES
-// 3.00, la ligne ci-dessus couvre les flottants, et sampler2D s'en tire
-// avec une precision implicite — mais sampler2DArray, sampler3D et leurs
-// variantes entieres exigent la leur, explicitement. Sans cette ligne le
-// shader ne compile pas, initMap leve, et le canvas reste NOIR sans un
-// mot : l'ecran noir de septembre 2026, une demi-heure de recherche.
+// sampler2DArray n'a pas de precision par defaut en GLSL ES 3.00. Sans
+// cette ligne le shader ne compile pas et l'ecran reste NOIR, sans erreur.
 precision highp sampler2DArray;
 
 uniform vec2  uRes;
@@ -52,17 +34,13 @@ uniform float uSea, uLand;             // profondeur d'encre des aplats
 uniform vec3  uBelief;                 // météo, légende, chance — somme = 1
 uniform vec3  uHere;                   // le réticule : là où se tient le piéton
 uniform int   uLegN;
-// LES COUPURES de l'admin, bit a bit : 1 relief, 2 tache, 4 chance,
-// 8 meteo, 16 legendes, 32 grain. Uniformes : tous les pixels prennent
-// la meme branche, la branche coupee ne coute rien. Chance, meteo et
-// legendes n'ont plus de case : seul « mesurer » s'en sert (map.js).
+// Coupures de l'admin, bit a bit : 1 relief, 2 tache, 4 chance, 8 meteo,
+// 16 legendes, 32 grain. Uniformes : la branche coupee ne coute rien.
 uniform int   uOff;
-// PIXEL — la tache en gros pixels (option P, a l'essai contre A). Trois
-// passes possibles d'un meme programme, choisies par uPass, uniforme :
-//   0  A, tout en direct, comme avant ;
-//   1  la tache seule, un fragment par BLOC de uPixN pixels du calque,
-//      ecrite (teinte, force) dans une petite texture ;
-//   2  le fond net, la tache relue dans cette texture sans lissage.
+// PIXEL — la tache en gros pixels (option P, a l'essai contre A). uPass :
+//   0  tout en direct ;
+//   1  la tache seule, un fragment par bloc de uPixN pixels, dans uPix ;
+//   2  le fond net, la tache relue dans uPix sans lissage.
 // Tout ce qui porte le mot PIXEL se retire d'un bloc quand on aura choisi.
 uniform int   uPass;
 uniform float uPixN;
@@ -74,14 +52,11 @@ uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
 uniform float uLegR[${MAX_LEGENDS}];   // au-dela (corde au carre), sous le plancher
 uniform sampler2D uField, uMask;
 
-// LA VRAIE METEO, en couches : un pas de temps par couche, trente-deux
-// pas de trois heures. Un sampler2DArray plutot qu'un damier dans une
-// seule image, parce qu'un damier fait baver les tuiles l'une dans
-// l'autre au filtrage bilineaire et qu'il faudrait border chaque case.
-//
-//      R   la pluie DU VOISINAGE, dilatee d'une case par le script
+// La meteo Open-Meteo, un pas de trois heures par couche. Des couches
+// plutot qu'un damier : un damier bave d'une case a l'autre au filtrage.
+//      R   la pluie du voisinage, dilatee d'une case par le script
 //      G   la clarte directe : des rayons non interceptes arrivent-ils ici
-//      B   la pluie locale — les etiquettes s'en servent, pas le shader
+//      B   la pluie locale, lue par personne
 uniform sampler2DArray uWx;
 uniform float uWxOn;                   // 0 = le bruit fractal, 1 = la grille
 uniform float uSlot, uWxN;             // ou l'on en est, et combien de pas
@@ -101,10 +76,8 @@ const float CHANCE_FREQ = 0.62;
 const float LUCK_NEAR = 10.0, LUCK_FAR = 48.0;
 const float SPILL_AMP = 0.55, SPILL_DEG = 18.0;
 
-// Les deux gammes des aplats : le papier, et l'encre du palier le plus
-// profond. uSea et uLand disent de combien on charge cette encre : 1,0
-// est le tirage d'origine. (Pas d'accent grave dans ce fichier — tout le
-// GLSL vit dans un gabarit de chaîne, et le premier le refermerait.)
+// Aplats : le papier, et l'encre du palier le plus profond.
+// Pas d'accent grave dans ce fichier : le GLSL vit dans un gabarit de chaine.
 const vec3 SEA_LIGHT  = vec3(0.948, 0.954, 0.964);
 const vec3 SEA_DEEP   = vec3(0.792, 0.806, 0.830);
 const vec3 LAND_LIGHT = vec3(0.995, 0.996, 1.000);
@@ -131,15 +104,9 @@ float fbm(vec3 p){
   return 0.56 * vnoise(p) + 0.29 * vnoise(p * 2.13) + 0.15 * vnoise(p * 4.37);
 }
 
-// LA TRAME ORDONNÉE. La matrice de Bayer 8×8, engendrée par la même
-// récurrence que d'habitude mais calculée bit à bit : à chaque niveau, le
-// quadrant (qx, qy) vaut 2·(qx⊕qy) + qy. Pas de tableau constant, pas
-// d'indexation dynamique, et le motif ne se lit pas comme une grille.
-//
-// Des POINTS et non des hachures : une hachure impose une direction, et
-// sur une carte toute direction finit par avoir l'air de signifier
-// quelque chose. La part de cases noircies vaut exactement l'intensité —
-// c'est littéralement ce que fera le tramage de l'e-ink.
+// Trame de Bayer 8x8 calculee bit a bit (quadrant = 2*(qx^qy) + qy) :
+// ni tableau ni indexation dynamique. Des points plutot que des hachures,
+// qui imposeraient une direction.
 float bayer8(ivec2 p){
   int v = 0;
   for(int b = 2; b >= 0; b--){
@@ -149,18 +116,15 @@ float bayer8(ivec2 p){
   return (float(v) + 0.5) / 64.0;
 }
 
-// LA LÉGENDE. Le plancher, relevé par le haut lieu le plus proche. Un
-// maximum et non une somme : deux traditions voisines ne s'additionnent
-// pas, on croit à la plus forte des deux. On compare des cordes plutôt
-// que des angles — à ces distances l'écart est sous le pixel, et ça
-// épargne un arc-cosinus par point et par pixel.
+// LA LEGENDE : un maximum et non une somme, on croit a la plus forte.
+// Des cordes plutot que des angles : l'ecart est sous le pixel, et on
+// epargne un arc-cosinus.
 float legendAt(vec3 g){
   float v = LEGEND_FLOOR;
   for(int i = 0; i < ${MAX_LEGENDS}; i++){
     if(i >= uLegN) break;
     vec3 d = g - uLegP[i].xyz;
-    // Au-dela de uLegR, f * exp(...) passe sous le plancher : le maximum
-    // ne le retiendrait pas. On saute l'exponentielle — resultat identique.
+    // Au-dela de uLegR on serait sous le plancher : l'exponentielle est sautee.
     float dd = dot(d, d);
     if(dd < uLegR[i]) v = max(v, uLegP[i].w * exp(-dd / uLegQ[i]));
   }
@@ -168,16 +132,15 @@ float legendAt(vec3 g){
 }
 
 void main(){
-  // PIXEL : en passe 1, le fragment i vaut le centre du bloc, (i + 0,5) x N
-  // en pixels du calque — uRes, uScale et uOx restent ceux de l'ecran.
+  // PIXEL : en passe 1, le fragment i vaut le centre du bloc ;
+  // uRes, uScale et uOx restent ceux de l'ecran.
   vec2 fc = uPass == 1 ? gl_FragCoord.xy * uPixN : gl_FragCoord.xy;
   float x = (fc.x - uRes.x * 0.5 - uOx) / uScale;
   float y = (fc.y - uRes.y * 0.5) / uScale;
 
   // --- inverse de la projection (Newton sur theta)
   float th = asin(clamp(y / YMAX, -1.0, 1.0) * M);
-  // Deux pas suffisent : l'ecart au calcul complet est d'un millionieme
-  // de degre (verifie en double precision, 3 octobre). Il en faisait six.
+  // Deux pas suffisent : un millionieme de degre d'ecart.
   for(int i = 0; i < 2; i++) th -= (fyf(th) - y) / fypf(th);
 
   float sn  = sin(th) / M;
@@ -195,9 +158,9 @@ void main(){
   float lat = degrees(asin(clamp(g.z, -1.0, 1.0)));
   float lon = degrees(atan(g.y, g.x));
 
-  // --- échantillonnage sans couture : u saute au méridien opposé, donc on
-  // calcule le gradient sur deux versions décalées d'un demi-tour et on
-  // garde le plus petit, sinon le mipmap s'effondre le long de la couture.
+  // --- couture du meridien : u y saute de 1 a 0. Gradient pris sur deux
+  // versions decalees d'un demi-tour, on garde le plus petit, sinon le
+  // mipmap s'effondre le long de la couture.
   float v  = (lat + 90.0) / 180.0;
   float u1 = lon / 360.0 + 0.5;
   float u2 = fract(u1 + 0.5);
@@ -219,23 +182,9 @@ void main(){
   float wC = max(fwidth(f), 1e-5);
   float isLand = smoothstep(0.5 - wC, 0.5 + wC, f);
 
-  // LE LUSTRE A ETE RETIRE, et avec lui data/earth.jpg — 3,9 Mo sur 13,
-  // une texture de 8192 pixels en memoire et une lecture de plus par
-  // pixel, pour creuser les versants de quatorze pour cent. La carte
-  // assume ses aplats : des bords calcules, nets a toute echelle, et rien
-  // d'imprime par-dessus. La touche « r » qui fondait vers le relief
-  // ombre s'en va par la meme occasion.
-
-  // LA PROFONDEUR D'ENCRE. Le papier ne bouge pas — c'est le palier le
-  // plus profond qui monte ou descend, comme on charge une plaque. À 1,0
-  // on retrouve exactement la carte d'origine ; à 0 il ne reste que le
-  // papier, et les paliers s'effacent sans se déplacer.
-  //
-  // Pourquoi ne pas simplement éclaircir tout l'aplat : parce que tirer
-  // toute la gamme vers le blanc rapproche les paliers les uns des
-  // autres, et la marche entre deux altitudes — qui est TOUTE la lecture
-  // du relief ici — se perd. En tenant le papier fixe, l'écart entre
-  // deux paliers reste proportionnel à l'encre, donc lisible.
+  // Profondeur d'encre : le papier reste fixe, seul le palier profond
+  // bouge. Eclaircir toute la gamme rapprocherait les paliers, et la
+  // marche entre eux est toute la lecture du relief.
   vec3 seaInk  = max(SEA_LIGHT  + (SEA_DEEP  - SEA_LIGHT)  * uSea,  vec3(0.0));
   vec3 landInk = max(LAND_LIGHT + (LAND_DEEP - LAND_LIGHT) * uLand, vec3(0.0));
   vec3 sea  = mix(SEA_LIGHT,  seaInk,  qS);
@@ -251,9 +200,8 @@ void main(){
   float d = radians(uDecl), pl = radians(lat), Hh = radians(lon - uSublon);
   float h = degrees(asin(clamp(sin(pl) * sin(d) + cos(pl) * cos(d) * cos(Hh), -1.0, 1.0)));
 
-  // Le soleil ouvre la fenêtre, et rien d'autre ne peut l'ouvrir — pour
-  // ce qui a une raison. La fuite, elle, ne sert qu'à la chance : pleine
-  // au bord de la fenêtre, éteinte SPILL_DEG plus loin.
+  // Seul le soleil ouvre la porte. La fuite ne sert qu'a la chance :
+  // pleine au bord de la fenetre, eteinte SPILL_DEG plus loin.
   float S = (h > 0.4 && h < SUN_MAX)
           ? pow(1.0 - h / SUN_MAX, 1.3) * smoothstep(0.0, 6.5, h)
           : 0.0;
@@ -263,8 +211,8 @@ void main(){
 
   if((uOff & 2) != 0){ S = 0.0; gateC = 0.0; }   // tache coupee (admin)
   if(uPass == 2){
-    // PIXEL : la tache est deja calculee, un bloc par texel. texelFetch
-    // ne filtre pas : des carres francs, et une seule lecture par pixel.
+    // PIXEL : la tache deja calculee, un bloc par texel ; texelFetch ne
+    // filtre pas, d'ou des carres francs.
     vec4 px = texelFetch(uPix, ivec2(gl_FragCoord.xy / uPixN), 0);
     hue = px.rgb;
     field = px.a;
@@ -272,11 +220,8 @@ void main(){
     float ccl = cos(pl);
     vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * FIELD_FREQ;
 
-    // ---- CHANCE : plus lente, plus large, et sans rapport avec la météo.
-    // Seuillée serré : ce ne sont pas des voiles mais des poches. Puis
-    // multipliée par LA FLAQUE — ce que le piéton porte. Loin de lui elle
-    // ne vaut rien, et c'est pour ça que la fuite ne fait pas un anneau
-    // plus gras mais des taches isolées, autour de nous.
+    // ---- CHANCE : des poches, multipliees par la flaque autour du
+    // pieton. D'ou une fuite en taches isolees, pas en anneau.
     float CHA = 0.0;
     if((uOff & 4) == 0)
       CHA = smoothstep(0.46, 0.76,
@@ -287,18 +232,11 @@ void main(){
 
     float belief = uBelief.z * CHA * luck * gateC;
 
-    // ---- MÉTÉO et LÉGENDE n'existent que porte ouverte. Ce qui est vrai
-    // et ce qu'on raconte ont toujours besoin du soleil.
+    // ---- METEO et LEGENDE n'existent que porte ouverte.
     if(S > 0.0){
       float rain, gap;
 
-      // DEUX SOURCES POUR LA MEME CHOSE. La branche est UNIFORME : tous
-      // les pixels prennent le meme chemin, le processeur graphique ne
-      // diverge pas, et la branche non prise ne coute rien.
-      //
-      // Et il se trouve que la vraie meteo est la MOINS chere des deux :
-      // deux lectures de texture au lieu de vingt-quatre hachages. Brancher
-      // Open-Meteo accelere la carte, ce qui n'allait pas de soi.
+      // Grille ou bruit : branche UNIFORME, la branche non prise ne coute rien.
       if((uOff & 8) != 0){
         rain = 0.0; gap = 0.0;
       } else if(uWxOn > 0.5){
@@ -308,12 +246,8 @@ void main(){
         vec4 w1 = texture(uWx, vec3(uv, k1));
         vec4 w  = mix(w0, w1, uSlot - k0);
         rain = w.r;
-        // La clarte mesuree, remise sur la course de l'ancienne formule :
-        // meme plancher, meme amplitude. Le masque littoral DISPARAIT ici
-        // — il servait a rattraper une climatologie inventee, et il n'y a
-        // plus rien a rattraper. La mer s'allume donc pour de bon : il y
-        // pleut vraiment, et les etiquettes disent deja qu'il n'y a
-        // personne pour voir.
+        // Meme course que la branche du bruit, mais sans masque littoral :
+        // la mer s'allume, il y pleut vraiment.
         gap = 0.14 + 1.66 * w.g;
       } else {
         rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
@@ -329,23 +263,15 @@ void main(){
 
     float t = clamp(belief * GAIN, 0.0, 1.0);
 
-    // LE GRAIN. Le bruit de base n'a rien de plus fin que ~400 km : passé
-    // x10 on regardait un aplat uniforme, et s'approcher ne montrait rien.
-    // Deux octaves fines entrent progressivement. Elles ne DÉPLACENT pas la
-    // tache — elles la dépolissent : la structure, donc l'indice lu, reste
-    // celle du champ. C'est de la matière, pas de la donnée.
+    // LE GRAIN : le bruit de base s'arrete vers 400 km. Ces octaves
+    // depolissent la tache sans la deplacer : de la matiere, pas de la
+    // donnee, d'ou leur absence dans sky.js.
     if(uDetail > 0.002 && (uOff & 32) == 0){
       float grain = (vnoise(sp *  6.1) - 0.5) * 1.10
                   + (vnoise(sp * 15.7) - 0.5) * 0.60;
 
-      // LES OCTAVES PROFONDES. Les deux du dessus valent 290 et 113 km :
-      // à x32 l'écran fait 1 250 km de large, elles y sont encore des
-      // masses. Trois octaves de plus — 47, 19 et 8 km — pour que
-      // s'approcher continue de RÉVÉLER au lieu d'agrandir.
-      //
-      // Elles n'entrent qu'au-delà de x6, et par uFine seul : au monde
-      // entier elles ne feraient qu'un fourmillement sous le pixel, et
-      // elles mentiraient sur la lecture d'ensemble.
+      // 47, 19 et 8 km, par uFine seul : au monde entier elles ne
+      // feraient qu'un fourmillement sous le pixel.
       if(uFine > 0.002){
         grain += ((vnoise(sp *  38.0) - 0.5) * 0.46
                 + (vnoise(sp *  92.0) - 0.5) * 0.30
@@ -354,45 +280,15 @@ void main(){
       t = clamp(t * (1.0 + uDetail * 0.55 * grain), 0.0, 1.0);
     }
 
-    // Elle NE S'EFFACE PLUS en s'approchant. Le facteur 0,40 qui tenait
-    // ici partait d'un constat juste — de près la couleur noyait le
-    // relief — mais il traitait le symptôme : ce qui saturait l'écran,
-    // c'était un aplat de couleur agrandi, pas la couleur elle-même. Ce
-    // sont les octaves profondes qui règlent ça, en donnant à la tache
-    // une structure à regarder. La force, elle, reste celle du monde
-    // entier : zoomer précise, ça ne doit rien retirer.
-    //
-    // uTache n'entre QUE là : c'est un gain sur la force de la tache, pas
-    // sur la valeur t. La teinte, elle, continue de dire la même chose.
+    // La force ne baisse pas au zoom. uTache agit sur la force, pas sur
+    // t : la teinte continue de dire la meme chose.
     float fv = clamp(pow(t, 1.15) * 0.98 * uTache, 0.0, 1.0);
 
-    // LE SEUIL. Sous cette presence, du papier — rien du tout.
-    //
-    // La premiere version montait ce seuil AVEC LE ZOOM et ne coupait
-    // qu'a 36 % au mieux : elle ne faisait rien avant x6, et pas grand
-    // chose apres. Le defaut qu'elle visait est pourtant reel, et il est
-    // pire de pres : un pays entier sous une nappe de couleur, ou le
-    // regard n'a aucun bord a saisir.
-    //
-    // Le seuil vaut donc maintenant A TOUTE ECHELLE, et il est franc.
-    //
-    // ET LA GAMME QUI RESTE EST REETALEE. C'est le second temps, et il
-    // compte autant : garder les valeurs telles quelles ne laisserait
-    // qu'une plage etroite entre le seuil et un, donc des taches toutes
-    // pareilles. On etire ce qui depasse sur toute la course de la
-    // couleur — mais en partant de 0,30 et non de zero, sans quoi le bord
-    // de la tache serait blanc et l'on ne verrait plus sa forme.
-    //
-    // Le bord est calcule par les derivees d'ecran : net a toute echelle,
-    // jamais crenele. Meme methode que les paliers du relief.
-    //
-    // BORNE PAR LE HAUT. Ce fwidth est pris DANS la branche de la porte,
-    // que les pixels voisins ne prennent pas tous : le GLSL ne garantit
-    // alors plus la derivee. Le processeur graphique de l'atelier s'en
-    // tire ; celui du Pi rend une valeur enorme au bord de la porte, et un
-    // fv presque nul passait le seuil — des traits roses le long de chaque
-    // courbe de hauteur du soleil (3 octobre). Un bord vrai ne fait jamais
-    // 0,08 de large par pixel.
+    // LE SEUIL, a toute echelle : en dessous, du papier. Ce qui depasse
+    // est reetale a partir de 0,30, sinon le bord de la tache serait blanc.
+    // fwidth BORNE PAR LE HAUT (piege n. 35) : pris dans une branche non
+    // uniforme, la derivee n'est plus garantie ; sur le Pi elle explosait
+    // au bord de la porte et tracait des traits roses.
     if(uSeuil > 0.001){
       float w = clamp(fwidth(fv), 1e-4, 0.08);
       float edge = smoothstep(uSeuil - w, uSeuil + w, fv);
@@ -401,17 +297,11 @@ void main(){
     }
 
     if(uGrey > 0.5){
-      // EN DÉGRADÉ, la force ne peut plus passer par la teinte : elle
-      // passe par la DENSITÉ, découpée en paliers — le même langage que
-      // les aplats du relief. Pas de trait d'iso-valeur : la marche entre
-      // deux paliers se voit toute seule, et un trait par-dessus faisait
-      // carte géologique.
+      // EN GRIS, la force passe par la densite, en paliers comme le relief.
       float band = floor(fv * BANDS) / BANDS;
       float v = 1.0 - pow(band, 0.85) * 0.50;
 
-      // Il faut bien quelque chose de plus : en couleur la teinte suffit
-      // à séparer la tache du fond, en gris elle entre en concurrence
-      // avec le relief, lui aussi gris et lui aussi lisse.
+      // La trame separe la tache du relief, gris et lisse lui aussi.
       if(bayer8(ivec2(gl_FragCoord.xy)) < clamp((fv - 0.12) / 0.88, 0.0, 1.0))
         v -= 0.20;
 
@@ -420,42 +310,28 @@ void main(){
     } else {
       field = fv;
 
-      // Irisation : palette cosinus parcourue plusieurs fois, décalée par un
-      // bruit lent. On obtient des bandes imbriquées, comme de l'huile sur
-      // l'eau, plutôt qu'un simple dégradé chaud-froid.
-      //
-      // LE NOMBRE DE TOURS EST UN RÉGLAGE, et il ne monte plus avec le
-      // zoom. Je l'avais lié à la finesse : plus on s'approchait, plus la
-      // palette bouclait — bleu, vert, jaune, orange, rose, puis cyan et
-      // ça recommence. Un arc-en-ciel de trop par-dessus le sujet. La
-      // complexité de près doit venir des TROUS, qui donnent une forme à
-      // lire ; la teinte, elle, gagne à tourner moins.
+      // Irisation : palette cosinus parcourue uFranges fois, decalee par un
+      // bruit lent, comme de l'huile sur l'eau. Le nombre de tours ne
+      // suit pas le zoom.
       float k = t * uFranges + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
-      // PALETTE : la phase arrondie a uPal crans par tour, donc uPal
-      // teintes en tout, en bandes franches — une palette de console.
+      // PALETTE : phase arrondie a uPal crans par tour, en bandes franches.
       if(uPal > 0.5) k = floor(k * uPal + 0.5) / uPal;
       vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
       c = mix(vec3(dot(c, vec3(0.3333))), c, uSat);      // saturation
-      // plancher relevé : sur papier blanc, une teinte trop basse vire à la boue
+      // plancher releve : sur papier blanc, une teinte trop basse vire a la boue
       hue = clamp(0.10 + 0.90 * c, 0.0, 1.0);
     }
   }
 
-  // PIXEL : la passe 1 s'arrete ici, la tache seule. Le fond et le
-  // couloir sont pour la passe 2, a pleine resolution.
+  // PIXEL : la passe 1 s'arrete ici ; fond et couloir en passe 2.
   if(uPass == 1){ fragColor = vec4(hue, field); return; }
 
-  // Multiplication : sur le papier, les taches teintent au lieu d'éclairer.
-  // Si le fond redevenait sombre, il faudrait repasser en additif.
+  // Multiplication : sur le papier, les taches teintent au lieu d'eclairer.
   vec3 col = ground * mix(vec3(1.0), hue, field);
 
   // ====================================================== LES COTES
-  // La cote est DEJA dans le relief : la ou le champ vaut 0,5. Le trait
-  // suit cette iso-ligne, comme le couloir suit l'iso-hauteur : la
-  // distance en pixels est l'ecart a 0,5 divise par le gradient a l'ecran.
-  // Une valeur deja lue, quelques operations — au lieu de reprojeter des
-  // dizaines de milliers de points en JavaScript a chaque image. Meme
-  // encre que le trace de l'encre ; les lacs, eux, n'y sont pas.
+  // L'iso-ligne 0,5 du relief : distance en pixels = ecart a 0,5 divise
+  // par le gradient a l'ecran. Les lacs n'y sont pas.
   if(uCoast > 0.0 && (uOff & 1) == 0){
     float gf = max(length(vec2(dFdx(f), dFdy(f))), 1e-6);
     float cl = clamp(0.5 * uCoast + 0.5 - abs(f - 0.5) / gf, 0.0, 1.0)
@@ -464,70 +340,32 @@ void main(){
   }
 
   // ====================================================== LE COULOIR
-  // DEUX POINTILLES, et la fenetre du soleil entre eux : 0 degre d'un
-  // cote, 42 de l'autre. Sans ce trace, on ne sait pas si l'absence de
-  // couleur quelque part vient d'un manque de pluie ou d'un soleil trop
-  // haut — et c'est toute la difference entre une carte qui se lit et une
-  // carte qu'on croit sur parole.
-  //
-  // Le trait suit l'ISO-HAUTEUR : la meme grandeur h que la porte, donc
-  // rigoureusement au bon endroit. Sa largeur passe par le GRADIENT DE h
-  // A L'ECRAN — combien de degres de hauteur par pixel — ce qui lui donne
-  // une epaisseur constante a toute echelle, et nette.
+  // Deux pointilles, a 0,4 et 42 degres : sans eux, on ne sait pas si
+  // l'absence de couleur vient de la pluie ou du soleil. Le trait suit
+  // l'iso-hauteur h ; son epaisseur passe par le gradient de h a l'ecran.
   if(uPorte > 0.5){
     vec2 gh = vec2(dFdx(h), dFdy(h));
     float gn = length(gh);
     float lw = max(gn, 1e-4);
 
-    // La ou la hauteur bascule d'un coup — pres des poles, et sur la
-    // couture de la carte — le gradient explose et le trait deviendrait
-    // une nappe. On l'efface plutot que de mentir sur sa position.
+    // Pres des poles et sur la couture, le gradient explose : on efface
+    // le trait plutot que de mentir sur sa position.
     float sane = 1.0 - smoothstep(2.0, 6.0, lw);
 
-    // L'EPAISSEUR EST UN REGLAGE. Un trait de 1,6 pixel se lit sur un
-    // ecran d'atelier ; sur le tramage de l'e-ink il disparaitra, et il
-    // faudra pouvoir le charger sans toucher au code.
     float tw = lw * 1.6 * uCouloir.y;
     float line = max(1.0 - smoothstep(0.0, tw, abs(h - 0.4)),
                      1.0 - smoothstep(0.0, tw, abs(h - SUN_MAX)));
 
-    // ---- LE POINTILLE, ET POURQUOI IL SUIT LA COURBE
-    //
-    // La premiere version decoupait le trait avec une trame diagonale de
-    // l'ecran : fract((x + y) * k). Elle a un defaut fatal et invisible
-    // tant qu'on ne tourne pas le globe — la ou la courbe court ELLE AUSSI
-    // en diagonale, la phase de la trame ne change plus le long du trait.
-    // Des portions entieres du couloir passaient alors tout allumees ou
-    // tout eteintes, et entre les deux naissaient les longues franges
-    // qu'on appelle un moire.
-    //
-    // La phase se prend donc LE LONG DE LA COURBE et non de l'ecran. Le
-    // gradient de h pointe perpendiculairement a l'iso-hauteur ; sa
-    // perpendiculaire est donc la tangente au trait. En projetant le pixel
-    // sur cette tangente, on obtient une abscisse curviligne : elle avance
-    // toujours quand on suit le trait, jamais quand on le traverse. Plus
-    // aucune orientation n'est privilegiee, et le moire n'a plus de quoi
-    // se former.
+    // Phase prise LE LONG DE LA COURBE (tangente = gradient tourne d'un
+    // quart de tour) et non de l'ecran : une trame d'ecran fait du moire
+    // la ou la courbe court dans sa direction.
     vec2 tang = gn > 1e-9 ? vec2(-gh.y, gh.x) / gn : vec2(1.0, 0.0);
 
-    // LA LONGUEUR DU TIRET SUIT LE ZOOM. Au monde entier, les deux courbes
-    // sont serrees et tres incurvees : un tiret court les epouse. De pres
-    // elles sont presque droites, et le meme tiret court devient un
-    // gresillement — on l'allonge.
-    //
-    // uDetail et non uFine : uDetail est la rampe du zoom toute seule,
-    // quand uFine est cette rampe MULTIPLIEE par le curseur « finesse ».
-    // Couper la finesse aurait fige le pointille au monde entier, et
-    // personne n'aurait fait le rapprochement.
-    // Et l'ECART est un reglage aussi : uCouloir.x multiplie la course
-    // entiere, zoom compris. Un pointille trop serre fait un trait plein.
+    // Tiret plus long de pres, ou les courbes sont droites. uDetail et
+    // non uFine : couper la finesse ne doit pas figer le pointille.
     float step_px = mix(12.0, 26.0, clamp(uDetail, 0.0, 1.0)) * uCouloir.x;
 
-    // UNE SINUSOIDE PLUTOT QU'UN CRENEAU. Un step() sur un fract() a des
-    // bords francs a l'echelle du pixel : c'est la seconde source de
-    // moire, et celle-la se voit meme sur un trait bien oriente. La
-    // sinusoide n'a aucun bord — le point s'ouvre et se ferme en douceur,
-    // et le rendu reste propre a n'importe quelle densite d'ecran.
+    // Une sinusoide et non un creneau : pas de bord franc, pas de moire.
     float s = dot(gl_FragCoord.xy, tang) / step_px;
     float dash = smoothstep(0.18, 0.62, 0.5 + 0.5 * sin(6.28318 * s));
 

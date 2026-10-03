@@ -1,9 +1,8 @@
 """
-Equirectangular greyscale earth texture + terrain mask, for GPU reprojection.
+Texture de la Terre en gris (plate carrée) et masque de surface.
 
-The browser reprojects per pixel, so we no longer bake an Equal Earth PNG:
-we ship the plate carree source and let the shader do the work. That is what
-makes zooming sharpen instead of blur.
+La projection se fait par pixel dans le shader : c'est ce qui fait qu'un
+zoom affine au lieu de flouter.
 """
 import json
 import numpy as np
@@ -86,9 +85,8 @@ Image.fromarray(g8, 'L').resize((TEX_W, TEX_H), Image.LANCZOS).save(
 del g8
 
 # ------------------------------------------------------------------ mask
-# On cuit directement le coefficient de surface dans la texture, puis on le
-# floute : le littoral vaut une prime (averses et trouees s'y croisent), la
-# haute mer beaucoup moins. Un champ continu, donc pas d'arete de texel.
+# Coefficient de surface cuit puis flouté : prime au littoral (averses et
+# trouées s'y croisent), moins en haute mer. Continu, donc sans arête de texel.
 print('writing mask.png ...')
 land_s = rasterize(f'{DATA}/ne_50m_land.geojson', MASK_W, MASK_H)
 near = np.zeros_like(land_s, dtype=bool)

@@ -16,9 +16,9 @@
 <canvas id="ink" class="layer"></canvas>
 
 <!-- =====================================================================
-     LE PANNEAU. Quatre registres dans une colonne à droite ; un registre,
-     une tâche. Tout ce qu'ils affichent décrit LE RÉTICULE, c'est-à-dire
-     le centre exact de l'écran. Le remplissage est fait par src/panel.js.
+     LE PANNEAU. Quatre registres à droite, un registre par tâche. Tout ce
+     qu'ils affichent décrit LE RÉTICULE (le centre de l'écran). Rempli par
+     src/panel.js.
      ===================================================================== -->
 <div class="rail">
 
@@ -35,19 +35,12 @@
     </div>
     <div class="body" id="corps-est">
 
-      <!-- Le lieu et l'heure ont leur ligne à eux : le titre doit pouvoir
-           dire le nom de la pièce en entier.
-
-           Le piéton dit « c'est nous » : le point visé est un endroit où
-           quelqu'un se tiendrait. Dessiné au trait et non en emoji — même
-           règle que le glyphe de l'arc, un emoji couleur devient un pâté
-           au tramage de l'e-ink. -->
+      <!-- Le lieu et l'heure ont leur ligne : le titre dit le nom en entier.
+           Le piéton dit « c'est nous ». Dessiné au trait, pas en emoji. -->
       <div class="reading">
         <b>
-          <!-- La MÊME figure que le réticule de la carte, aux mêmes
-               coordonnées. Sur la carte elle marche — voir walkerGait()
-               dans src/ink.js ; ici elle reste posée, et ces coordonnées
-               sont exactement sa pose de repos. -->
+          <!-- La même figure que le réticule, en pose de repos (sur la
+               carte elle marche : walkerGait() dans src/ink.js). -->
           <svg class="walker" viewBox="-7.4 -23 14.8 24" aria-hidden="true">
             <g fill="currentColor" stroke="currentColor"
                stroke-linecap="round" stroke-linejoin="round">
@@ -64,9 +57,8 @@
         <span id="f-clock">—</span>
       </div>
 
-      <!-- Le chiffre à droite du titre EST la hauteur du soleil. L'échelle
-           verticale se recadre sur ce que la courbe parcourt, en gardant
-           toujours la fenêtre 0–42° dans le champ. -->
+      <!-- Le chiffre du titre est la hauteur du soleil. L'échelle se
+           recadre sur la courbe, en gardant toujours 0–42° dans le champ. -->
       <div class="sub short">
         <div class="head"><span>héliodon</span><em id="h-sun">—</em></div>
         <canvas class="plot" id="p-sun"></canvas>
@@ -76,16 +68,9 @@
   </section>
 
   <!-- =================================================== L'ALGORITHME -->
-  <!-- UN SEUL CADRE, UN SEUL TITRE : la courbe de la présence et la
-       formule qui la fabrique. Le chiffre est dans le bandeau.
-
-       « Algorithme » et non « présence » : le registre ne montre pas un
-       résultat, il montre la machine qui le fabrique.
-
-       Les trois boutons de la croyance — Météo, Légendes, Chance — sont
-       dans RÉGLAGES, groupe ALGORITHME, comme sur la plaque : une
-       commande, une seule place. Le soleil n'y est pas : on ne croit pas
-       en sa hauteur, on la calcule. -->
+  <!-- Un seul cadre : la courbe de la présence et la formule qui la
+       fabrique. Les boutons de la croyance sont dans RÉGLAGES, groupe
+       ALGORITHME, comme sur la plaque : une commande, une place. -->
   <section class="box">
     <div class="head">
       <span>algorithme</span>
@@ -97,12 +82,10 @@
     </div>
     <div class="body" id="corps-croy">
 
-      <!-- « Indice » ne disait rien. « Probabilité » mentirait : le chiffre
-           est composite et volontairement poétique. -->
+      <!-- Pas « probabilité » : le chiffre est composite et poétique. -->
       <canvas class="plot" id="p-idx"></canvas>
 
-      <!-- COMMENT LES TROIS SE MÉLANGENT. Même action que l'interrupteur
-           « Formule » de la plaque. -->
+      <!-- Le mélange des trois : même action que « Formule » sur la plaque. -->
       <div class="dials">
         <div class="gauge lone"><span>formule</span>
           <button type="button" class="ask" data-note="formule"
@@ -120,23 +103,17 @@
     </div>
     <div class="body" id="corps-leg" hidden>
       <div class="chips" id="chips"></div>
-      <!-- La phrase, et au bout le renvoi vers sa provenance. Citer une
-           croyance sans dire d'où elle vient, sur un mur, sous un nom
-           propre, c'est de l'appropriation avec une jolie police. Le
-           bouton est rempli par src/panel.js, et il apparaît même quand
-           la source manque — il dit alors qu'elle manque. -->
+      <!-- La phrase, et au bout le renvoi vers sa provenance (rempli par
+           src/panel.js). Il paraît même sans source, pour dire qu'elle manque. -->
       <p class="said" id="said">—</p>
     </div>
   </section>
 
   <!-- ===================================================== LES RÉGLAGES -->
-  <!-- LA PLAQUE, ET RIEN D'AUTRE. Les commandes gravées dans l'inox du
-       tableau, avec leurs labels et leurs groupes exacts — TEXTES.md §9.
-       Un mot changé ici est un mot qui ne correspond plus au métal.
-
-       Chaque commande a UN point d'entrée, `plaque` dans src/panel.js :
-       la page l'appelle, le Raspberry Pi l'appellera. Tout ce qui n'est
-       pas sur la plaque est dans le registre ADMIN, plus bas, caché. -->
+  <!-- LA PLAQUE, ET RIEN D'AUTRE : commandes, labels et groupes gravés dans
+       l'inox (TEXTES.md §9). Un mot changé ici ne correspond plus au métal.
+       Point d'entrée unique : `plaque` dans src/panel.js. Le reste est
+       dans ADMIN, caché. -->
   <section class="box plaque" id="box-reg">
     <div class="head quiet">
       <span>réglages</span>
@@ -163,9 +140,8 @@
         </div>
       </div>
 
-      <!-- ALGORITHME. Trois poids indépendants : le logiciel les ramène à
-           100 %. Tous à 0 %, la carte ne montre rien. Puis quatre boutons
-           poussoirs, qui déplacent le piéton ou posent un repère. -->
+      <!-- ALGORITHME. Trois poids ramenés à 100 % ; tous à 0 %, rien ne
+           s'affiche. Puis quatre boutons poussoirs (piéton, repère). -->
       <div class="sub">
         <div class="head"><span>ALGORITHME</span></div>
         <div class="dials">
@@ -193,8 +169,8 @@
         </div>
       </div>
 
-      <!-- HORLOGE. Un bouton à trois positions. Il n'agit qu'avec la vraie
-           météo : en horloge « dev » (ADMIN), il s'éteint. -->
+      <!-- HORLOGE. Trois positions. N'agit qu'avec la vraie météo ; en
+           horloge « dev » (ADMIN), il s'éteint. -->
       <div class="sub">
         <div class="head"><span>HORLOGE</span></div>
         <div class="dials">
@@ -211,9 +187,8 @@
       <div class="sub">
         <div class="head"><span>GRAPHISME</span></div>
         <div class="dials">
-          <!-- La profondeur d'encre des aplats. Le papier ne bouge pas :
-               c'est le palier le plus profond qu'on charge ou qu'on
-               allège. 50 % est le tirage d'origine. -->
+          <!-- Profondeur d'encre des aplats : le palier le plus profond se
+               charge ou s'allège, le papier ne bouge pas. 50 % = d'origine. -->
           <div class="dial">
             <label for="s-terres">Contraste Terre</label>
             <input id="s-terres" type="range" min="0" max="100" value="50"><output id="o-terres">&#8212;</output>
@@ -222,20 +197,18 @@
             <label for="s-mer">Contraste Mer</label>
             <input id="s-mer" type="range" min="0" max="100" value="50"><output id="o-mer">&#8212;</output>
           </div>
-          <!-- Combien de fois la palette fait le tour. Au-delà de deux, on
-               voit un arc-en-ciel par-dessus le sujet. -->
+          <!-- Tours de palette. Au-delà de deux, l'arc-en-ciel couvre le sujet. -->
           <div class="dial">
             <label for="s-franges" id="l-franges">Irisation</label>
             <input id="s-franges" type="range" min="0" max="100" value="33"><output id="o-franges">&#8212;</output>
           </div>
-          <!-- Le seuil sous lequel rien ne s'allume. À 0 % de la couleur
-               partout, à 100 % seulement les endroits les plus forts. -->
+          <!-- Seuil d'allumage : à 0 % partout, à 100 % les seuls points
+               les plus forts. -->
           <div class="dial">
             <label for="s-seuil">Sensibilité</label>
             <input id="s-seuil" type="range" min="0" max="100" value="86"><output id="o-seuil">&#8212;</output>
           </div>
-          <!-- La taille de toutes les icônes de la carte : hauts lieux,
-               repères, le piéton et son point. -->
+          <!-- Taille des icônes : hauts lieux, repères, piéton et son point. -->
           <div class="dial">
             <label for="s-icon">Icônes</label>
             <input id="s-icon" type="range" min="0" max="100" value="58"><output id="o-icon">&#8212;</output>
@@ -257,16 +230,11 @@
   </section>
 
   <!-- ======================================================== L'ADMIN -->
-  <!-- CE QUI N'EST PAS SUR LA PLAQUE. Caché : il n'apparaît que par
-       /admin (admin/index.html renvoie ici avec « ?admin »). Caché ne veut
-       pas dire protégé — la page n'a rien à protéger, elle ne fait que ne
-       pas le montrer. Les réglages faits ici sont mémorisés et la page
-       publique les relit.
-
-       TROIS FAMILLES, et elles répondent à trois questions différentes :
-
+  <!-- CE QUI N'EST PAS SUR LA PLAQUE. Ouvert par /admin (« ?admin »).
+       Caché, pas protégé. Les réglages sont mémorisés et relus par la page
+       publique.
            GRAPHISME     comment la carte est peinte
-           DONNÉES       ce qu'elle peint, d'où ça vient, et de quand
+           DONNÉES       ce qu'elle peint, d'où, et de quand
            PERFORMANCE   ce que ça coûte -->
   <section class="box" id="box-admin" hidden>
     <div class="head quiet">
@@ -296,8 +264,8 @@
               <label for="s-tache">intensit&#233;</label>
               <input id="s-tache" type="range" min="0" max="100" value="54"><output id="o-tache">&#8212;</output>
             </div>
-            <!-- « saturation » et non plus « couleur » : « Couleur » est
-                 l'interrupteur de la plaque, et ce n'est pas la même chose. -->
+            <!-- « saturation », pas « couleur » : « Couleur » est
+                 l'interrupteur de la plaque, autre chose. -->
             <div class="dial">
               <label for="s-colour" id="l-colour">saturation</label>
               <input id="s-colour" type="range" min="0" max="100" value="83"><output id="o-colour">&#8212;</output>
@@ -307,10 +275,9 @@
               <label for="s-fine" id="l-fine">finesse</label>
               <input id="s-fine" type="range" min="0" max="100" value="50"><output id="o-fine">&#8212;</output>
             </div>
-            <!-- Les deux mesures du pointill&#233; du Couloir, et deux curseurs
-                 parce qu'un seul ferait grossir les points en les &#233;cartant.
-                 Les chiffres sont ceux du monde entier : de pr&#232;s, l'&#233;cart
-                 s'allonge seul. -->
+            <!-- Le pointillé du Couloir : deux curseurs, sinon les points
+                 grossiraient en s'écartant. Valeurs au monde entier ;
+                 de près, l'écart s'allonge seul. -->
             <div class="dial">
               <label for="s-ecart" id="l-ecart">&#8212; &#233;cart</label>
               <input id="s-ecart" type="range" min="0" max="100" value="45"><output id="o-ecart">&#8212;</output>
@@ -342,8 +309,8 @@
               <label for="s-text">texte</label>
               <input id="s-text" type="range" min="0" max="100" value="20"><output id="o-text">&#8212;</output>
             </div>
-            <!-- Le point du r&#233;ticule. Tout &#224; gauche il reste de l'encre ;
-                 ensuite il parcourt le cercle des teintes. -->
+            <!-- Le point du réticule : encre tout à gauche, puis le cercle
+                 des teintes. -->
             <div class="dial">
               <label for="s-point">point</label>
               <input id="s-point" type="range" min="0" max="100" value="0"><output id="o-point">&#8212;</output>
@@ -355,10 +322,8 @@
       </div>
 
       <!-- ######################################### DONNÉES ########### -->
-      <!-- CE QUE LA CARTE PEINT : d'où vient l'heure, d'où vient la
-           pluie, et ce que la page a effectivement sous la main. Le temps
-           est ici et non dans le graphisme parce qu'il ne change pas
-           l'allure — il change le SUJET. -->
+      <!-- CE QUE LA CARTE PEINT : l'heure, la pluie, et ce que la page a
+           sous la main. Le temps est ici : il change le sujet, pas l'allure. -->
       <div class="sub">
         <div class="head"><span>données</span>
           <button type="button" id="pli-dat" aria-expanded="true"
@@ -375,16 +340,9 @@
           </div>
           <div class="dials" id="corps-r-temps" hidden>
 
-            <!-- D'O&#217; VIENT L'HEURE, et donc d'o&#249; vient la pluie. Les deux
-                 vont ensemble : un temps invent&#233; ne peut pas aller chercher
-                 une pr&#233;vision, et une vraie pr&#233;vision ne se laisse pas
-                 acc&#233;l&#233;rer dix mille fois.
-
-                 DEUX CASES ET NON UNE : avec une seule &#224; cocher, il faut se
-                 rappeler ce que « coch&#233; » voulait dire. L&#224;, on lit ce qu'on
-                 a choisi. « m&#233;t&#233;o » reste &#233;teint tant que data/weather.png
-                 n'est pas &#224; c&#244;t&#233; de la page — une case qui pr&#233;tendrait
-                 brancher des donn&#233;es absentes mentirait. -->
+            <!-- L'heure et la pluie vont ensemble : un temps inventé n'a pas de
+                 prévision, une prévision ne s'accélère pas. « météo » reste
+                 éteint sans data/weather.png. -->
             <div class="choice">
               <span>horloge</span>
               <label><input type="radio" name="clk" id="clk-dev" checked><b>dev</b></label>
@@ -393,10 +351,8 @@
                       aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
             </div>
 
-            <!-- LA COLONNE DE DROITE EST PLUS LARGE ICI : « &#215;100 000 »
-                 d&#233;borde d'une case de 44 px. La vitesse ne vaut qu'en dev ;
-                 en m&#233;t&#233;o elle s'&#233;teint, et c'est Temps, sur la plaque,
-                 qui dit quand. -->
+            <!-- Colonne de droite plus large : « ×100 000 » déborde de 44 px.
+                 La vitesse ne vaut qu'en dev ; en météo, c'est Temps qui dit quand. -->
             <div class="dial wide">
               <label for="s-time" id="l-time">vitesse</label>
               <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">&#8212;</output>
@@ -404,19 +360,10 @@
           </div>
         </div>
 
-          <!-- L'ÉTAT DE CE QUE LA PAGE A SOUS LA MAIN, en permanence.
-               Un indicateur qui disparaît quand tout va bien ne dit rien :
-               il dit seulement qu'il a fini de regarder. Celui-ci reste,
-               et il répond aux trois questions qu'on se pose quand la
-               carte paraît bizarre — qu'est-ce qui est arrivé, de quand
-               date la météo, et d'où tout ça vient.
-
-               Les tailles ne sont pas mesurées à la main : le navigateur
-               les tient déjà dans performance.getEntriesByType, avec les
-               durées, et les modules chargés par import y figurent aussi.
-
-               Sa minuterie s'arrête quand on le replie — sur le tableau
-               du mur, il ne coûtera plus rien. -->
+          <!-- L'état de ce que la page a sous la main, en permanence : ce qui
+               est arrivé, de quand date la météo, d'où ça vient. Tailles et
+               durées lues dans performance.getEntriesByType. Sa minuterie
+               s'arrête quand on le replie. -->
           <div class="sub">
             <div class="head quiet"><span>l'état</span>
               <button type="button" id="pli-data" aria-expanded="true"
@@ -441,20 +388,10 @@
         <div class="body" id="corps-cost" hidden>
 
   <!-- ======================================== LA PERFORMANCE -->
-        <!-- CE QUE LA PAGE CO&#219;TE, et sur quelle machine. Repli&#233; par d&#233;faut
-             comme les autres : c'est un instrument d'atelier, pas une
-             mesure du ciel, et le spectateur n'a rien &#224; en faire. Il ne
-             s'ouvre que si on va le chercher.
-
-             DEUX CHRONOM&#200;TRES, et il faut les deux. Le JavaScript se mesure
-             &#224; la montre ; le shader, non — drawArrays rend la main avant que
-             la carte graphique ait commenc&#233;. Une page &#224; douze images par
-             seconde dont le JavaScript ne co&#251;te qu'une milliseconde, c'est
-             le processeur graphique qui sature, et rien d'autre.
-
-             CHAQUE LIGNE PORTE SON « ? ». Un chiffre en millisecondes ne dit
-             rien tout seul : il faut savoir ce qu'il mesure, et surtout ce
-             qui le fait monter. Sans &#231;a on optimise au hasard. -->
+        <!-- CE QUE LA PAGE COÛTE, sur cette machine. Replié par défaut.
+             Deux chronomètres : drawArrays rend la main avant que le GPU
+             ait fini, donc le shader ne se mesure pas à la montre.
+             Chaque ligne porte son « ? » : ce qu'elle mesure, ce qui la fait monter. -->
         <div class="dials" id="corps-r-perf">
             <div class="part">mesures</div>
 
@@ -464,9 +401,8 @@
             <div class="gauge"><span>shader</span><em id="g-gpu">&#8212;</em>
               <button type="button" class="ask" data-note="gpu" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
 
-            <!-- LE SHADER EN D&#201;TAIL : chaque partie coup&#233;e tour &#224; tour, la
-                 diff&#233;rence est son prix. &#192; la demande : la page se fige le
-                 temps de la mesure. -->
+            <!-- Le shader en détail : chaque partie coupée tour à tour, la
+                 différence est son prix. À la demande : la page se fige. -->
             <div class="choice">
               <span>en d&#233;tail</span>
               <button type="button" class="plain" id="gpu-prof">mesurer</button>
@@ -488,17 +424,12 @@
             <div class="gauge"><span>pixels</span><em id="g-px">&#8212;</em>
               <button type="button" class="ask" data-note="px" aria-label="Que dit ce chiffre" title="Que dit ce chiffre">?</button></div>
 
-            <!-- TROIS BLOCS : les mesures au-dessus, puis ce qu'on choisit,
-                 puis ce qu'on coupe pour mesurer. Dans le panneau de 272 px,
-                 l'&#233;tiquette passe AU-DESSUS de ses cases (.stack) : sur une
-                 seule ligne, les options s'enroulaient n'importe o&#249;. -->
+            <!-- Trois blocs : mesures, choix, coupures. L'étiquette passe
+                 au-dessus de ses cases (.stack), faute de largeur. -->
             <div class="part">affichage</div>
 
-            <!-- LE MODE DE CALCUL, manuel et m&#233;moris&#233;. Une d&#233;tection
-                 automatique aurait chang&#233; le rendu sans le dire, et sur une
-                 oeuvre on ne veut pas d'un tableau qui se r&#232;gle dans notre
-                 dos. Deux cases, pour la m&#234;me raison qu'&#224; l'horloge : on
-                 doit LIRE ce qu'on a choisi, pas s'en souvenir. -->
+            <!-- Le mode de calcul, manuel et mémorisé : pas de détection
+                 automatique qui changerait le rendu sans le dire. -->
             <div class="choice stack">
               <span>machine</span>
               <label><input type="radio" name="rig" id="rig-laptop" checked><b>laptop</b></label>
@@ -506,8 +437,8 @@
               <button type="button" class="ask" data-note="rig"
                       aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
             </div>
-            <!-- LA R&#201;SOLUTION DU SHADER : le calque WebGL calcul&#233; plus petit,
-                 agrandi par le navigateur. L'encre reste nette. M&#233;moris&#233;. -->
+            <!-- Résolution du shader : calque WebGL plus petit, agrandi par le
+                 navigateur. L'encre reste nette. Mémorisé. -->
             <div class="choice cut stack">
               <span>r&#233;solution, %</span>
               <label><input type="radio" name="gls" id="gls-80"><b>80</b></label>
@@ -516,8 +447,8 @@
               <label><input type="radio" name="gls" id="gls-95"><b>95</b></label>
               <label><input type="radio" name="gls" id="gls-100" checked><b>100</b></label>
             </div>
-            <!-- EN MOUVEMENT : le shader descend &#224; cette r&#233;solution pendant que
-                 la carte glisse, puis revient &#224; celle du dessus &#224; l'arr&#234;t. -->
+            <!-- En mouvement : le shader descend à cette résolution pendant que
+                 la carte glisse, et revient à l'arrêt. -->
             <div class="choice cut stack">
               <span>en mouvement, %</span>
               <label><input type="radio" name="glm" id="glm-30"><b>30</b></label>
@@ -525,8 +456,8 @@
               <label><input type="radio" name="glm" id="glm-60"><b>60</b></label>
               <label><input type="radio" name="glm" id="glm-100" checked><b>idem</b></label>
             </div>
-            <!-- PIXEL : la tache calcul&#233;e par blocs, le fond reste net.
-                 &#171; direct &#187; = chaque pixel, comme avant. M&#233;moris&#233;. -->
+            <!-- PIXEL : la tache calculée par blocs, le fond reste net.
+                 « direct » = chaque pixel. Mémorisé. -->
             <div class="choice cut stack">
               <span>tache, en px</span>
               <label><input type="radio" name="pix" id="pix-1" checked><b>direct</b></label>
@@ -543,8 +474,8 @@
               <label><input type="radio" name="pal" id="pal-8"><b>8</b></label>
               <label><input type="radio" name="pal" id="pal-12"><b>12</b></label>
             </div>
-            <!-- LES C&#212;TES : trac&#233;es par l'encre (lacs compris, lourd sur le
-                 Pi) ou par le shader (iso-ligne du relief, presque gratuite). -->
+            <!-- Les côtes : par l'encre (lacs compris, lourd sur le Pi) ou par
+                 le shader (iso-ligne du relief, presque gratuite). -->
             <div class="choice cut stack">
               <span>c&#244;tes</span>
               <label><input type="radio" name="cote" id="cote-aucune" checked><b>aucune</b></label>
@@ -552,8 +483,8 @@
               <label><input type="radio" name="cote" id="cote-shader"><b>shader</b></label>
             </div>
 
-            <!-- LES COUPURES : cocher, c'est NE PLUS dessiner ce poste. Pour
-                 savoir lequel co&#251;te, sur la machine m&#234;me. M&#233;moris&#233;. -->
+            <!-- Les coupures : cocher, c'est ne plus dessiner ce poste, pour
+                 mesurer ce qu'il coûte. Mémorisé. -->
             <div class="part">couper, pour mesurer</div>
             <div class="choice cut stack">
               <span>tout</span>
@@ -586,23 +517,19 @@
 
 </div>
 
-<!-- LE POÈME, par-dessus la carte — l'interrupteur « Poème ». Le texte
-     n'existe pas encore : l'auteur l'apportera. Ce qui suit tient la
-     place, rien de plus. Il ne prend pas la main : la carte reste
-     saisissable au travers. -->
+<!-- LE POÈME, par-dessus la carte (interrupteur « Poème »). Texte
+     provisoire. Il ne prend pas la main : la carte reste saisissable. -->
 <div class="poeme" id="poeme" hidden>
   <p>Le poème viendra ici.</p>
 </div>
 
-<!-- Interface éteinte, il ne reste que la carte — et ce bouton, pour la
-     rallumer depuis un navigateur. Sur le tableau, c'est l'interrupteur
-     qui s'en charge. La touche « i » fait la même chose. -->
+<!-- Interface éteinte : ce bouton la rallume depuis un navigateur
+     (sur le tableau, l'interrupteur ; touche « i »). -->
 <button type="button" class="iface-on" id="iface-on" hidden
         aria-label="Afficher l'interface" title="Afficher l'interface (i)">+</button>
 
-<!-- LE PLEIN ÉCRAN, dans le coin bas-gauche : la page d'arrivée doit pouvoir
-     le demander sans clavier (le Pi n'en a pas). Discret comme le bouton
-     d'interface ; il s'efface une fois en plein écran. Touche « f ». -->
+<!-- Plein écran, coin bas-gauche : le Pi n'a pas de clavier. S'efface
+     une fois en plein écran. Touche « f ». -->
 <button type="button" class="plein" id="plein"
         aria-label="Plein écran" title="Plein écran (f)">
   <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
@@ -720,10 +647,9 @@
   </div>
 </div>
 
-<!-- LA PROVENANCE. Même feuille que l'explication, en plus petit : on y
-     relit la croyance en entier, on voit qui l'atteste, et on peut aller
-     vérifier. Quand rien n'est établi, la feuille le dit plutôt que de
-     rester muette — c'est une information sur la carte, pas un manque. -->
+<!-- LA PROVENANCE. Même feuille que l'explication, en plus petit : la
+     croyance en entier, qui l'atteste, où vérifier. Sans source établie,
+     la feuille le dit. -->
 <div class="sheet" id="src-sheet" hidden>
   <div class="sheet-inner narrow" role="dialog" aria-modal="true" aria-labelledby="src-nom">
     <button class="sheet-close" id="src-close" aria-label="Fermer">×</button>
@@ -733,18 +659,14 @@
   </div>
 </div>
 
-<!-- LA NOTE. Troisi&#232;me feuille, m&#234;me m&#233;canique que les deux autres : on y
-     lit ce qu'un chiffre mesure et surtout CE QUI LE FAIT MONTER. Un temps
-     en millisecondes ne dit rien tout seul ; sans savoir d'o&#249; il vient, on
-     optimise au hasard. Le texte vit dans src/panel.js, avec le registre
-     qu'il explique. -->
+<!-- LA NOTE. Troisième feuille : ce qu'un chiffre mesure et ce qui le
+     fait monter. Le texte vit dans src/panel.js. -->
 <div class="sheet" id="note-sheet" hidden>
   <div class="sheet-inner narrow" role="dialog" aria-modal="true" aria-labelledby="note-nom">
     <button class="sheet-close" id="note-close" aria-label="Fermer">&#215;</button>
     <h1 id="note-nom">&#8212;</h1>
     <p class="lead" id="note-quoi">&#8212;</p>
-    <!-- Une formule se lit en bloc, pas dans une phrase. Cach&#233; quand la
-         note n'en a pas. -->
+    <!-- Une formule se lit en bloc. Caché quand la note n'en a pas. -->
     <pre id="note-pre" hidden></pre>
     <dl class="terms" id="note-defs" hidden></dl>
     <p id="note-pourquoi">&#8212;</p>
@@ -753,16 +675,12 @@
 
 <div class="fallback" id="fallback" hidden></div>
 
-<!-- Modules ES natifs : aucune bibliothèque, aucune étape de construction.
-     Il faut servir la page par HTTP — mais il le fallait déjà, Chrome
-     refusant de charger une image locale dans une texture WebGL.
-         python serve.py                                                 -->
+<!-- Modules ES natifs, sans bibliothèque ni construction. Servir par
+     HTTP (WebGL refuse une image locale) :  python serve.py -->
 <script type="module" src="src/main.js"></script>
 
-<!-- LA VEILLE. Un module qui ne se charge pas échoue en silence : la page
-     reste blanche et rien, nulle part, ne dit pourquoi. Sur un tableau
-     accroché à un mur c'est la pire des pannes, alors on surveille le
-     démarrage et on écrit ce qu'on sait. -->
+<!-- LA VEILLE. Un module qui ne se charge pas échoue en silence, page
+     blanche ; on surveille le démarrage et on écrit ce qu'on sait. -->
 <script>
   setTimeout(function () {
     if (window.__rainbow) return;

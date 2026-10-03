@@ -1,58 +1,24 @@
 // =========================================================================
 //  LA VRAIE MÉTÉO
 //
-//  La grille d'Open-Meteo : son chargement, sa fraîcheur, et sa lecture.
-//  Ce module ne dépend de RIEN — il est tout en haut de la chaîne, avec
-//  projection et legends — parce qu'il ne fait que tenir un tableau de
-//  nombres et savoir y chercher.
+//  La grille Open-Meteo : chargement, fraîcheur, lecture. Aucune dépendance.
+//  Miroir du shader : les deux lisent les mêmes octets et doivent dire la
+//  même chose. Sans réseau ni fichier, RIEN NE CASSE : retour au bruit.
+// =========================================================================
+
+// data/weather.png : atlas VERTICAL de 32 pas de 3 h (360 × 5 760), chaque
+// tranche contiguë. LIGNE 0 = LATITUDE -89,5 : l'image paraît à l'envers,
+// c'est voulu (envoyée sans retournement, le shader lit v = (lat+90)/180).
 //
-//  Deux lecteurs, et ils doivent dire la même chose :
-//
-//      le shader   lit une texture en couches, un texel par pixel d'écran
-//      sky.js      lit ce même tableau au réticule, en JavaScript
-//
-//  C'est la même duplication que le miroir du bruit fractal, pour la même
-//  raison : on ne fait pas tourner du GLSL au réticule, ni du JavaScript
-//  par pixel. Ici elle est bien plus facile à tenir, puisque les deux
-//  lisent LES MÊMES OCTETS.
-//
-//  ----------------------------------------------------------------------
-//  LA FORME DU FICHIER
-//
-//  data/weather.png est un atlas VERTICAL : trente-deux pas de temps de
-//  trois heures, empilés l'un sous l'autre, 360 de large sur 5 760 de
-//  haut. Chaque tranche est donc CONTIGUË en mémoire, et la découper ne
-//  coûte rien — pas une recopie ligne à ligne sur un Raspberry Pi.
-//
-//  LA LIGNE 0 EST LA LATITUDE -89,5. L'image paraît à l'envers dans une
-//  visionneuse : c'est voulu. On l'envoie telle quelle au processeur
-//  graphique, sans retournement, et le shader lit v = (lat + 90) / 180.
-//
-//      R   la pluie DU VOISINAGE, dilatée d'une case
+//      R   la pluie DU VOISINAGE, dilatée d'une case (l'arc se voit à côté
+//          de l'averse, pas dessous)
 //      G   la clarté directe : des rayons non interceptés arrivent-ils ici
 //      B   la pluie locale, pour les étiquettes
-//
-//  Le rouge est dilaté parce qu'on ne voit pas d'arc DANS l'averse : on
-//  est dessous, il pleut, le ciel est gris. On le voit à côté.
-//
-//  ----------------------------------------------------------------------
-//  LA FRAÎCHEUR
-//
-//  Le tableau reste allumé des mois. Le fichier, lui, couvre quatre jours.
-//  On le redemande donc toutes les six heures — une requête, quelques
-//  centaines de kilo-octets, et le navigateur répondra le plus souvent
-//  « rien de neuf » sans rien transférer.
-//
-//  Et s'il n'y a pas de réseau, ou pas de fichier, RIEN NE CASSE : la
-//  page retombe sur son bruit fractal et la case « météo » reste éteinte.
-//  Sur un mur, une œuvre qui s'éteint parce qu'un serveur a hoqueté n'est
-//  pas une œuvre, c'est une panne.
-// =========================================================================
 
 const PNG = 'data/weather.png';
 const META = 'data/weather.json';
 
-/** Toutes les six heures. Le fichier en couvre quatre-vingt-seize. */
+/** Le fichier couvre 96 h ; on le redemande toutes les 6 h. */
 const REFRESH_MS = 6 * 3600 * 1000;
 
 /**
@@ -73,16 +39,8 @@ let note = () => {};
 let checking = false, checkedAt = 0;
 
 /**
- * UN HORODATAGE SANS FUSEAU EST UNE HEURE LOCALE, en JavaScript. C'est la
- * règle de la norme, et c'est un piège : Open-Meteo rend
- * « 2026-09-21T00:00 » même interrogé en UTC, et Date.parse le lirait
- * alors décalé du fuseau du spectateur — deux heures à Paris, neuf à
- * Tokyo, zéro à Londres. La carte serait juste chez les uns et fausse
- * chez les autres, ce qui est la pire des façons de s'en apercevoir.
- *
- * Le script pose désormais le Z lui-même ; cette fonction est la ceinture
- * qui va avec les bretelles, pour un vieux relevé ou un fichier écrit à
- * la main.
+ * UN HORODATAGE SANS FUSEAU EST UNE HEURE LOCALE pour Date.parse, et
+ * Open-Meteo en rend. Le script pose le Z ; ceci couvre les autres cas.
  */
 function utcOf(s) {
   if (typeof s !== 'string') return NaN;
@@ -92,18 +50,15 @@ function utcOf(s) {
   return Date.parse(t);
 }
 
-/** La grille est-elle utilisable ? C'est ce qui allume la case « météo ». */
+/** La grille est-elle utilisable ? */
 export const hasWeather = () => grid !== null;
 
-/** La grille entière — octets et dimensions — pour que map.js en fasse
- *  une texture en couches. */
+/** Octets et dimensions, pour la texture en couches de map.js. */
 export const weatherPixels = () => grid;
 
 /**
- * Où l'on se trouve dans la fenêtre de prévision, en pas de temps
- * fractionnaires. Rendu borné aux extrémités : passé la fin du fichier on
- * répète le dernier pas plutôt que de s'éteindre, en attendant le
- * prochain relevé.
+ * Position dans la prévision, en pas fractionnaires, bornée : passé la fin
+ * on répète le dernier pas en attendant le relevé suivant.
  */
 export function weatherSlot(ms) {
   if (!grid) return 0;
@@ -119,11 +74,7 @@ export function weatherReach(ms) {
 /** La raison du dernier échec, ou null quand tout va bien. */
 let trouble = null;
 
-/**
- * Ce que la page tient, pour le registre DONNÉES. `grid` est null s'il n'y
- * a rien, et `trouble` porte alors la raison — une absence sans motif
- * n'apprend rien à personne.
- */
+/** Pour le registre DONNÉES. Sans grille, `trouble` dit pourquoi. */
 export function weatherInfo() {
   return {
     grid: grid && { t0: grid.t0, nt: grid.nt, nx: grid.nx, ny: grid.ny,
@@ -135,12 +86,8 @@ export function weatherInfo() {
 }
 
 // ---------------------------------------------------------- la lecture
-//
-// BILINÉAIRE EN ESPACE, LINÉAIRE EN TEMPS — exactement ce que fait le
-// processeur graphique, et il le faut : ce module est le miroir du
-// shader. Une lecture au plus proche voisin donnerait ici des marches
-// d'escalier là où l'écran montre un dégradé, et le chiffre sous le
-// réticule cesserait de décrire la couleur qu'on a sous les yeux.
+// BILINÉAIRE EN ESPACE, LINÉAIRE EN TEMPS, comme le GPU : sinon le chiffre
+// du réticule ne décrit plus la couleur affichée.
 
 /** Un canal, en un point et à un pas de temps entier. Bilinéaire. */
 function tap(ch, lon, lat, k) {
@@ -163,10 +110,7 @@ function tap(ch, lon, lat, k) {
   return (a + (b - a) * fy) / 255;
 }
 
-/**
- * Un canal, en un point et à un instant quelconque. `slot` vient de
- * `weatherSlot` et peut tomber entre deux pas.
- */
+/** Un canal à un instant quelconque ; `slot` vient de `weatherSlot`. */
 function sample(ch, lon, lat, slot) {
   const k0 = Math.floor(slot), f = slot - k0;
   const k1 = Math.min(grid.nt - 1, k0 + 1);
@@ -182,18 +126,14 @@ export const wxClear = (lon, lat, slot) => grid ? sample(1, lon, lat, slot) : 0;
 // ------------------------------------------------------------ l'arrivée
 
 /**
- * Le décodage. On passe par un canvas parce que c'est le seul moyen, dans
- * un navigateur, de lire les octets d'un PNG — et `createImageBitmap` le
- * fait hors du fil principal, donc sans figer la carte pendant que deux
- * millions de pixels se décompressent.
+ * Lire les octets d'un PNG passe par un canvas ; `createImageBitmap`
+ * décompresse hors du fil principal.
  */
 async function decode(url) {
   const res = await fetch(url, { cache: 'no-cache' });
   if (!res.ok) throw new Error('weather.png : ' + res.status);
 
-  // Les octets sont comptés au passage, comme pour le relief : un demi-
-  // mégaoctet sur une connexion lente, c'est plusieurs secondes pendant
-  // lesquelles la case « météo » reste grise sans rien dire.
+  // Octets comptés au passage, pour afficher la progression.
   const total = +res.headers.get('content-length') || 0;
   const chunks = [];
   let got = 0;
@@ -219,10 +159,7 @@ async function decode(url) {
            w: cv.width, h: cv.height };
 }
 
-/**
- * Va voir s'il y a une grille, et la prend si elle est nouvelle. Ne lève
- * jamais : l'absence de météo est un état normal, pas une panne.
- */
+/** Prend la grille si elle est nouvelle. Ne lève jamais. */
 async function pull() {
   if (checking) return;
   checking = true;
@@ -231,8 +168,7 @@ async function pull() {
     if (!res.ok) return;
     const meta = await res.json();
 
-    // Déjà cette grille-là : rien à décoder, et surtout rien à téléverser
-    // au processeur graphique.
+    // Déjà cette grille-là : rien à décoder ni à téléverser.
     if (grid && grid.made === meta.made) return;
 
     const { data, w, h } = await decode(PNG);
@@ -246,24 +182,12 @@ async function pull() {
       t0: utcOf(meta.t0),
       stepMs: meta.step_h * 3600000
     };
-    // UN RELEVÉ PÉRIMÉ NE SE VOIT PAS. La carte affiche le dernier pas
-    // disponible sans rien dire, et l'on croit regarder demain. Si le
-    // robot n'a pas tourné depuis deux jours, autant que ce soit écrit
-    // quelque part pour qui va chercher.
-    // À L'ÉCRAN, ET PAS SEULEMENT DANS LA CONSOLE. Un relevé dépassé ne
-    // se voit pas : la carte affiche son dernier pas disponible sans rien
-    // dire, et l'on croit regarder demain.
     trouble = null;
     note('météo', null);
     onArrival();
   } catch (e) {
-    // Pas de fichier, pas de réseau, fichier malformé : la page continue
-    // avec son bruit fractal, et RIEN NE CASSE. Mais la carte ne montre
-    // alors plus la vraie pluie, et c'est une différence que le spectateur
-    // a le droit de connaître — d'où la ligne rouge, qui reste.
-    //
-    // Si une grille est déjà en mémoire, on se tait : un relevé plus
-    // récent qui n'arrive pas n'enlève rien à celui qu'on a déjà.
+    // La page continue avec son bruit fractal, mais `trouble` reste
+    // affiché : le spectateur doit savoir que la pluie n'est plus vraie.
     trouble = /404/.test(e.message) ? 'aucun relevé publié'
             : /NetworkError|Failed to fetch/i.test(e.message) ? 'serveur injoignable'
             : e.message;
@@ -276,13 +200,9 @@ async function pull() {
 }
 
 /**
- * Appelé une fois au démarrage. `arrived` sert à rallumer la case
- * « météo » et à redessiner quand la grille tombe.
- *
- * Pas de minuterie : une page qui se réveille après trois jours de veille
- * aurait vu passer douze réveils pour rien. On regarde l'heure à chaque
- * appel de `keepFresh`, qui vient de la boucle d'images — donc jamais
- * quand la carte dort.
+ * Une fois au démarrage ; `arrived` redessine quand la grille tombe. Pas
+ * de minuterie : `keepFresh`, appelé par la boucle d'images, ne tourne
+ * jamais quand la carte dort.
  */
 export function initWeather(arrived, loading) {
   onArrival = arrived || (() => {});
@@ -290,7 +210,7 @@ export function initWeather(arrived, loading) {
   pull();
 }
 
-/** Appelé depuis la boucle d'images. Ne fait rien, sauf toutes les six heures. */
+/** Depuis la boucle d'images ; agit toutes les six heures. */
 export function keepFresh() {
   if (!checking && Date.now() - checkedAt > REFRESH_MS) pull();
 }

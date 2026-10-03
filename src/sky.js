@@ -1,50 +1,10 @@
 // =========================================================================
-//  LE CIEL
-//
-//  LA PORTE, puis LA CROYANCE.
-//
-//  La porte est le soleil, et elle est exacte. Il doit se tenir entre
-//  l'horizon et 42° : au-delà, le centre de l'arc — situé à l'opposé du
-//  soleil — passe sous l'horizon, et il n'y a plus rien à voir, pour
-//  personne, quoi qu'on en pense. Cette seule contrainte dessine un
-//  anneau qui fait deux fois le tour de la Terre chaque jour.
-//
-//  Porte fermée : zéro pour ce qui a une raison. On ne croit pas en la
-//  hauteur du soleil, on la calcule — c'est ce qui empêche la pièce de
-//  devenir un jouet, et `sunGate` reste exacte au degré près.
-//
-//  Porte ouverte, trois raisons d'y croire se partagent ce qui reste :
-//
-//      MÉTÉO    la pluie et la trouée        ce qui est vrai
-//      LÉGENDE  la foi attachée au lieu      ce qu'on raconte
-//      CHANCE   ce qu'on porte sur soi       ce qui n'a pas de raison
-//
-//      indice = Soleil × ( wM·Météo + wL·Légende )
+//  LE CIEL — la porte, puis la croyance. Fonctions pures.
+//  La porte est le soleil, entre 0,4 et 42° : exacte, rien d'autre ne l'ouvre.
+//      indice = Soleil × (wM·Météo + wL·Légende)
 //             + wC · Chance · flaque · max(Soleil, fuite · wC)
-//               avec wM + wL + wC = 1
-//
-//  LA CHANCE N'EST PAS UN LIEU DU MONDE, C'EST CE QUE LE PIÉTON PORTE.
-//  Elle est multipliée par une FLAQUE centrée sur le réticule, qui
-//  s'élargit à mesure qu'on croit en elle. Au réticule la flaque vaut
-//  exactement 1 : le panneau lit donc toujours la chance pleine, et c'est
-//  la carte alentour qui la perd. On promène sa chance sur la Terre.
-//
-//  Et c'est là, dans la flaque et nulle part ailleurs, que LA PORTE FUIT.
-//  Un arc peut s'allumer alors que le soleil est couché ou trop haut,
-//  parce qu'il n'a aucune raison de s'allumer — c'est très exactement ce
-//  que le curseur dit. La fuite est en wC² : elle n'existe pas tant qu'on
-//  ne l'a pas voulue, et elle ne touche que la chance. La météo et la
-//  légende restent enfermées dans l'anneau, comme avant : ce qui est vrai
-//  et ce qu'on raconte ont toujours besoin du soleil.
-//
-//  Une SOMME et non un produit : avec un produit, un seul zéro éteindrait
-//  tout, et le spectateur qui ne croit qu'aux légendes ne verrait rien
-//  nulle part. Avec une somme pondérée, il voit une carte allumée à ses
-//  hauts lieux — et c'est précisément ce que la pièce a à dire.
-//
-//  Fonctions pures, sans état. Le bruit est le MIROIR EXACT de celui du
-//  shader : si l'un change, l'autre doit changer, sinon le chiffre lu
-//  cesse de décrire la couleur qu'on a sous les yeux.
+//  Une somme et non un produit : un seul zéro n'éteint pas tout.
+//  MIROIR de src/shader.js (build/check_mirror.mjs).
 // =========================================================================
 
 import { DEG, RAD, wrap180, geoVec } from './projection.js';
@@ -116,9 +76,8 @@ export function openFor(lon, lat, sun) {
 }
 
 // --------------------------------------------------------------- le bruit
-// Miroir en JavaScript du bruit du shader. Math.fround reproduit la
-// précision float32 du processeur graphique : sans lui, les deux versions
-// divergent lentement et le chiffre lu ne correspond plus à la couleur.
+// Math.fround reproduit le float32 du shader : sans lui, les deux bruits
+// divergent et le chiffre lu ne correspond plus à la couleur.
 
 const fr = Math.fround;
 const fract = v => v - Math.floor(v);
@@ -156,24 +115,14 @@ const smooth01 = (t, a, b) => {
 };
 
 // ============================================================== LA MÉTÉO
-//  Ce qui est vrai — et depuis septembre 2026, ce qui est VRAIMENT vrai.
-//
-//  DEUX SOURCES, choisies par le dernier paramètre `slot` :
-//
-//      slot === null   le bruit fractal. C'est le mode « dev » : un temps
-//                      inventé qu'on accélère pour voir la mécanique.
-//      slot un nombre  la grille Open-Meteo, lue au pas de temps donné.
-//
-//  Ce module ne sait PAS dans quel mode la page se trouve, et c'est
-//  voulu : il est au-dessus de view.js dans l'ordre de dépendance, il n'a
-//  donc pas le droit de le lui demander. Ce sont les appelants qui
-//  savent — et `slotAt()` dans view.js leur donne la réponse.
+//  `slot` null : le bruit fractal (mode « dev ») ; un nombre : la grille
+//  Open-Meteo à ce pas de temps. Ce module ne connaît pas le mode :
+//  l'appelant le passe (slotAt() dans view.js).
 
 /** La pluie en un point, telle que le shader la voit. */
 export function rainAt(lon, lat, drift, slot) {
-  // LA VRAIE PLUIE EST CELLE DU VOISINAGE, dilatée d'une case par le
-  // script qui fabrique la grille : on ne voit pas d'arc DANS l'averse,
-  // on est dessous et le ciel est gris. On le voit à côté.
+  // Pluie du voisinage, dilatée d'une case : on ne voit pas d'arc dans
+  // l'averse, on le voit à côté.
   if (slot != null) return wxRain(lon, lat, slot);
 
   const p = lat * DEG, lo = lon * DEG, cl = Math.cos(p);
@@ -184,27 +133,10 @@ export function rainAt(lon, lat, drift, slot) {
 }
 
 /**
- * La trouée : du soleil direct malgré l'averse.
- *
- * EN MÉTÉO, c'est une mesure : `direct_radiation` rapporté à ce qu'un
- * ciel parfaitement clair donnerait à cette hauteur de soleil. Elle dit
- * littéralement « des rayons non interceptés arrivent ici », ce qui est
- * la condition physique exacte d'un arc-en-ciel.
- *
- * EN DEV, c'est une climatologie grossière et inventée — zone de
- * convergence intertropicale, rails dépressionnaires. C'était joli, et
- * c'était faux : il ne fait pas toujours beau à 48° de latitude.
- *
- * La remise à l'échelle 0,14 + 1,66 × clarté garde exactement la course
- * de l'ancienne formule, plancher compris : même sous une couverture
- * totale il reste un peu de trouée, parce qu'une carte où quelque chose
- * vaut zéro absolu cesse de respirer.
- *
- * Le shader multiplie EN PLUS par le masque littoral dans la branche du
- * bruit, que ce miroir n'a pas : la lecture sous le réticule est donc
- * légèrement plus généreuse que le pixel en pleine mer. C'était déjà vrai
- * avant, c'est assumé — et en météo la question ne se pose plus, le
- * masque disparaît des deux côtés.
+ * La trouée : du soleil direct malgré l'averse. En météo, la clarté
+ * directe mesurée, remise sur la course de la formule du bruit (plancher
+ * 0,14 compris). En dev, une climatologie inventée.
+ * Écart assumé : en dev, le shader multiplie aussi par le masque littoral.
  */
 export function gapAt(lon, lat, sun, slot) {
   if (slot != null) return 0.14 + 1.66 * wxClear(lon, lat, slot);
@@ -221,9 +153,8 @@ export function meteoAt(lon, lat, sun, drift, slot) {
 }
 
 // ============================================================ LA LÉGENDE
-// Les hauts lieux, précalculés en vecteurs unitaires. On compare des
-// CORDES et non des angles : à ces distances la différence est sous le
-// pixel, et ça évite un arc-cosinus par point et par pixel.
+// Des cordes et non des angles : l'écart est sous le pixel, et on évite
+// un arc-cosinus par point.
 
 const LEG = LEGENDS.map(l => {
   const v = geoVec(l.lon, l.lat);
@@ -234,11 +165,7 @@ const LEG = LEGENDS.map(l => {
 
 export const LEGEND_POINTS = LEG;
 
-/**
- * LÉGENDE en un point : le plancher, relevé par le haut lieu le plus
- * proche. Un MAXIMUM et non une somme — deux traditions voisines ne
- * s'additionnent pas, on croit à la plus forte des deux.
- */
+/** Le plancher, relevé par le haut lieu le plus fort : un maximum, pas une somme. */
 export function legendAtVec(g) {
   let v = LEGEND_FLOOR;
   for (let i = 0; i < LEG.length; i++) {
@@ -265,9 +192,8 @@ export function nearestLegend(lon, lat) {
 }
 
 // ============================================================= LA CHANCE
-// Un second champ, plus lent et plus grand que la météo, et sans rapport
-// avec elle. Seuillé serré : la chance n'est pas un voile uniforme sur le
-// monde, c'est des poches. Ailleurs, elle ne vaut rien.
+// Un champ plus lent que la météo, sans rapport avec elle, seuillé serré :
+// des poches, pas un voile.
 
 const CHANCE_FREQ = 0.62;                     // ~2 850 km de motif
 
@@ -281,19 +207,9 @@ export function chanceAt(lon, lat, driftC) {
 }
 
 // -------------------------------------------------------------- LA FLAQUE
-// Ce qu'on porte sur soi. Le champ de chance existe partout, mais il ne
-// compte que près de celui qui le porte — la flaque décroît en gaussienne
-// depuis le réticule, comme un haut lieu, et par la même formule.
-//
-// AU RÉTICULE ELLE VAUT 1, toujours. C'est ce qui sauve le panneau : il
-// lit la chance pleine où qu'on soit, et `history.js` n'a rien à savoir de
-// tout ceci. Ce qui change, c'est la carte alentour.
-//
-// Son rayon s'élargit avec la croyance : dix degrés quand on n'y croit
-// pas — la flaque est alors à peu près sous nos pieds — quarante-huit
-// quand on n'y croit que. Trente ne suffisait pas : à pleine chance, le
-// curseur promettait une carte qui s'allume et ne donnait qu'un halo
-// autour du piéton.
+// La chance ne compte que près du piéton : gaussienne centrée sur le
+// réticule, où elle vaut toujours 1 (le panneau lit la chance pleine).
+// Son rayon va de LUCK_NEAR à LUCK_FAR degrés avec la part de chance.
 export const LUCK_NEAR = 10, LUCK_FAR = 48;
 
 /** `g` et `here` sont des vecteurs unitaires ; `wc` la part de chance. */
@@ -305,16 +221,9 @@ export function luckAt(g, here, wc) {
 }
 
 // --------------------------------------------------------------- LA FUITE
-// De combien la porte laisse passer, hors de sa fenêtre. Pleine au bord,
-// éteinte dix-huit degrés plus loin — soit très exactement les bornes que
-// l'héliodon se donnait déjà (−18°, 60°), par une coïncidence commode.
-//
-// Elle ne sert QU'À LA CHANCE, et elle est repondérée par wC une seconde
-// fois : la fuite est donc en wC², elle n'apparaît pas par accident.
-//
-// Portée de 0,42 à 0,55 en même temps que la flaque s'élargissait : hors
-// de l'anneau, la chance plafonnait sinon trop bas pour franchir le
-// nouveau seuil de couleur.
+// Ce que la porte laisse passer hors de sa fenêtre : pleine au bord,
+// éteinte SPILL_DEG plus loin. Pour la chance seule, et repondérée par
+// wC : elle est en wC², elle n'apparaît pas par accident.
 export const SPILL_AMP = 0.55, SPILL_DEG = 18;
 
 export function spillAt(h) {
@@ -326,19 +235,15 @@ export function spillAt(h) {
 
 /**
  * Ce que le shader peint et ce que le réticule affiche.
- * `w` est le partage de croyance : { m, l, c }, de somme 1.
- *
- * Attention : le GRAIN des zooms profonds n'existe que dans le shader. Il
- * dépolit la tache sans la déplacer — c'est de la matière, pas de la
- * donnée — donc la structure lue ici reste celle du champ.
+ * `w` : le partage de croyance { m, l, c }, de somme 1. Le grain des
+ * zooms n'existe que dans le shader : il ne déplace pas la tache.
  */
 export function rainbowIndex(lon, lat, sun, drift, driftC, w, here, slot) {
   const h = sunElev(lon, lat, sun);
   const S = sunGate(h);
 
   // La porte de la chance : celle du soleil, ou la fuite si elle est plus
-  // généreuse. C'est le seul endroit du projet où un curseur pèse sur le
-  // soleil, et il ne pèse que sur ce qui n'a pas de raison.
+  // généreuse. Le seul endroit où un curseur pèse sur le soleil.
   const gateC = Math.max(S, spillAt(h) * w.c);
   if (S <= 0 && gateC <= 0.002) return 0;
 
@@ -352,12 +257,8 @@ export function rainbowIndex(lon, lat, sun, drift, driftC, w, here, slot) {
 }
 
 /**
- * Les parts séparément — pour l'étiquette et pour la lecture.
- *
- * Porte fermée, la météo et la légende sont rendues NULLES et non
- * calculées à vide : elles n'ont rien porté du chiffre, et c'est ce que
- * l'étiquette doit dire. Sans quoi une tache de pleine nuit annoncerait
- * « averse en cours » là où il n'y a que de la chance.
+ * Les parts séparément, pour la lecture. Porte fermée, météo et légende
+ * valent 0 : elles n'ont rien porté du chiffre.
  */
 export function ingredients(lon, lat, sun, drift, driftC, here, w, slot) {
   const h = sunElev(lon, lat, sun), S = sunGate(h);

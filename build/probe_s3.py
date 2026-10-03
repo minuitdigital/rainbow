@@ -1,23 +1,10 @@
-# =========================================================================
-#  LE SONDAGE
+# Sondage : Open-Meteo publie ses champs bruts sur AWS Open Data (anonyme,
+# sans clé, sans quota), en grilles complètes au lieu de points comptés.
 #
-#      pip install omfiles fsspec s3fs
-#      python build/probe_s3.py
+#     pip install omfiles fsspec s3fs
+#     python build/probe_s3.py
 #
-#  Open-Meteo publie ses champs bruts sur AWS Open Data : accès anonyme,
-#  sans clé, SANS QUOTA. Ce sont les mêmes données que l'API qui nous
-#  compte un appel par coordonnée — mais livrées en grilles complètes au
-#  lieu de points comptés un par un.
-#
-#  Si ça marche, la maille de 3° tombe : on lirait ECMWF IFS à 0,25° ou
-#  GFS à 13 km, et l'on agrégerait soi-même. Mieux encore, on pourrait
-#  prendre le MAXIMUM de la pluie sur les seize cellules d'un degré plutôt
-#  qu'un unique point au hasard — ce qui est exactement la dilatation
-#  qu'on cherche, et gratuitement.
-#
-#  CE SCRIPT NE FABRIQUE RIEN. Il regarde ce qu'il y a, et il le dit. Un
-#  chantier de cette taille ne se lance pas sur une supposition.
-# =========================================================================
+# Ne fabrique rien : regarde ce qu'il y a et le dit.
 
 import sys
 from datetime import datetime, timedelta, timezone
@@ -62,9 +49,8 @@ def look_around(fs):
 
 
 def newest_file(fs, model, back_hours=48):
-    """Le fichier le plus récent qu'on trouve, en remontant heure par
-    heure. Les passages de modèle prennent quelques heures à arriver : le
-    fichier de maintenant n'existe pas encore."""
+    """Le fichier le plus récent, en remontant heure par heure : un passage
+    de modèle met quelques heures à arriver."""
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     for h in range(back_hours):
         t = now - timedelta(hours=h)

@@ -1,15 +1,9 @@
 // =========================================================================
 //  LE SOL
 //
-//  Ce qu'il y a sous l'arc : de quoi l'endroit est fait, et comment on
-//  l'appelle. Deux jeux de données générés, un accès chacun.
-//
-//  Pas de frontières. Une frontière est une convention et elle ne dit pas
-//  où se tient quelqu'un ; une ville si. « L'arc est à 40 km de Valparaíso »
-//  est la phrase que la carte cherche — « l'arc est au Chili » ne l'est pas.
-//
-//  Fonctions pures : rien ici ne connaît la vue. Le zoom arrive en
-//  argument quand il faut choisir jusqu'où descendre dans les paliers.
+//  De quoi l'endroit est fait (relief) et comment on l'appelle (villes).
+//  Pas de frontières : « à 40 km de Valparaíso », pas « au Chili ».
+//  Fonctions pures ; le zoom arrive en argument.
 // =========================================================================
 
 import { DEG } from './projection.js';
@@ -20,10 +14,8 @@ import { CITIES } from '../data/cities.js';
 export const RE = 6371;
 
 // ------------------------------------------------------------- le relief
-// Un octet par degré carré : quartet haut = accessibilité (peut-on
-// seulement être là ?), quartet bas = dégagement de l'horizon. C'est ce qui
-// fait que deux observateurs à quelques kilomètres l'un de l'autre n'ont
-// pas la même chance : celui de la crête voit l'arc, celui de la vallée non.
+// Un octet par degré carré : quartet haut = accessibilité, quartet bas =
+// dégagement de l'horizon.
 
 const TERR = (() => {
   const b = atob(TERRAIN.d), u = new Uint8Array(b.length);
@@ -42,10 +34,8 @@ export function terrainAt(lon, lat) {
 }
 
 // -------------------------------------------------------------- les lieux
-// Chaque ville porte un PALIER : à partir de quel zoom elle a le droit
-// d'exister. Les capitales dès le monde entier, le reste en s'approchant.
-// Le palier ne fait que limiter le vivier — c'est l'encombrement à l'écran
-// qui décide vraiment, et les étiquettes d'arc passent toujours d'abord.
+// PALIER : zoom à partir duquel une ville peut paraître. Il limite le
+// vivier ; l'encombrement décide, les étiquettes d'arc d'abord.
 
 export const TIER_ZOOM = [1, 1.8, 3, 5, 9, 16];
 
@@ -78,8 +68,7 @@ export const CITY = (() => {
     vec[i*3 + 2] = Math.sin(lat[i] * DEG);
   }
 
-  // Grille de 10° pour la recherche du plus proche. Sans elle, chaque
-  // étiquette ferait quatre mille comparaisons cinq fois par seconde.
+  // Grille de 10° pour la recherche du plus proche.
   const GW = 36, GH = 18, cell = [];
   for (let i = 0; i < GW * GH; i++) cell.push([]);
   for (let i = 0; i < n; i++) {
@@ -92,18 +81,13 @@ export const CITY = (() => {
   return { n, name, ctry, tier, lon, lat, vec, GW, GH, cell };
 })();
 
-/**
- * La ville la plus proche d'un point, dans la limite d'un palier et d'une
- * distance. Rien au-delà : au milieu du Pacifique il n'y a personne, et
- * c'est une information — celle que porte déjà « personne pour voir ».
- */
+/** La ville la plus proche, dans la limite d'un palier et d'une distance. */
 export function nearestCity(lo, la, maxTier, maxKm) {
   const cl = Math.cos(la * DEG);
   const gx = cl * Math.cos(lo * DEG), gy = cl * Math.sin(lo * DEG),
         gz = Math.sin(la * DEG);
 
-  // Près des pôles, une case de 10° ne fait plus que quelques kilomètres de
-  // large : on élargit la fenêtre en longitude d'autant.
+  // Près des pôles les cases rétrécissent : on élargit en longitude.
   const span = Math.min(17, 1 + Math.ceil(1 / Math.max(0.06, cl)));
   const j0 = Math.floor((la + 90) / 10), i0 = Math.floor((lo + 180) / 10);
 
@@ -126,10 +110,7 @@ export function nearestCity(lo, la, maxTier, maxKm) {
   return { i: best, km: Math.acos(Math.min(1, bd)) * RE };
 }
 
-// « de Oulan-Oudé » : une carte française qui n'élide pas n'est plus une
-// œuvre, c'est un export.
-// Pas de « y » : en français on dit « de York », « de Yinchuan ». Le yod
-// est une consonne, même quand la lettre ressemble à une voyelle.
+// Élision : « d'Oulan-Oudé ». Pas de « y » : « de York ».
 const VOWEL = /^[aeiouàâäéèêëîïôöùûü]/i;
 const de = name => (VOWEL.test(name) ? "d'" : 'de ') + name;
 

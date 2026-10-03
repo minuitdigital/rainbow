@@ -1,4 +1,4 @@
-"""Coastlines: finer simplification + per-ring bbox for culling, flat arrays."""
+"""Côtes et lacs simplifiés, avec boîte englobante par anneau, en tableaux plats."""
 import json
 
 import os
@@ -7,7 +7,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = HERE                     # les sources téléchargées, à côté du script
 OUT = os.path.join(os.path.dirname(HERE), 'data')   # ce que sert la page
 os.makedirs(OUT, exist_ok=True)
-TOL = 0.012          # degrees — fine enough to stay crisp when zoomed in
+TOL = 0.012          # degrés — assez fin pour rester net au zoom
 MIN_AREA = 0.0012
 Q = 3
 
