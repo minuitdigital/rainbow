@@ -754,10 +754,10 @@ export function trace(centre) {
   }
 
   // Le repère SOUS le piéton : tracé d'abord, le piéton se tient dessus.
-  if (!cut.icons) drawReperes(Rt);
+  drawReperes(Rt);
 
   const cx = W / 2 + view.ox, cy = H / 2;
-  if (!cut.walker) drawReticle(cx, cy);
+  drawReticle(cx, cy);
 
   // L'emprise du réticule est devenue un CARRÉ centré : la figure pivote
   // tout autour du point, elle peut donc se tenir dans n'importe quelle
@@ -769,6 +769,6 @@ export function trace(centre) {
   ];
   if (railBox) boxes.push(railBox);               // le panneau
   if (!cut.callouts) drawCallouts(boxes, Rt);
-  if (!cut.icons) drawLegends(boxes, Rt);
+  drawLegends(boxes, Rt);
   if (!cut.places) drawPlaces(boxes, Rt);
 }

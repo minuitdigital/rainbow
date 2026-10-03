@@ -349,8 +349,7 @@ export function paint(canvas, sun, slot) {
 /** Les coupures de l'admin, en bits pour `uOff` — voir shader.js. */
 function cutMask() {
   const sc = view.cut;
-  return (sc.relief ? 1 : 0) | (sc.tache ? 2 : 0) | (sc.chance ? 4 : 0)
-       | (sc.meteo ? 8 : 0) | (sc.legendes ? 16 : 0) | (sc.grain ? 32 : 0);
+  return (sc.relief ? 1 : 0) | (sc.tache ? 2 : 0) | (sc.grain ? 32 : 0);
 }
 
 // ================================================== PIXEL — LA TACHE EN PETIT

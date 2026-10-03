@@ -54,7 +54,8 @@ uniform vec3  uHere;                   // le réticule : là où se tient le pi�
 uniform int   uLegN;
 // LES COUPURES de l'admin, bit a bit : 1 relief, 2 tache, 4 chance,
 // 8 meteo, 16 legendes, 32 grain. Uniformes : tous les pixels prennent
-// la meme branche, la branche coupee ne coute rien.
+// la meme branche, la branche coupee ne coute rien. Chance, meteo et
+// legendes n'ont plus de case : seul « mesurer » s'en sert (map.js).
 uniform int   uOff;
 // PIXEL — la tache en gros pixels (option P, a l'essai contre A). Trois
 // passes possibles d'un meme programme, choisies par uPass, uniforme :

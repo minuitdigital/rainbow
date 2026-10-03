@@ -69,7 +69,7 @@ function glSize(k) {
 // carte qui bouge — il le lit quand elle s'arrête. `glsMove` égal à 1 :
 // rien ne change (le défaut, tant que l'auteur ne l'a pas vu).
 const SETTLE_MS = 140;
-let lastR = null, lastZoom = 0, movedAt = -1e9;
+let lastR = null, lastZoom = 0, movedAt = -1e9, wasMoving = false;
 
 function trackMotion(now) {
   const R = view.R;
@@ -124,7 +124,12 @@ function frame(now) {
 
   // La foulée se mesure APRÈS toutes les rotations : elle lit le
   // déplacement, elle ne le décide pas.
-  if (stride(dt)) animating = true;
+  //
+  // LE PIÉTON SEUL N'APPELLE QUE L'ENCRE. Après un glissé, il finit son pas
+  // et se retourne pendant deux ou trois secondes ; la carte, elle, ne
+  // bouge plus. Redessiner le shader à chaque image pour ses jambes, c'est
+  // ce qui saccadait au lâcher sur le Pi (3 octobre).
+  const walking = stride(dt);
 
   // LE TEMPS AVANCE — mais pas à la même cadence selon d'où il vient.
   //
@@ -142,8 +147,16 @@ function frame(now) {
   // l'image nette tombe d'elle-même quand le doigt s'arrête.
   const moving = trackMotion(now);
   if (moving && view.glsMove < view.gls) animating = true;
+  // L'image nette tombe à l'image où le mouvement cesse — c'était le pas
+  // du piéton qui la provoquait, par hasard ; elle est demandée ici.
+  if (wasMoving && !moving) dirty = true;
+  wasMoving = moving;
 
-  if (dirty || animating) {
+  const legsOnly = walking && !dirty && !animating;
+  if (walking) animating = true;
+
+  if (legsOnly) trace(centre());
+  else if (dirty || animating) {
     dirty = false;
     glSize(moving ? Math.min(view.gls, view.glsMove) : view.gls);
     const when = simDate();
