@@ -106,7 +106,10 @@ export const view = {
    */
   gls: 1,
 
-  cut: { shader: false, ink: false, coast: false, places: false,
+  //
+  // Les côtes sont coupées par défaut (décision de l'auteur, 3 octobre) :
+  // sur le Pi, elles coûtaient plus que tout le reste de l'encre.
+  cut: { shader: false, ink: false, coast: true, places: false,
          callouts: false, icons: false, walker: false },
 
   /**

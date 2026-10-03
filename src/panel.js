@@ -1392,7 +1392,7 @@ export function initPanel(invalidate, resize) {
   // Jamais mémorisées — voir `view.cut`.
   for (const key of Object.keys(view.cut)) {
     const input = byId('cut-' + key);
-    input.checked = false;
+    input.checked = view.cut[key];
     input.addEventListener('change', () => { view.cut[key] = input.checked; repaint(); });
   }
 
