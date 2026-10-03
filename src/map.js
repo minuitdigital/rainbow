@@ -72,7 +72,8 @@ const UNIFORMS = ['uRes', 'uScale', 'uOx', 'uRot', 'uDecl', 'uSublon',
                   'uBelief', 'uHere',
                   'uSat', 'uTache', 'uGrey', 'uPorte', 'uCouloir', 'uSea', 'uLand',
                   'uLegN', 'uOff', 'uLegP', 'uLegQ', 'uLegR', 'uField', 'uMask',
-                  'uWx', 'uWxOn', 'uSlot', 'uWxN'];
+                  'uWx', 'uWxOn', 'uSlot', 'uWxN',
+                  'uPass', 'uPixN', 'uPix', 'uPal'];
 
 /**
  * Les textures arrivent quand elles arrivent. On lie donc des textures
@@ -160,6 +161,7 @@ export function initMap(canvas, onReady, note = () => {}) {
   gl.uniform1i(U.uField, 1);
   gl.uniform1i(U.uMask, 2);
   gl.uniform1i(U.uWx, 3);
+  gl.uniform1i(U.uPix, 4);              // PIXEL
 
   // L'unite 0 n'est plus utilisee depuis le retrait de earth.jpg.
   placeholder(1); placeholder(2);
@@ -351,10 +353,58 @@ function cutMask() {
        | (sc.meteo ? 8 : 0) | (sc.legendes ? 16 : 0) | (sc.grain ? 32 : 0);
 }
 
+// ================================================== PIXEL — LA TACHE EN PETIT
+//  Option P, à l'essai contre A (`view.pix`). La tache est calculée un
+//  fragment par BLOC dans une petite texture, puis relue sans lissage par
+//  la passe d'écran, qui garde le fond net. À 8 px, 64 fois moins de
+//  calcul pour la tache. Tout ce qui porte le mot PIXEL se retire d'un
+//  bloc quand on aura choisi.
+
+let pixTex = null, pixFbo = null, pixW = 0, pixH = 0;
+
+function pixTarget(w, h) {
+  if (!pixTex) {
+    pixTex = gl.createTexture();
+    pixFbo = gl.createFramebuffer();
+  }
+  gl.activeTexture(gl.TEXTURE0 + 4);
+  gl.bindTexture(gl.TEXTURE_2D, pixTex);
+  if (w === pixW && h === pixH) return;
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pixFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, pixTex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  pixW = w; pixH = h;
+}
+
+/**
+ * La passe 1. Le bloc est donné en pixels de PAGE : converti en pixels du
+ * calque, il garde la même taille à l'écran quand `glsMove` baisse la
+ * résolution pendant un glissé.
+ */
+function drawPixels(canvas, off) {
+  const n = view.pix * canvas.width / view.W;
+  const w = Math.ceil(canvas.width / n), h = Math.ceil(canvas.height / n);
+  pixTarget(w, h);
+  // On n'écrit pas dans une texture qu'un sampler pourrait lire : WebGL
+  // refuse le tracé. Elle se délie le temps de la passe.
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pixFbo);
+  gl.viewport(0, 0, w, h);
+  gl.uniform1i(U.uPass, 1);
+  gl.uniform1f(U.uPixN, n);
+  gl.uniform1i(U.uOff, off | 1);        // pas de relief dans la tache
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindTexture(gl.TEXTURE_2D, pixTex);
+  gl.uniform1i(U.uPass, 2);
+}
+
 function draw(canvas, sun, slot, off) {
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.clearColor(1, 1, 1, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
   gl.uniform2f(U.uRes, canvas.width, canvas.height);
   // Pixels du calque par pixel de page : dpr, réduit par `gls` s'il y a lieu.
   gl.uniform1f(U.uScale, scale() * canvas.width / view.W);
@@ -381,7 +431,6 @@ function draw(canvas, sun, slot, off) {
   gl.uniform2f(U.uCouloir, view.look.pas, view.look.trait);
   gl.uniform1f(U.uSea, view.look.sea);
   gl.uniform1f(U.uLand, view.look.land);
-  gl.uniform1i(U.uOff, off);
 
   // La grille n'est en service que si elle est arrivée ET versée. Un slot
   // nul veut dire « mode dev » : le shader reprend son bruit fractal.
@@ -389,7 +438,15 @@ function draw(canvas, sun, slot, off) {
   gl.uniform1f(U.uWxOn, wxOk ? 1 : 0);
   gl.uniform1f(U.uSlot, wxOk ? slot : 0);
   gl.uniform1f(U.uWxN, wxLayers || 1);
+  gl.uniform1f(U.uPal, view.pal);
 
+  if (view.pix > 1) drawPixels(canvas, off);          // PIXEL
+  else gl.uniform1i(U.uPass, 0);
+  gl.uniform1i(U.uOff, off);
+
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(1, 1, 1, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 

@@ -56,6 +56,17 @@ uniform int   uLegN;
 // 8 meteo, 16 legendes, 32 grain. Uniformes : tous les pixels prennent
 // la meme branche, la branche coupee ne coute rien.
 uniform int   uOff;
+// PIXEL — la tache en gros pixels (option P, a l'essai contre A). Trois
+// passes possibles d'un meme programme, choisies par uPass, uniforme :
+//   0  A, tout en direct, comme avant ;
+//   1  la tache seule, un fragment par BLOC de uPixN pixels du calque,
+//      ecrite (teinte, force) dans une petite texture ;
+//   2  le fond net, la tache relue dans cette texture sans lissage.
+// Tout ce qui porte le mot PIXEL se retire d'un bloc quand on aura choisi.
+uniform int   uPass;
+uniform float uPixN;
+uniform sampler2D uPix;
+uniform float uPal;                    // PALETTE : teintes par tour, 0 = continue
 uniform vec4  uLegP[${MAX_LEGENDS}];   // xyz = vecteur unitaire, w = force
 uniform float uLegQ[${MAX_LEGENDS}];   // rayon au carré, en cordes
 uniform float uLegR[${MAX_LEGENDS}];   // au-dela (corde au carre), sous le plancher
@@ -155,8 +166,11 @@ float legendAt(vec3 g){
 }
 
 void main(){
-  float x = (gl_FragCoord.x - uRes.x * 0.5 - uOx) / uScale;
-  float y = (gl_FragCoord.y - uRes.y * 0.5) / uScale;
+  // PIXEL : en passe 1, le fragment i vaut le centre du bloc, (i + 0,5) x N
+  // en pixels du calque — uRes, uScale et uOx restent ceux de l'ecran.
+  vec2 fc = uPass == 1 ? gl_FragCoord.xy * uPixN : gl_FragCoord.xy;
+  float x = (fc.x - uRes.x * 0.5 - uOx) / uScale;
+  float y = (fc.y - uRes.y * 0.5) / uScale;
 
   // --- inverse de la projection (Newton sur theta)
   float th = asin(clamp(y / YMAX, -1.0, 1.0) * M);
@@ -246,7 +260,13 @@ void main(){
   float gateC = max(S, spill * uBelief.z);
 
   if((uOff & 2) != 0){ S = 0.0; gateC = 0.0; }   // tache coupee (admin)
-  if(S > 0.0 || gateC > 0.002){
+  if(uPass == 2){
+    // PIXEL : la tache est deja calculee, un bloc par texel. texelFetch
+    // ne filtre pas : des carres francs, et une seule lecture par pixel.
+    vec4 px = texelFetch(uPix, ivec2(gl_FragCoord.xy / uPixN), 0);
+    hue = px.rgb;
+    field = px.a;
+  } else if(S > 0.0 || gateC > 0.002){
     float ccl = cos(pl);
     vec3 sp = vec3(ccl * cos(radians(lon)), ccl * sin(radians(lon)), sin(pl)) * FIELD_FREQ;
 
@@ -409,12 +429,19 @@ void main(){
       // complexité de près doit venir des TROUS, qui donnent une forme à
       // lire ; la teinte, elle, gagne à tourner moins.
       float k = t * uFranges + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
+      // PALETTE : la phase arrondie a uPal crans par tour, donc uPal
+      // teintes en tout, en bandes franches — une palette de console.
+      if(uPal > 0.5) k = floor(k * uPal + 0.5) / uPal;
       vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
       c = mix(vec3(dot(c, vec3(0.3333))), c, uSat);      // saturation
       // plancher relevé : sur papier blanc, une teinte trop basse vire à la boue
       hue = clamp(0.10 + 0.90 * c, 0.0, 1.0);
     }
   }
+
+  // PIXEL : la passe 1 s'arrete ici, la tache seule. Le fond et le
+  // couloir sont pour la passe 2, a pleine resolution.
+  if(uPass == 1){ fragColor = vec4(hue, field); return; }
 
   // Multiplication : sur le papier, les taches teintent au lieu d'éclairer.
   // Si le fond redevenait sombre, il faudrait repasser en additif.

@@ -110,6 +110,15 @@ export const view = {
   glsMove: 1,
 
   /**
+   * PIXEL — la tache en blocs de `pix` pixels de page (option P, voir
+   * map.js). 1 = calculée en direct à chaque pixel (option A). Admin, mémorisé.
+   */
+  pix: 1,
+
+  /** PALETTE — teintes par tour d'irisation ; 0 = continue. Admin, mémorisé. */
+  pal: 0,
+
+  /**
    * LE CENTRE DE LA CARTE, décalé du centre de l'écran, en pixels de page.
    * Le panneau couvre la droite : le piéton se tient au milieu de ce qui
    * reste, pas derrière les boîtes. Posé par main.js à chaque mesure —

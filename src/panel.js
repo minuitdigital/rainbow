@@ -723,6 +723,10 @@ function closeNote() {
 // bouge et qu'il doit s'imposer, on incrémente.
 const STORE_KEY = 'estimateur.reglages.3';
 
+// PIXEL et PALETTE : les cases de l'admin, et seules valeurs admises.
+const PIX = [1, 4, 6, 8, 12];
+const PAL = [0, 6, 8, 12];
+
 function saveKnobs() {
   try {
     const o = { belief: view.belief, couleur: byId('s-couleur').checked,
@@ -730,7 +734,8 @@ function saveKnobs() {
                 iface: byId('p-interface').checked, poeme: byId('p-poeme').checked,
                 temps: Object.keys(TEMPS).find(k => byId('t-' + k).checked),
                 rig: view.rig, clock: clockWanted, plis: folded,
-                cut: view.cut, gls: view.gls, glsMove: view.glsMove };
+                cut: view.cut, gls: view.gls, glsMove: view.glsMove,
+                pix: view.pix, pal: view.pal };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
   } catch (e) { /* sans mémoire, la page marche quand même */ }
@@ -757,6 +762,8 @@ function loadKnobs() {
     if (typeof o.cut[k] === 'boolean') view.cut[k] = o.cut[k];
   if ([0.8, 0.85, 0.9, 0.95, 1].includes(o.gls)) view.gls = o.gls;
   if ([0.3, 0.45, 0.6, 1].includes(o.glsMove)) view.glsMove = o.glsMove;
+  if (PIX.includes(o.pix)) view.pix = o.pix;
+  if (PAL.includes(o.pal)) view.pal = o.pal;
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -1417,6 +1424,18 @@ export function initPanel(invalidate, resize, shaderProfile) {
     const input = byId('glm-' + pc);
     input.checked = Math.round(view.glsMove * 100) === pc;
     input.addEventListener('change', () => { view.glsMove = pc / 100; repaint(); saveKnobs(); });
+  }
+
+  // PIXEL et PALETTE — voir `view.pix`, `view.pal`.
+  for (const n of PIX) {
+    const input = byId('pix-' + n);
+    input.checked = view.pix === n;
+    input.addEventListener('change', () => { view.pix = n; repaint(); saveKnobs(); });
+  }
+  for (const n of PAL) {
+    const input = byId('pal-' + n);
+    input.checked = view.pal === n;
+    input.addEventListener('change', () => { view.pal = n; repaint(); saveKnobs(); });
   }
 
   // LE SHADER EN DÉTAIL — voir profileShader dans src/map.js. Le texte
