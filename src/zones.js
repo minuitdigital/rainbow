@@ -29,7 +29,7 @@ const hash01 = n => {
  * une chance propre à l'observateur (`luck`, distincte de la CHANCE du
  * champ) qui oscille sans raison. La durée, elle, est exacte.
  */
-export function estimate(lon, lat, sun, drift, driftC, w, seed, simH, here, slot) {
+function estimate(lon, lat, sun, drift, driftC, w, seed, simH, here, slot) {
   const base = rainbowIndex(lon, lat, sun, drift, driftC, w, here, slot);
   if (base <= 0.02) return null;
 
@@ -66,7 +66,7 @@ const pick = (k, seed) => {
  * La phrase dit ce qui PORTE le chiffre, pas ce qu'il vaut. Si c'est la
  * légende, on cite la croyance du lieu.
  */
-export function phraseFor(e, seed, w) {
+function phraseFor(e, seed, w) {
   if (e.v > 0.95) return pick('imminent', seed);
   if (e.acc < 0.34) return pick('nul', seed);
 

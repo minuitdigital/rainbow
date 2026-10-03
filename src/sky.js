@@ -120,7 +120,7 @@ const smooth01 = (t, a, b) => {
 //  l'appelant le passe (slotAt() dans view.js).
 
 /** La pluie en un point, telle que le shader la voit. */
-export function rainAt(lon, lat, drift, slot) {
+function rainAt(lon, lat, drift, slot) {
   // Pluie du voisinage, dilatée d'une case : on ne voit pas d'arc dans
   // l'averse, on le voit à côté.
   if (slot != null) return wxRain(lon, lat, slot);
@@ -166,7 +166,7 @@ const LEG = LEGENDS.map(l => {
 export const LEGEND_POINTS = LEG;
 
 /** Le plancher, relevé par le haut lieu le plus fort : un maximum, pas une somme. */
-export function legendAtVec(g) {
+function legendAtVec(g) {
   let v = LEGEND_FLOOR;
   for (let i = 0; i < LEG.length; i++) {
     const p = LEG[i].v;
@@ -213,7 +213,7 @@ export function chanceAt(lon, lat, driftC) {
 export const LUCK_NEAR = 10, LUCK_FAR = 48;
 
 /** `g` et `here` sont des vecteurs unitaires ; `wc` la part de chance. */
-export function luckAt(g, here, wc) {
+function luckAt(g, here, wc) {
   if (!here) return 1;
   const r = (LUCK_NEAR + (LUCK_FAR - LUCK_NEAR) * wc) * DEG;
   const dx = g[0] - here[0], dy = g[1] - here[1], dz = g[2] - here[2];

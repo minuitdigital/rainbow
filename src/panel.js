@@ -366,7 +366,7 @@ function showData() {
     if (!hit) {
       // Météo absente : pas une anomalie, le relevé dessous l'explique.
       rows.push(dataRow(nom, nom === 'météo' ? 'absente' : 'en attente',
-                        nom === 'météo' ? 'deep' : 'deep'));
+                        'deep'));
       continue;
     }
     const e = hit[1];

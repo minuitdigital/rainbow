@@ -37,7 +37,7 @@ export function terrainAt(lon, lat) {
 // PALIER : zoom à partir duquel une ville peut paraître. Il limite le
 // vivier ; l'encombrement décide, les étiquettes d'arc d'abord.
 
-export const TIER_ZOOM = [1, 1.8, 3, 5, 9, 16];
+const TIER_ZOOM = [1, 1.8, 3, 5, 9, 16];
 
 /** Le dernier palier qu'on s'autorise à ce zoom. −1 si aucun. */
 export function tierAt(zoom) {
@@ -82,7 +82,7 @@ export const CITY = (() => {
 })();
 
 /** La ville la plus proche, dans la limite d'un palier et d'une distance. */
-export function nearestCity(lo, la, maxTier, maxKm) {
+function nearestCity(lo, la, maxTier, maxKm) {
   const cl = Math.cos(la * DEG);
   const gx = cl * Math.cos(lo * DEG), gy = cl * Math.sin(lo * DEG),
         gz = Math.sin(la * DEG);

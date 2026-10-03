@@ -126,7 +126,7 @@ export const view = {
 //
 //  Choix MANUEL et mémorisé : une détection automatique changerait le rendu
 //  sans le dire.
-export const RIGS = {
+const RIGS = {
   laptop: { dpr: 2, probe: 30, scanMs: 200 },
   mini:   { dpr: 1, probe: 44, scanMs: 320 }
 };
@@ -204,7 +204,7 @@ export function beliefWeights() {
 }
 
 /** Un repère dure un jour au plus, en temps réel. */
-export const REPERE_MS = 24 * 3600000;
+const REPERE_MS = 24 * 3600000;
 
 export const liveReperes = () =>
   view.reperes.filter(r => Date.now() - r.at < REPERE_MS);
@@ -260,7 +260,7 @@ let ops = 0;
 /** Tous les soixante-quatre produits, on ré-orthonormalise R. */
 function bump() { if ((++ops & 63) === 0) view.R = orthonormalize(view.R); }
 
-export function turn(q) {
+function turn(q) {
   if (q) { view.R = matMul(view.R, q); bump(); }
 }
 

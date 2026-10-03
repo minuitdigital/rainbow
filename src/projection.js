@@ -93,7 +93,7 @@ export const matT = A => {
 
 export const identity = () => new Float32Array([1,0,0, 0,1,0, 0,0,1]);
 
-export const cross = (a, b) =>
+const cross = (a, b) =>
   [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
 
 export const dot3 = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];

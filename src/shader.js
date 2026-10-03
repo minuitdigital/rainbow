@@ -191,7 +191,6 @@ void main(){
   vec3 land = mix(LAND_LIGHT, landInk, qL);
 
   vec3 ground = mix(sea, land, isLand);
-  float m = texture(uMask, uv).r;
 
   // ====================================================== LA PORTE
   float field = 0.0;
@@ -253,6 +252,9 @@ void main(){
         rain = smoothstep(0.44, 0.70, fbm(sp + vec3(uDrift, 0.0, 0.0)));
         float a = (lat - uDecl * 0.45) / 9.5;
         float b = (abs(lat) - 48.0) / 15.0;
+        // Le masque n'est lu qu'ici, en mode dev. textureLod : pas de
+        // derivee implicite dans une branche (piege n. 35), et pas de mipmap.
+        float m = textureLod(uMask, uv, 0.0).r;
         gap = (0.14 + 0.92 * exp(-a * a) + 0.74 * exp(-b * b)) * m;
       }
 

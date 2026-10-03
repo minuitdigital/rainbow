@@ -60,7 +60,8 @@ function trackMotion(now) {
 // On ne redessine que si quelque chose a changé. Une carte figée ne
 // consomme rien : c'est ce qui la rend supportable sur un mur.
 
-let dirty = true, rafId = 0, last = performance.now(), lastScan = -1e9;
+const PANEL_MOVE_MS = 125;
+let dirty = true, rafId = 0, last = performance.now(), lastScan = -1e9, lastPanel = -1e9;
 
 function invalidate() {
   dirty = true;
@@ -139,7 +140,9 @@ function frame(now) {
     const t1 = performance.now();
     trace(c);
     const t2 = performance.now();
-    refreshPanel(sun, c, when);
+    // En glissé, le panneau (320 points d'historique) suit huit fois par
+    // seconde, pas à chaque image ; l'image d'arrêt le remet à jour.
+    if (!moving || now - lastPanel > PANEL_MOVE_MS) { refreshPanel(sun, c, when); lastPanel = now; }
     const t3 = performance.now();
 
     beatFrame(now, t3 - t0, t1 - t0, t2 - t1, t3 - t2);
