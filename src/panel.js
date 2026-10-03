@@ -755,7 +755,7 @@ function loadKnobs() {
   // Les coupures et la résolution du shader (admin, performance).
   if (o.cut) for (const k of Object.keys(view.cut))
     if (typeof o.cut[k] === 'boolean') view.cut[k] = o.cut[k];
-  if (typeof o.gls === 'number') view.gls = bound(o.gls, 0.1, 1);
+  if ([0.5, 0.6, 0.7, 0.8, 1].includes(o.gls)) view.gls = o.gls;
   if (o.plis) for (const [, bodyId] of FOLDS)
     if (typeof o.plis[bodyId] === 'boolean') folded[bodyId] = o.plis[bodyId];
 }
@@ -1406,18 +1406,11 @@ export function initPanel(invalidate, resize, shaderProfile) {
   }
 
   // LA RÉSOLUTION DU SHADER — voir `view.gls`. Retaille les calques.
-  const gls = byId('s-gls');
-  const showGls = () => {
-    view.gls = +gls.value / 100;
-    gls.style.setProperty('--p', gls.value + '%');
-    byId('o-gls').textContent = gls.value + ' %';
-    remeasure();
-    saveKnobs();
-  };
-  gls.value = Math.round(view.gls * 100);
-  gls.style.setProperty('--p', gls.value + '%');
-  byId('o-gls').textContent = gls.value + ' %';
-  gls.addEventListener('input', showGls);
+  for (const pc of [50, 60, 70, 80, 100]) {
+    const input = byId('gls-' + pc);
+    input.checked = Math.round(view.gls * 100) === pc;
+    input.addEventListener('change', () => { view.gls = pc / 100; remeasure(); saveKnobs(); });
+  }
 
   // LE SHADER EN DÉTAIL — voir profileShader dans src/map.js. Le texte
   // est posé d'abord, la mesure part à l'image suivante : sinon la page

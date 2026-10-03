@@ -504,9 +504,13 @@
                  savoir lequel co&#251;te, sur la machine m&#234;me. M&#233;moris&#233;. -->
             <!-- LA R&#201;SOLUTION DU SHADER : le calque WebGL calcul&#233; plus petit,
                  agrandi par le navigateur. L'encre reste nette. M&#233;moris&#233;. -->
-            <div class="dial">
-              <label for="s-gls">shader</label>
-              <input id="s-gls" type="range" min="10" max="100" value="100"><output id="o-gls">100 %</output>
+            <div class="choice cut">
+              <span>shader</span>
+              <label><input type="radio" name="gls" id="gls-50"><b>50</b></label>
+              <label><input type="radio" name="gls" id="gls-60"><b>60</b></label>
+              <label><input type="radio" name="gls" id="gls-70"><b>70</b></label>
+              <label><input type="radio" name="gls" id="gls-80"><b>80</b></label>
+              <label><input type="radio" name="gls" id="gls-100" checked><b>100 %</b></label>
             </div>
             <div class="choice cut">
               <span>couper</span>
