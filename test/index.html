@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Essai des commandes</title>
+<style>
+  body { background:#111; color:#ddd; font:14px/1.5 monospace; margin:16px; }
+  button, select { font:inherit; background:#222; color:#ddd; border:1px solid #555; }
+  .axe { display:grid; grid-template-columns:3em 12em 6em 5em 1fr 11em 8em; gap:8px; align-items:center; }
+  .barre { background:#222; height:10px; position:relative; }
+  .barre i { position:absolute; left:0; top:0; bottom:0; background:#6a6; }
+  .bt { display:inline-block; width:2.4em; text-align:center; border:1px solid #555; margin:2px; }
+  .bt.on { background:#6a6; color:#000; }
+  #joy { width:120px; height:120px; border:1px solid #555; position:relative; margin:8px 0; }
+  #pt { width:8px; height:8px; background:#e66; position:absolute; margin:-4px 0 0 -4px; }
+</style>
+<h3>Essai des commandes</h3>
+<p id="etat"></p>
+<p id="cadence"></p>
+<p><button id="raz">remettre min / max à zéro</button></p>
+<div id="axes"></div>
+<p id="boutons"></p>
+<div id="joy"><div id="pt"></div></div>
+<p id="jv"></p>
+<script>
+const NOMS = ['', 'MÉTÉO', 'LÉGENDES', 'CHANCE', 'HORAIRE', 'TERRE', 'MER', 'IRISATION',
+  'SENSIBILITÉ', 'ICÔNES', 'ZOOM', 'JOYSTICK X', 'JOYSTICK Y'];
+const $ = id => document.getElementById(id);
+let id = null, mm = [], noms = [], rows = [], bts = [], lastTs = -1, lectures = 0;
+
+const lire = k => { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } };
+const ecrire = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} };
+
+function construire(g) {
+  id = g.id; mm = g.axes.map(() => [Infinity, -Infinity]);
+  noms = lire('test.noms.' + id) || [];
+  $('axes').innerHTML = ''; rows = [];
+  g.axes.forEach((_, i) => {
+    const r = document.createElement('div'); r.className = 'axe';
+    r.innerHTML = `<b>#${i}</b><select>${NOMS.map(n => `<option>${n}</option>`).join('')}</select>
+      <span></span><span></span><div class="barre"><i></i></div><span></span><span></span>`;
+    const s = r.querySelector('select'); s.value = noms[i] || '';
+    s.onchange = () => { noms[i] = s.value; ecrire('test.noms.' + id, noms) };
+    $('axes').append(r); rows.push(r);
+  });
+  $('boutons').innerHTML = 'boutons : ';
+  bts = g.buttons.map((_, i) => { const b = document.createElement('span'); b.className = 'bt'; b.textContent = i; $('boutons').append(b); return b });
+}
+
+function boucle() {
+  const g = [...navigator.getGamepads()].find(x => x);
+  if (!g) { id = null; $('etat').textContent = 'Aucune manette. Tournez un bouton : Chrome ne la déclare qu\'après une première action.'; }
+  else {
+    if (g.id !== id || g.axes.length !== mm.length) construire(g);
+    $('etat').textContent = `${g.connected ? 'connectée' : 'déconnectée'} · ${g.id} · ${g.axes.length} axes · ${g.buttons.length} boutons · mapping « ${g.mapping} »`;
+    if (g.timestamp !== lastTs) { lastTs = g.timestamp; lectures++; }
+    g.axes.forEach((v, i) => {
+      const m = mm[i]; m[0] = Math.min(m[0], v); m[1] = Math.max(m[1], v);
+      const p = (v + 1) * 50, c = rows[i].children;
+      c[2].textContent = v.toFixed(3); c[3].textContent = p.toFixed(1) + ' %';
+      c[4].firstChild.style.width = p + '%';
+      c[5].textContent = `min ${m[0].toFixed(3)} max ${m[1].toFixed(3)}`;
+      c[6].textContent = noms[i] === 'HORAIRE' ? (p < 33.3 ? 'hier' : p < 66.7 ? 'maintenant' : 'demain') : '';
+    });
+    g.buttons.forEach((b, i) => bts[i].classList.toggle('on', b.pressed));
+    const x = g.axes[noms.indexOf('JOYSTICK X')], y = g.axes[noms.indexOf('JOYSTICK Y')];
+    if (x !== undefined && y !== undefined) {
+      $('pt').style.left = (x + 1) * 60 + 'px'; $('pt').style.top = (y + 1) * 60 + 'px';
+      $('jv').textContent = `x ${x.toFixed(3)}  y ${y.toFixed(3)}`;
+    } else $('jv').textContent = 'joystick : nommer deux axes JOYSTICK X et Y';
+  }
+  requestAnimationFrame(boucle);
+}
+$('raz').onclick = () => mm.forEach(m => { m[0] = Infinity; m[1] = -Infinity });
+setInterval(() => { $('cadence').textContent = `${lectures} lectures/s`; lectures = 0 }, 1000);
+boucle();
+</script>
