@@ -6,43 +6,32 @@
 <title>Essai des commandes</title>
 <style>
   body { background:#111; color:#ddd; font:14px/1.5 monospace; margin:16px; }
-  button, select { font:inherit; background:#222; color:#ddd; border:1px solid #555; }
-  .axe { display:grid; grid-template-columns:3em 12em 6em 5em 1fr 11em 8em; gap:8px; align-items:center; }
-  .barre { background:#222; height:10px; position:relative; }
-  .barre i { position:absolute; left:0; top:0; bottom:0; background:#6a6; }
-  .bt { display:inline-block; width:2.4em; text-align:center; border:1px solid #555; margin:2px; }
-  .bt.on { background:#6a6; color:#000; }
-  #joy { width:120px; height:120px; border:1px solid #555; position:relative; margin:8px 0; }
   table { border-collapse:collapse; margin:8px 0; }
   td, th { border:1px solid #444; padding:2px 10px; text-align:left; }
   td.on { background:#6a6; color:#000; }
-  #pt { width:8px; height:8px; background:#e66; position:absolute; margin:-4px 0 0 -4px; }
 </style>
 <h3>Essai des commandes</h3>
 <p id="etat"></p>
-<p id="cadence"></p>
 <p id="pi"></p>
 <table id="synth"></table>
-<p><button id="raz">remettre min / max à zéro</button></p>
-<div id="axes"></div>
-<p id="boutons"></p>
-<div id="joy"><div id="pt"></div></div>
-<p id="jv"></p>
 <script>
-const NOMS = ['', 'MÉTÉO', 'LÉGENDES', 'CHANCE', 'HORAIRE', 'TERRE', 'MER', 'IRISATION',
-  'SENSIBILITÉ', 'ICÔNES', 'ZOOM', 'JOYSTICK X', 'JOYSTICK Y'];
-const $ = id => document.getElementById(id);
-const ROT = ['MÉTÉO', 'LÉGENDES', 'CHANCE', 'TERRE', 'MER', 'IRISATION', 'SENSIBILITÉ', 'ICÔNES', 'ZOOM', 'JOYSTICK X', 'JOYSTICK Y'];
-const TEMPS = ['hier', 'maintenant', 'demain'];
+// commande -> numéro d'axe de la manette (ordre de arduino/leonardo/leonardo.ino :
+// la broche A0 est l'axe 0, A1 l'axe 1, A2 l'axe 2, A4 l'axe 3 … A11 l'axe 10).
+// Sur la plaque d'essai le joystick est sur A0 et A1 : à changer ici si on le déplace.
+const AXE = { 'JOYSTICK X': 0, 'JOYSTICK Y': 1, CHANCE: 2, TERRE: 3, MER: 4, IRISATION: 5,
+  SENSIBILITÉ: 6, ICÔNES: 7, ZOOM: 8, MÉTÉO: 9, LÉGENDES: 10 };
+const TEMPS = ['hier', 'maintenant', 'demain'];   // boutons 0, 1, 2
 const POUSS = ['arcEnCiel', 'teleportation', 'repere', 'maison'];
 const INTER = ['couloir', 'couleur', 'interface', 'formule', 'poeme'];
+const $ = id => document.getElementById(id);
 const pi = {};  // venu du service du Pi : poussoir -> nombre d'appuis, interrupteur -> true/false
-const lignes = {};
-$('synth').innerHTML = '<tr><th>commande</th><th>type</th><th>valeur</th></tr>';
-[...ROT.map(n => [n, 'rotatif / axe']), ['TEMPS', 'Leonardo, 3 boutons'],
- ...POUSS.map(n => [n, 'poussoir GPIO']), ...INTER.map(n => [n, 'interrupteur GPIO'])].forEach(([n, t]) => {
-  const r = $('synth').insertRow(); r.innerHTML = `<td>${n}</td><td>${t}</td><td></td>`; lignes[n] = r.cells[2];
+const cases = {};
+
+$('synth').innerHTML = '<tr><th>commande</th><th>valeur</th></tr>';
+[...Object.keys(AXE), 'TEMPS', ...POUSS, ...INTER].forEach(n => {
+  const r = $('synth').insertRow(); r.innerHTML = `<td>${n}</td><td></td>`; cases[n] = r.cells[1];
 });
+
 function pont() {
   const ws = new WebSocket('ws://' + location.host + '/ws');
   ws.onopen = () => $('pi').textContent = 'service du Pi : connecté';
@@ -50,68 +39,21 @@ function pont() {
   ws.onclose = () => { $('pi').textContent = 'service du Pi : absent (poussoirs et interrupteurs muets)'; setTimeout(pont, 2000); };
 }
 pont();
-function synthese(g) {
-  ROT.forEach(n => {
-    const i = g ? noms.indexOf(n) : -1;
-    lignes[n].textContent = i < 0 ? '— (axe non nommé)' : ((g.axes[i] + 1) * 50).toFixed(1) + ' %  (' + g.axes[i].toFixed(3) + ')';
-  });
-  const t = g ? [0, 1, 2].findIndex(i => g.buttons[i] && g.buttons[i].pressed) : -1;
-  lignes.TEMPS.textContent = t < 0 ? '—' : TEMPS[t];
-  POUSS.forEach(n => lignes[n].textContent = pi[n] ? 'appuyé ' + pi[n] + ' fois' : '—');
-  INTER.forEach(n => {
-    lignes[n].textContent = n in pi ? (pi[n] ? 'ON' : 'OFF') : '—';
-    lignes[n].className = pi[n] ? 'on' : '';
-  });
-}
-
-let id = null, mm = [], noms = [], rows = [], bts = [], lastTs = -1, lectures = 0;
-
-const lire = k => { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } };
-const ecrire = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} };
-
-function construire(g) {
-  id = g.id; mm = g.axes.map(() => [Infinity, -Infinity]);
-  const sv = lire('test.noms.' + id) || [];
-  noms = g.axes.map((_, i) => sv[i] || ROT[i] || '');  // par défaut l'ordre de leonardo.ino
-  $('axes').innerHTML = ''; rows = [];
-  g.axes.forEach((_, i) => {
-    const r = document.createElement('div'); r.className = 'axe';
-    r.innerHTML = `<b>#${i}</b><select>${NOMS.map(n => `<option>${n}</option>`).join('')}</select>
-      <span></span><span></span><div class="barre"><i></i></div><span></span><span></span>`;
-    const s = r.querySelector('select'); s.value = noms[i] || '';
-    s.onchange = () => { noms[i] = s.value; ecrire('test.noms.' + id, noms) };
-    $('axes').append(r); rows.push(r);
-  });
-  $('boutons').innerHTML = 'boutons : ';
-  bts = g.buttons.map((_, i) => { const b = document.createElement('span'); b.className = 'bt'; b.textContent = i; $('boutons').append(b); return b });
-}
 
 function boucle() {
   const g = [...navigator.getGamepads()].find(x => x);
-  if (!g) { id = null; $('etat').textContent = 'Aucune manette. Tournez un bouton : Chrome ne la déclare qu\'après une première action.'; }
-  else {
-    if (g.id !== id || g.axes.length !== mm.length) construire(g);
-    $('etat').textContent = `${g.connected ? 'connectée' : 'déconnectée'} · ${g.id} · ${g.axes.length} axes · ${g.buttons.length} boutons · mapping « ${g.mapping} »`;
-    if (g.timestamp !== lastTs) { lastTs = g.timestamp; lectures++; }
-    g.axes.forEach((v, i) => {
-      const m = mm[i]; m[0] = Math.min(m[0], v); m[1] = Math.max(m[1], v);
-      const p = (v + 1) * 50, c = rows[i].children;
-      c[2].textContent = v.toFixed(3); c[3].textContent = p.toFixed(1) + ' %';
-      c[4].firstChild.style.width = p + '%';
-      c[5].textContent = `min ${m[0].toFixed(3)} max ${m[1].toFixed(3)}`;
-      c[6].textContent = noms[i] === 'HORAIRE' ? (p < 33.3 ? 'hier' : p < 66.7 ? 'maintenant' : 'demain') : '';
-    });
-    g.buttons.forEach((b, i) => bts[i].classList.toggle('on', b.pressed));
-    const x = g.axes[noms.indexOf('JOYSTICK X')], y = g.axes[noms.indexOf('JOYSTICK Y')];
-    if (x !== undefined && y !== undefined) {
-      $('pt').style.left = (x + 1) * 60 + 'px'; $('pt').style.top = (y + 1) * 60 + 'px';
-      $('jv').textContent = `x ${x.toFixed(3)}  y ${y.toFixed(3)}`;
-    } else $('jv').textContent = 'joystick : nommer deux axes JOYSTICK X et Y';
-  }
-  synthese(g);
+  $('etat').textContent = g ? `manette : ${g.id}, ${g.axes.length} axes, ${g.buttons.length} boutons`
+    : 'Aucune manette. Tournez un bouton : Chrome ne la déclare qu\'après une première action.';
+  for (const [n, i] of Object.entries(AXE))
+    cases[n].textContent = g && g.axes[i] !== undefined ? ((g.axes[i] + 1) * 50).toFixed(1) + ' %' : '—';
+  const t = g ? [0, 1, 2].findIndex(i => g.buttons[i] && g.buttons[i].pressed) : -1;
+  cases.TEMPS.textContent = t < 0 ? '—' : TEMPS[t];
+  POUSS.forEach(n => cases[n].textContent = pi[n] ? 'appuyé ' + pi[n] + ' fois' : '—');
+  INTER.forEach(n => {
+    cases[n].textContent = n in pi ? (pi[n] ? 'ON' : 'OFF') : '—';
+    cases[n].className = pi[n] ? 'on' : '';
+  });
   requestAnimationFrame(boucle);
 }
-$('raz').onclick = () => mm.forEach(m => { m[0] = Infinity; m[1] = -Infinity });
-setInterval(() => { $('cadence').textContent = `${lectures} lectures/s`; lectures = 0 }, 1000);
 boucle();
 </script>
