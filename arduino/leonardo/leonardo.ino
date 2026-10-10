@@ -19,7 +19,7 @@ void setup() {
 void loop() {
   int v[11];
   for (uint8_t i = 0; i < 11; i++) {
-    analogRead(PINS[i]);                                         // lecture jetée : le convertisseur garde la broche d'avant
+    analogRead(PINS[i]);                                         // lecture jetée : laisse le convertisseur se caler sur la source (inutile pour une broche libre)
     v[i] = analogRead(PINS[i]);                                  // 0..1023, plage par défaut
   }
   joy.setXAxis(v[0]);   joy.setYAxis(v[1]);   joy.setZAxis(v[2]);
