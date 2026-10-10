@@ -1,0 +1,117 @@
+# -*- coding: utf-8 -*-
+"""
+Service du Pi : `python3 pi/service.py [port]`. Un seul processus.
+Sert la page (comme serve.py), lit les GPIO avec 20 ms d'anti-rebond et
+pousse chaque changement à la page par WebSocket sur /ws. Broches : MATERIEL §7.
+
+La page se branche avec « ?pi » (src/pi.js). Sans gpiozero (ordinateur),
+le service sert quand même la page ; /ws reste ouvert, muet.
+"""
+
+import base64
+import hashlib
+import json
+import os
+import sys
+import threading
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+import serve  # noqa: E402
+
+try:
+    from gpiozero import Button
+except ImportError:
+    Button = None
+
+# commande -> numéro GPIO (BCM). Poussoirs : un message à l'appui.
+# Interrupteurs : un message à chaque changement, et l'état à la connexion.
+PUSH = {'arcEnCiel': 5, 'teleportation': 6, 'repere': 13, 'maison': 19}
+SWITCH = {'couloir': 17, 'couleur': 27, 'interface': 22, 'formule': 23, 'poeme': 24}
+
+clients = set()
+lock = threading.Lock()
+switches = {}
+
+
+def frame(text):
+    """Trame WebSocket texte, serveur -> client (non masquée)."""
+    b = text.encode('utf-8')
+    n = len(b)
+    head = bytes([0x81, n]) if n < 126 else bytes([0x81, 126]) + n.to_bytes(2, 'big')
+    return head + b
+
+
+def send(wfile, msg):
+    wfile.write(frame(json.dumps(msg)))
+    wfile.flush()
+
+
+def broadcast(msg):
+    with lock:
+        for w in list(clients):
+            try:
+                send(w, msg)
+            except OSError:
+                clients.discard(w)
+
+
+def start_gpio():
+    if Button is None:
+        print('  gpiozero absent : pas de GPIO')
+        return
+    for name, pin in PUSH.items():
+        b = Button(pin, pull_up=True, bounce_time=0.02)
+        b.when_pressed = lambda n=name: broadcast({'k': n})
+        switches[name] = b  # garde la référence : sinon le ramasse-miettes la ferme
+    for name, pin in SWITCH.items():
+        b = Button(pin, pull_up=True, bounce_time=0.02)
+        b.when_pressed = lambda n=name: broadcast({'k': n, 'v': True})
+        b.when_released = lambda n=name: broadcast({'k': n, 'v': False})
+        switches[name] = b
+
+
+class Handler(serve.Handler):
+
+    def do_GET(self):
+        if self.path.split('?')[0] != '/ws':
+            return super().do_GET()
+        key = self.headers.get('Sec-WebSocket-Key')
+        if not key:
+            return self.send_error(400)
+        accept = base64.b64encode(hashlib.sha1(
+            (key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode()).digest()).decode()
+        self.send_response(101, 'Switching Protocols')
+        self.send_header('Upgrade', 'websocket')
+        self.send_header('Connection', 'Upgrade')
+        self.send_header('Sec-WebSocket-Accept', accept)
+        # Pas serve.Handler.end_headers : le cache n'a rien à faire ici.
+        http_end = serve.http.server.SimpleHTTPRequestHandler.end_headers
+        http_end(self)
+        self.close_connection = True
+        with lock:
+            try:
+                for name in SWITCH:
+                    if name in switches:
+                        send(self.wfile, {'k': name, 'v': switches[name].is_pressed})
+            except OSError:
+                return
+            clients.add(self.wfile)
+        try:
+            while self.rfile.read(1024):  # on ignore ce que dit la page ; EOF = fermée
+                pass
+        except OSError:
+            pass
+        finally:
+            with lock:
+                clients.discard(self.wfile)
+
+
+if __name__ == '__main__':
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    start_gpio()
+    print('Estimateur — service du Pi\n  http://localhost:%d/?pi\n' % port)
+    try:
+        with serve.Server(('', port), Handler) as httpd:
+            httpd.serve_forever()
+    except KeyboardInterrupt:
+        print('\narrêté.')

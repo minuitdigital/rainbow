@@ -14,6 +14,7 @@ import { scan } from './zones.js';
 import { initMap, paint, uploadWeather, profileShader } from './map.js';
 import { initInk, rescale, trace } from './ink.js';
 import { initPanel, refreshPanel, weatherArrived, plaque } from './panel.js';
+import { initPi } from './pi.js';
 import { bind } from './chrome.js';
 
 const glCv = document.getElementById('gl');
@@ -180,6 +181,7 @@ if (!initMap(glCv, invalidate, noteLoad)) {
 
   // La plaque, appelable par le Pi : window.plaque.maison(), .meteo(40)…
   window.plaque = plaque;
+  initPi();
   window.addEventListener('resize', resize);
   resize();
 

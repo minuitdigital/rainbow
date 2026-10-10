@@ -13,11 +13,16 @@
   .bt { display:inline-block; width:2.4em; text-align:center; border:1px solid #555; margin:2px; }
   .bt.on { background:#6a6; color:#000; }
   #joy { width:120px; height:120px; border:1px solid #555; position:relative; margin:8px 0; }
+  table { border-collapse:collapse; margin:8px 0; }
+  td, th { border:1px solid #444; padding:2px 10px; text-align:left; }
+  td.on { background:#6a6; color:#000; }
   #pt { width:8px; height:8px; background:#e66; position:absolute; margin:-4px 0 0 -4px; }
 </style>
 <h3>Essai des commandes</h3>
 <p id="etat"></p>
 <p id="cadence"></p>
+<p id="pi"></p>
+<table id="synth"></table>
 <p><button id="raz">remettre min / max à zéro</button></p>
 <div id="axes"></div>
 <p id="boutons"></p>
@@ -27,6 +32,38 @@
 const NOMS = ['', 'MÉTÉO', 'LÉGENDES', 'CHANCE', 'HORAIRE', 'TERRE', 'MER', 'IRISATION',
   'SENSIBILITÉ', 'ICÔNES', 'ZOOM', 'JOYSTICK X', 'JOYSTICK Y'];
 const $ = id => document.getElementById(id);
+const ROT = ['MÉTÉO', 'LÉGENDES', 'CHANCE', 'TERRE', 'MER', 'IRISATION', 'SENSIBILITÉ', 'ICÔNES', 'ZOOM', 'JOYSTICK X', 'JOYSTICK Y'];
+const TEMPS = ['hier', 'maintenant', 'demain'];
+const POUSS = ['arcEnCiel', 'teleportation', 'repere', 'maison'];
+const INTER = ['couloir', 'couleur', 'interface', 'formule', 'poeme'];
+const pi = {};  // venu du service du Pi : poussoir -> nombre d'appuis, interrupteur -> true/false
+const lignes = {};
+$('synth').innerHTML = '<tr><th>commande</th><th>type</th><th>valeur</th></tr>';
+[...ROT.map(n => [n, 'rotatif / axe']), ['TEMPS', 'Leonardo, 3 boutons'],
+ ...POUSS.map(n => [n, 'poussoir GPIO']), ...INTER.map(n => [n, 'interrupteur GPIO'])].forEach(([n, t]) => {
+  const r = $('synth').insertRow(); r.innerHTML = `<td>${n}</td><td>${t}</td><td></td>`; lignes[n] = r.cells[2];
+});
+function pont() {
+  const ws = new WebSocket('ws://' + location.host + '/ws');
+  ws.onopen = () => $('pi').textContent = 'service du Pi : connecté';
+  ws.onmessage = e => { const { k, v } = JSON.parse(e.data); pi[k] = v === undefined ? (pi[k] || 0) + 1 : v; };
+  ws.onclose = () => { $('pi').textContent = 'service du Pi : absent (poussoirs et interrupteurs muets)'; setTimeout(pont, 2000); };
+}
+pont();
+function synthese(g) {
+  ROT.forEach(n => {
+    const i = g ? noms.indexOf(n) : -1;
+    lignes[n].textContent = i < 0 ? '— (axe non nommé)' : ((g.axes[i] + 1) * 50).toFixed(1) + ' %  (' + g.axes[i].toFixed(3) + ')';
+  });
+  const t = g ? [0, 1, 2].findIndex(i => g.buttons[i] && g.buttons[i].pressed) : -1;
+  lignes.TEMPS.textContent = t < 0 ? '—' : TEMPS[t];
+  POUSS.forEach(n => lignes[n].textContent = pi[n] ? 'appuyé ' + pi[n] + ' fois' : '—');
+  INTER.forEach(n => {
+    lignes[n].textContent = n in pi ? (pi[n] ? 'ON' : 'OFF') : '—';
+    lignes[n].className = pi[n] ? 'on' : '';
+  });
+}
+
 let id = null, mm = [], noms = [], rows = [], bts = [], lastTs = -1, lectures = 0;
 
 const lire = k => { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } };
@@ -70,6 +107,7 @@ function boucle() {
       $('jv').textContent = `x ${x.toFixed(3)}  y ${y.toFixed(3)}`;
     } else $('jv').textContent = 'joystick : nommer deux axes JOYSTICK X et Y';
   }
+  synthese(g);
   requestAnimationFrame(boucle);
 }
 $('raz').onclick = () => mm.forEach(m => { m[0] = Infinity; m[1] = -Infinity });
