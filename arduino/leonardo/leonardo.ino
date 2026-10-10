@@ -18,12 +18,16 @@ void setup() {
 
 void loop() {
   int v[11];
-  for (uint8_t i = 0; i < 11; i++) v[i] = analogRead(PINS[i]);   // 0..1023, plage par défaut
+  for (uint8_t i = 0; i < 11; i++) {
+    analogRead(PINS[i]);                                         // lecture jetée : le convertisseur garde la broche d'avant
+    v[i] = analogRead(PINS[i]);                                  // 0..1023, plage par défaut
+  }
   joy.setXAxis(v[0]);   joy.setYAxis(v[1]);   joy.setZAxis(v[2]);
   joy.setRxAxis(v[3]);  joy.setRyAxis(v[4]);  joy.setRzAxis(v[5]);
   joy.setRudder(v[6]);  joy.setThrottle(v[7]); joy.setAccelerator(v[8]);
   joy.setBrake(v[9]);   joy.setSteering(v[10]);
 
+  analogRead(A3);                   // lecture jetée, comme ci-dessus
   int t = analogRead(A3);           // Temps : 3 positions
   joy.setButton(0, t < 341);
   joy.setButton(1, t >= 341 && t < 682);
