@@ -71,7 +71,8 @@ const ecrire = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } ca
 
 function construire(g) {
   id = g.id; mm = g.axes.map(() => [Infinity, -Infinity]);
-  noms = lire('test.noms.' + id) || [];
+  const sv = lire('test.noms.' + id) || [];
+  noms = g.axes.map((_, i) => sv[i] || ROT[i] || '');  // par défaut l'ordre de leonardo.ino
   $('axes').innerHTML = ''; rows = [];
   g.axes.forEach((_, i) => {
     const r = document.createElement('div'); r.className = 'axe';
