@@ -148,7 +148,7 @@ const KNOBS = {
   's-ecart':    { fmt: t => Math.round(tween(0.5, 3.0, t) * 12) + ' px',
                   apply: t => { view.look.pas = tween(0.5, 3.0, t); repaint(); } },
 
-  's-trait':    { fmt: t => (tween(0.5, 3.0, t) * 1.6).toFixed(1) + ' px',
+  's-trait':    { fmt: t => (tween(0.5, 3.0, t) * 0.8).toFixed(1) + ' px',
                   apply: t => { view.look.trait = tween(0.5, 3.0, t); repaint(); } },
 
   // LA PROFONDEUR D'ENCRE des aplats : le milieu du curseur est le tirage
@@ -590,10 +590,10 @@ function closeNote() {
 const STORE_KEY = 'estimateur.reglages.3';
 
 // PIXEL et PALETTE : les cases de l'admin, et seules valeurs admises.
-const PIX = [1, 4, 6, 8, 12];
+const PIX = [1, 3, 4, 6, 8, 12];
 // Le Pi (« ?pi ») reçoit une fois les réglages légers (REPRISE §4) ; ensuite
 // l'admin les change librement. Le drapeau survit aux enregistrements.
-const PI_LIGHT = { rig: 'mini', gls: 0.85, glsMove: 0.6, pix: 6, coasts: 'aucune' };
+const PI_LIGHT = { rig: 'mini', gls: 0.85, glsMove: 0.6, pix: 3, coasts: 'aucune' };
 let piDone = false;
 const PAL = [0, 6, 8, 12];
 const COASTS = ['aucune', 'encre', 'shader'];

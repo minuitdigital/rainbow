@@ -57,7 +57,7 @@ export const view = {
    *    grey   0 = irisé, 1 = densité tramée — l'interrupteur « Couleur » éteint
    *    porte  1 = tracer en pointillé la fenêtre du soleil, 0° et 42°
    *    pas    l'écart entre les points du couloir
-   *    trait  l'épaisseur du couloir, 1 = 1,6 pixel
+   *    trait  l'épaisseur du couloir, 1 = 0,8 pixel
    *    icon   taille commune des icônes, en pixels
    *    sea    profondeur d'encre des aplats de mer
    *    land   idem pour les terres

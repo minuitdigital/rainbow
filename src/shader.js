@@ -82,7 +82,6 @@ const vec3 SEA_LIGHT  = vec3(0.948, 0.954, 0.964);
 const vec3 SEA_DEEP   = vec3(0.792, 0.806, 0.830);
 const vec3 LAND_LIGHT = vec3(0.995, 0.996, 1.000);
 const vec3 LAND_DEEP  = vec3(0.655, 0.667, 0.688);
-const float BANDS = 6.0;
 
 float fyf (float t){ float a=t*t, b=a*a*a; return t*(A1 + A2*a + b*(A3 + A4*a)); }
 float fypf(float t){ float a=t*t, b=a*a*a; return A1 + 3.0*A2*a + b*(7.0*A3 + 9.0*A4*a); }
@@ -102,18 +101,6 @@ float vnoise(vec3 x){
 }
 float fbm(vec3 p){
   return 0.56 * vnoise(p) + 0.29 * vnoise(p * 2.13) + 0.15 * vnoise(p * 4.37);
-}
-
-// Trame de Bayer 8x8 calculee bit a bit (quadrant = 2*(qx^qy) + qy) :
-// ni tableau ni indexation dynamique. Des points plutot que des hachures,
-// qui imposeraient une direction.
-float bayer8(ivec2 p){
-  int v = 0;
-  for(int b = 2; b >= 0; b--){
-    int qx = (p.x >> b) & 1, qy = (p.y >> b) & 1;
-    v = (v << 2) | (2 * (qx ^ qy) + qy);
-  }
-  return (float(v) + 0.5) / 64.0;
 }
 
 // LA LEGENDE : un maximum et non une somme, on croit a la plus forte.
@@ -291,31 +278,29 @@ void main(){
     // fwidth BORNE PAR LE HAUT (piege n. 35) : pris dans une branche non
     // uniforme, la derivee n'est plus garantie ; sur le Pi elle explosait
     // au bord de la porte et tracait des traits roses.
+    // La palette suit ce qui depasse le seuil : toutes les teintes restent
+    // visibles, quelle que soit la Sensibilite.
+    float kt = t;
     if(uSeuil > 0.001){
       float w = clamp(fwidth(fv), 1e-4, 0.08);
       float edge = smoothstep(uSeuil - w, uSeuil + w, fv);
       float over = clamp((fv - uSeuil) / max(1.0 - uSeuil, 1e-3), 0.0, 1.0);
       fv = edge * mix(0.30, 1.0, over);
+      kt = over;
     }
 
     if(uGrey > 0.5){
-      // EN GRIS, la force passe par la densite, en paliers comme le relief.
-      float band = floor(fv * BANDS) / BANDS;
-      float v = 1.0 - pow(band, 0.85) * 0.50;
-
-      // La trame separe la tache du relief, gris et lisse lui aussi.
-      if(bayer8(ivec2(gl_FragCoord.xy)) < clamp((fv - 0.12) / 0.88, 0.0, 1.0))
-        v -= 0.20;
-
-      hue = vec3(v);
-      field = 1.0;          // la densité REMPLACE la teinte, elle ne s'y ajoute pas
+      // EN GRIS, le meme degrade que la couleur, sans teinte : une encre
+      // grise dont la densite suit la force. Ni paliers ni trame.
+      hue = vec3(0.30);
+      field = fv;
     } else {
       field = fv;
 
       // Irisation : palette cosinus parcourue uFranges fois, decalee par un
       // bruit lent, comme de l'huile sur l'eau. Le nombre de tours ne
       // suit pas le zoom.
-      float k = t * uFranges + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
+      float k = kt * uFranges + vnoise(sp * 0.55) * 0.40 + uDrift * 0.03;
       // PALETTE : phase arrondie a uPal crans par tour, en bandes franches.
       if(uPal > 0.5) k = floor(k * uPal + 0.5) / uPal;
       vec3 c = 0.5 + 0.5 * cos(6.28318 * k + vec3(0.0, 2.0944, 4.1888));
@@ -354,7 +339,7 @@ void main(){
     // le trait plutot que de mentir sur sa position.
     float sane = 1.0 - smoothstep(2.0, 6.0, lw);
 
-    float tw = lw * 1.6 * uCouloir.y;
+    float tw = lw * 0.8 * uCouloir.y;
     float line = max(1.0 - smoothstep(0.0, tw, abs(h - 0.4)),
                      1.0 - smoothstep(0.0, tw, abs(h - SUN_MAX)));
 
