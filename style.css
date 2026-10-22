@@ -634,8 +634,8 @@ body.bare .rail { display: none; }
 .touche {
   position: fixed;
   z-index: 3;
-  left: calc(42px + env(safe-area-inset-left, 0px));
-  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  left: calc(10px + env(safe-area-inset-left, 0px));
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   color: var(--ink-soft);
   letter-spacing: .05em;
   pointer-events: none;
