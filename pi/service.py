@@ -9,11 +9,18 @@ le service sert quand même la page ; /ws reste ouvert, muet.
 """
 
 import base64
+import glob
 import hashlib
 import json
 import os
+import struct
 import sys
 import threading
+
+try:
+    import fcntl
+except ImportError:  # Windows : pas de manette à régler
+    fcntl = None
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 import serve  # noqa: E402
@@ -73,6 +80,25 @@ def start_gpio():
         switches[name] = b
 
 
+def no_dead_zone():
+    """Linux (joydev) met une zone morte de 1/16 de la course au milieu de
+    chaque axe, et Chromium lit joydev : on la retire. La Leonardo envoie
+    0..65535. Refait à chaque connexion de la page, car un nouveau
+    branchement (ou un nouveau chargement du croquis) la remet."""
+    if fcntl is None:
+        return
+    for js in glob.glob('/dev/input/js*'):
+        try:
+            fd = os.open(js, os.O_RDONLY | os.O_NONBLOCK)
+            n = struct.unpack('B', fcntl.ioctl(fd, 0x80016a11, bytes(1)))[0]  # JSIOCGAXES
+            # JS_CORR_BROKEN, centre 32767, pente 2^29 / 32767, sans zone morte
+            corr = struct.pack('8ihH', 32767, 32767, 16384, 16384, 0, 0, 0, 0, 0, 1) * n
+            fcntl.ioctl(fd, 0x40246a21, corr)  # JSIOCSCORR
+            os.close(fd)
+        except OSError as e:
+            print('  %s : %s' % (js, e))
+
+
 class Handler(serve.Handler):
 
     def do_GET(self):
@@ -91,6 +117,7 @@ class Handler(serve.Handler):
         http_end = serve.http.server.SimpleHTTPRequestHandler.end_headers
         http_end(self)
         self.close_connection = True
+        no_dead_zone()
         with lock:
             try:
                 for name in SWITCH:
@@ -112,6 +139,7 @@ class Handler(serve.Handler):
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     start_gpio()
+    no_dead_zone()
     print('Estimateur — service du Pi\n  http://localhost:%d/?pi\n' % port)
     try:
         with serve.Server(('', port), Handler) as httpd:
