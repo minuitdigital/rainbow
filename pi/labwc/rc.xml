@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- Copié dans ~/.config/labwc/ avec autostart (labwc -m le fusionne au rc.xml du système). -->
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <keyboard>
+    <!-- ALLUMAGE sur – (overlay gpio-shutdown, GPIO 3) : arrêt direct, sans le menu de pishutdown. -->
+    <keybind key="XF86PowerOff">
+      <action name="Execute" command="/sbin/shutdown -h now" />
+    </keybind>
+  </keyboard>
+</openbox_config>
