@@ -491,6 +491,8 @@ input[type="range"]::-moz-range-thumb {
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
 }
+/* La fiche d'une note (FORMULE) laisse voir la carte : pas de voile. */
+#note-sheet { background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .sheet-inner {
   position: relative;
   max-width: 560px;
