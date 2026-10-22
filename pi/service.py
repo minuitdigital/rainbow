@@ -23,10 +23,12 @@ try:
 except ImportError:
     Button = None
 
-# commande -> numéro GPIO (BCM). Poussoirs : un message à l'appui.
+# commande -> numéro GPIO (BCM). Poussoirs : un message à l'appui, et
+# {'k': 'relache'} au relâché (pour /test/ ; plaque.relache n'existe pas).
 # Interrupteurs : un message à chaque changement, et l'état à la connexion.
+# allumage (GPIO 3) : lu tant que l'overlay gpio-shutdown ne le tient pas.
 PUSH = {'arcEnCiel': 5, 'teleportation': 6, 'repere': 13, 'maison': 19}
-SWITCH = {'couloir': 17, 'couleur': 27, 'interface': 22, 'formule': 23, 'poeme': 24}
+SWITCH = {'couloir': 17, 'couleur': 27, 'interface': 22, 'formule': 23, 'poeme': 24, 'allumage': 3}
 
 clients = set()
 lock = threading.Lock()
@@ -62,6 +64,7 @@ def start_gpio():
     for name, pin in PUSH.items():
         b = Button(pin, pull_up=True, bounce_time=0.02)
         b.when_pressed = lambda n=name: broadcast({'k': n})
+        b.when_released = lambda n=name: broadcast({'k': 'relache', 'v': n})
         switches[name] = b  # garde la référence : sinon le ramasse-miettes la ferme
     for name, pin in SWITCH.items():
         b = Button(pin, pull_up=True, bounce_time=0.02)

@@ -5,54 +5,131 @@
 <meta name="robots" content="noindex">
 <title>Essai des commandes</title>
 <style>
-  body { background:#111; color:#ddd; font:14px/1.5 monospace; margin:16px; }
-  table { border-collapse:collapse; margin:8px 0; }
-  td, th { border:1px solid #444; padding:2px 10px; text-align:left; }
-  td.on { background:#6a6; color:#000; }
+  html, body { margin:0; background:#e4e4e4; font-family:system-ui,sans-serif; }
+  svg { display:block; width:100vw; height:auto; max-height:100vh; }
 </style>
-<h3>Essai des commandes</h3>
-<p id="etat"></p>
-<p id="pi"></p>
-<table id="synth"></table>
+<svg viewBox="0 0 1024 600">
+  <rect width="1024" height="600" fill="#f4f4f2"/>
+  <text id="etat" x="16" y="22" font-size="13" fill="#666"></text>
+  <rect x="390" y="120" width="520" height="320" rx="50" fill="none" stroke="#bbb" stroke-dasharray="6 6"/>
+  <g id="g"></g>
+</svg>
 <script>
-// commande -> numéro d'axe de la manette (ordre de arduino/leonardo/leonardo.ino :
-// la broche A0 est l'axe 0, A1 l'axe 1, A2 l'axe 2, A4 l'axe 3 … A11 l'axe 10).
-// Sur la plaque d'essai le joystick est sur A0 et A1 : à changer ici si on le déplace.
-const AXE = { 'JOYSTICK X': 0, 'JOYSTICK Y': 1, CHANCE: 2, TERRE: 3, MER: 4, IRISATION: 5,
-  SENSIBILITÉ: 6, ICÔNES: 7, ZOOM: 8, MÉTÉO: 9, LÉGENDES: 10 };
-const TEMPS = ['hier', 'maintenant', 'demain'];   // boutons 0, 1, 2
-const POUSS = ['arcEnCiel', 'teleportation', 'repere', 'maison'];
-const INTER = ['couloir', 'couleur', 'interface', 'formule', 'poeme'];
-const $ = id => document.getElementById(id);
-const pi = {};  // venu du service du Pi : poussoir -> nombre d'appuis, interrupteur -> true/false
-const cases = {};
+// La face avant, simplifiée (POUR-ORCA §0 ter, étape 3). Rotatifs et joystick :
+// la Leonardo, en manette. Poussoirs et interrupteurs : le service du Pi, sur /ws.
+// Axe = ordre de arduino/leonardo/leonardo.ino (A0 l'axe 0, A1 l'axe 1, A2 l'axe 2,
+// A4 l'axe 3 … A11 l'axe 10) ; HORAIRE (A3) arrive en trois boutons.
+const GREEN = '#639922', GREY = '#b4b2a9', BLUE = '#378add', RED = '#e24b4a',
+  TRACK = '#d3d1c7', INK = '#222', MUTED = '#666';
+const Y = [60, 135, 210, 285, 360, 435, 510];
+// [label, nature, x, y, source] — r rotatif, h horaire, z zoom, p poussoir, s interrupteur, j joystick
+const P = [
+  ['MÉTÉO', 'r', 80, Y[0], 0], ['LÉGENDES', 'r', 80, Y[1], 1], ['CHANCE', 'r', 80, Y[2], 2],
+  ['HORAIRE', 'h', 80, Y[3]], ['TERRE', 'r', 80, Y[4], 3], ['MER', 'r', 80, Y[5], 4],
+  ['IRISATION', 'r', 80, Y[6], 5],
+  ['ARC-EN-CIEL', 'p', 210, Y[0], 'arcEnCiel'], ['TÉLÉPORTATION', 'p', 210, Y[1], 'teleportation'],
+  ['REPÈRE', 'p', 210, Y[2], 'repere'], ['MAISON', 'p', 210, Y[3], 'maison'],
+  ['COULOIR', 's', 210, Y[4], 'couloir'], ['COULEUR', 's', 210, Y[5], 'couleur'],
+  ['SENSIBILITÉ', 'r', 210, Y[6], 6], ['ICÔNES', 'r', 330, Y[6], 7],
+  ['ZOOM', 'z', 520, 515, 8], ['', 'j', 700, 512, [9, 10]],
+  ['INTERFACE', 's', 760, 60, 'interface'], ['FORMULE', 's', 860, 60, 'formule'],
+  ['POÈME', 's', 960, 60, 'poeme'], ['ALLUMAGE', 's', 960, 510, 'allumage'],
+];
+const TEMPS = ['hier', 'maint.', 'demain'];
+const NS = 'http://www.w3.org/2000/svg';
+const g = document.getElementById('g');
+function el(t, a) {
+  const e = document.createElementNS(NS, t);
+  for (const k in a) e.setAttribute(k, a[k]);
+  return g.appendChild(e);
+}
 
-$('synth').innerHTML = '<tr><th>commande</th><th>valeur</th></tr>';
-[...Object.keys(AXE), 'TEMPS', ...POUSS, ...INTER].forEach(n => {
-  const r = $('synth').insertRow(); r.innerHTML = `<td>${n}</td><td></td>`; cases[n] = r.cells[1];
+const items = P.map(([n, k, x, y, src]) => {
+  const o = { k, x, y, src, s: 0.5, shown: null };
+  if (k !== 'j') o.label = el('text', { x, y: y + (k === 'z' ? 50 : 40), 'font-size': 13,
+    'text-anchor': 'middle', fill: INK, 'font-weight': 600 });
+  if (o.label) o.label.textContent = k === 'p' ? n : '– ' + n + ' +';
+  if ('rhz'.includes(k)) {
+    const R = k === 'z' ? 30 : 21;
+    o.C = 2 * Math.PI * R; o.T = o.C * 300 / 360;   // 300° de course, de 7 h à 5 h
+    const arc = { cx: x, cy: y, r: R, fill: 'none', 'stroke-width': 6, 'stroke-linecap': 'round',
+      transform: `rotate(120 ${x} ${y})` };
+    o.track = el('circle', { ...arc, stroke: TRACK, 'stroke-dasharray': o.T + ' ' + o.C });
+    o.arc = el('circle', { ...arc, stroke: BLUE, 'stroke-dasharray': '0 ' + o.C });
+    o.val = el('text', { x, y: y + 5, 'font-size': k === 'z' ? 16 : 14, 'text-anchor': 'middle', fill: INK });
+    if (k === 'h') o.pos = el('text', { x: x + 30, y: y + 5, 'font-size': 12, fill: MUTED });
+  } else if (k === 'p' || k === 's') {
+    o.dot = el('circle', { cx: x, cy: y, r: k === 'p' ? 17 : 14, fill: GREY, stroke: '#999' });
+  } else {
+    const S = o.S = 34;
+    o.box = el('rect', { x: x - S, y: y - S, width: 2 * S, height: 2 * S, rx: 6, fill: 'none', stroke: '#999' });
+    el('line', { x1: x - S, y1: y, x2: x + S, y2: y, stroke: TRACK });
+    el('line', { x1: x, y1: y - S, x2: x, y2: y + S, stroke: TRACK });
+    o.dot = el('circle', { cx: x, cy: y, r: 6, fill: BLUE });
+    o.val = el('text', { x, y: y + S + 20, 'font-size': 13, 'text-anchor': 'middle', fill: MUTED });
+    o.sx = 0; o.sy = 0;
+  }
+  return o;
 });
 
+// Service du Pi : poussoir -> {k} à l'appui, {k:'relache', v:k} au relâché ;
+// interrupteur -> {k, v:true/false}. Absent (PC, site public) : tout en rouge.
+const pi = {};
+let piOk = false;
 function pont() {
-  const ws = new WebSocket('ws://' + location.host + '/ws');
-  ws.onopen = () => $('pi').textContent = 'service du Pi : connecté';
-  ws.onmessage = e => { const { k, v } = JSON.parse(e.data); pi[k] = v === undefined ? (pi[k] || 0) + 1 : v; };
-  ws.onclose = () => { $('pi').textContent = 'service du Pi : absent (poussoirs et interrupteurs muets)'; setTimeout(pont, 2000); };
+  let ws;
+  try { ws = new WebSocket('ws://' + location.host + '/ws'); } catch (e) { return; }
+  ws.onopen = () => piOk = true;
+  ws.onmessage = e => {
+    const { k, v } = JSON.parse(e.data);
+    if (k === 'relache') pi[v] = false; else pi[k] = v === undefined ? true : v;
+  };
+  ws.onclose = () => { piOk = false; setTimeout(pont, 2000); };
 }
 pont();
 
+const f1 = v => v.toFixed(1);
+// Lissé, puis on ne change le chiffre que s'il s'écarte de plus d'un demi-pas : il ne tremble pas.
+function steady(o, v) {
+  o.s += (v - o.s) * 0.15;
+  if (o.shown === null || Math.abs(o.s - o.shown) > 0.07) o.shown = Math.round(o.s * 10) / 10;
+  return o.shown;
+}
+
 function boucle() {
-  const g = [...navigator.getGamepads()].find(x => x);
-  $('etat').textContent = g ? `manette : ${g.id}, ${g.axes.length} axes, ${g.buttons.length} boutons`
-    : 'Aucune manette. Tournez un bouton : Chrome ne la déclare qu\'après une première action.';
-  for (const [n, i] of Object.entries(AXE))
-    cases[n].textContent = g && g.axes[i] !== undefined ? ((g.axes[i] + 1) * 50).toFixed(1) + ' %' : '—';
-  const t = g ? [0, 1, 2].findIndex(i => g.buttons[i] && g.buttons[i].pressed) : -1;
-  cases.TEMPS.textContent = t < 0 ? '—' : TEMPS[t];
-  POUSS.forEach(n => cases[n].textContent = pi[n] ? 'appuyé ' + pi[n] + ' fois' : '—');
-  INTER.forEach(n => {
-    cases[n].textContent = n in pi ? (pi[n] ? 'ON' : 'OFF') : '—';
-    cases[n].className = pi[n] ? 'on' : '';
-  });
+  const pad = [...navigator.getGamepads()].find(x => x);
+  document.getElementById('etat').textContent =
+    'manette : ' + (pad ? 'oui' : 'non — tournez un bouton, Chrome ne la déclare qu\'après une action')
+    + ' · service GPIO : ' + (piOk ? 'oui' : 'non');
+  for (const o of items) {
+    if (o.arc) {
+      let v = null;
+      if (pad && o.k === 'h') {
+        const t = [0, 1, 2].findIndex(i => pad.buttons[i] && pad.buttons[i].pressed);
+        if (t >= 0) { v = t / 2; o.pos.textContent = TEMPS[t]; }
+      } else if (pad && pad.axes[o.src] !== undefined) v = (pad.axes[o.src] + 1) / 2;
+      const dead = v === null;
+      o.track.setAttribute('stroke', dead ? RED : TRACK);
+      o.label.setAttribute('fill', dead ? RED : INK);
+      if (dead) { o.arc.setAttribute('stroke-dasharray', '0 ' + o.C); o.val.textContent = ''; if (o.pos) o.pos.textContent = ''; continue; }
+      const shown = steady(o, v);
+      o.arc.setAttribute('stroke-dasharray', o.s * o.T + ' ' + o.C);
+      o.val.textContent = f1(shown);
+    } else if (o.k === 'j') {
+      const dead = !pad || pad.axes[o.src[1]] === undefined;
+      o.box.setAttribute('stroke', dead ? RED : '#999');
+      o.dot.setAttribute('fill', dead ? RED : BLUE);
+      if (dead) { o.dot.setAttribute('cx', o.x); o.dot.setAttribute('cy', o.y); o.val.textContent = ''; continue; }
+      o.sx += (pad.axes[o.src[0]] - o.sx) * 0.3;
+      o.sy += (pad.axes[o.src[1]] - o.sy) * 0.3;
+      o.dot.setAttribute('cx', o.x + o.sx * o.S * 0.85);
+      o.dot.setAttribute('cy', o.y + o.sy * o.S * 0.85);
+      o.val.textContent = f1(o.sx) + ' · ' + f1(o.sy);
+    } else {
+      o.dot.setAttribute('fill', !piOk ? RED : pi[o.src] ? GREEN : GREY);
+      o.label.setAttribute('fill', piOk ? INK : RED);
+    }
+  }
   requestAnimationFrame(boucle);
 }
 boucle();
