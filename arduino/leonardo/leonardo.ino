@@ -9,9 +9,9 @@ Joystick_ joy(0x03, JOYSTICK_TYPE_JOYSTICK, 3, 0,
               true, true, true, true, true);        // Rudder Throttle Accelerator Brake Steering
 
 // Ordre des axes : X Y Z Rx Ry Rz Rudder Throttle Accelerator Brake Steering
-// Câblage réel du tableau (22/10), pas celui de MATERIEL §7 : irisation A8,
-// sensibilité A6, icônes A7, zoom A10, joystick X A11, joystick Y A9.
-const uint8_t PINS[11] = {A0, A1, A2, A4, A5, A8, A6, A7, A10, A11, A9};
+// Câblage réel du tableau (22/10), pas celui de MATERIEL §7 : irisation A7,
+// sensibilité A8, icônes A6, zoom A10, joystick X A11, joystick Y A9.
+const uint8_t PINS[11] = {A0, A1, A2, A4, A5, A7, A8, A6, A10, A11, A9};
 //                        météo légendes chance terre mer irisation sensibilité icônes zoom joyX joyY
 
 void setup() {
@@ -23,7 +23,7 @@ void loop() {
   for (uint8_t i = 0; i < 11; i++) {
     analogRead(PINS[i]);                                         // lecture jetée : laisse le convertisseur se caler sur la source (inutile pour une broche libre)
     v[i] = analogRead(PINS[i]);                                  // 0..1023, plage par défaut
-    if (i < 9) v[i] = 1023 - v[i];  // les 9 rotatifs sont câblés à l'envers ; le joystick, non
+    if (i < 8 || i == 9) v[i] = 1023 - v[i];  // câblés à l'envers : 8 rotatifs (pas Zoom) et joystick X
   }
   joy.setXAxis(v[0]);   joy.setYAxis(v[1]);   joy.setZAxis(v[2]);
   joy.setRxAxis(v[3]);  joy.setRyAxis(v[4]);  joy.setRzAxis(v[5]);
