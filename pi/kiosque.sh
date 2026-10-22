@@ -4,6 +4,18 @@
 PAGE='?pi'
 cd "$(dirname "$0")/.." || exit 1
 
+# Courant revenu avec ALLUMAGE sur – : on se rééteint. La touche « power » de
+# gpio-shutdown (active_low=0) est tenue tant que le contact est ouvert.
+python3 - <<'EOF' && exec /sbin/shutdown -h now
+import fcntl, glob
+for n in glob.glob('/sys/class/input/event*/device/name'):
+    if 'shutdown' in open(n).read():
+        keys = bytearray(96)
+        fcntl.ioctl(open('/dev/input/' + n.split('/')[4]), 0x80604518, keys)  # EVIOCGKEY(96)
+        exit(0 if keys[116 // 8] >> (116 % 8) & 1 else 1)                      # KEY_POWER
+exit(1)
+EOF
+
 pgrep -f '^python3 pi/service.py' >/dev/null ||
   setsid python3 pi/service.py > /tmp/service.log 2>&1 < /dev/null &
 for i in $(seq 30); do
