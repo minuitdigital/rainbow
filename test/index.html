@@ -36,6 +36,7 @@ const P = [
   ['POÈME', 's', 960, 60, 'poeme'], ['ALLUMAGE', 's', 960, 510, 'allumage'],
 ];
 const TEMPS = ['hier', 'maint.', 'demain'];
+const BRUT = new URLSearchParams(location.search).has('brut');   // « &brut » : les axes tels que Chromium les donne
 const NS = 'http://www.w3.org/2000/svg';
 const g = document.getElementById('g');
 function el(t, a) {
@@ -100,7 +101,8 @@ function boucle() {
   const pad = [...navigator.getGamepads()].find(x => x);
   document.getElementById('etat').textContent =
     'manette : ' + (pad ? 'oui' : 'non — tournez un bouton, Chrome ne la déclare qu\'après une action')
-    + ' · service GPIO : ' + (piOk ? 'oui' : 'non');
+    + ' · service GPIO : ' + (piOk ? 'oui' : 'non')
+    + (pad && BRUT ? ' · axes : ' + pad.axes.map((a, i) => i + '=' + a.toFixed(2)).join(' ') : '');
   for (const o of items) {
     if (o.arc) {
       let v = null;
