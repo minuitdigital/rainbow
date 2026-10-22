@@ -591,6 +591,10 @@ const STORE_KEY = 'estimateur.reglages.3';
 
 // PIXEL et PALETTE : les cases de l'admin, et seules valeurs admises.
 const PIX = [1, 4, 6, 8, 12];
+// Le Pi (« ?pi ») reçoit une fois les réglages légers (REPRISE §4) ; ensuite
+// l'admin les change librement. Le drapeau survit aux enregistrements.
+const PI_LIGHT = { rig: 'mini', gls: 0.85, glsMove: 0.6, pix: 6, coasts: 'aucune' };
+let piDone = false;
 const PAL = [0, 6, 8, 12];
 const COASTS = ['aucune', 'encre', 'shader'];
 
@@ -602,7 +606,7 @@ function saveKnobs() {
                 temps: Object.keys(TEMPS).find(k => byId('t-' + k).checked),
                 rig: view.rig, clock: clockWanted, plis: folded,
                 cut: view.cut, gls: view.gls, glsMove: view.glsMove,
-                pix: view.pix, pal: view.pal, coasts: view.coasts };
+                pix: view.pix, pal: view.pal, coasts: view.coasts, pi: piDone };
     for (const id of Object.keys(KNOBS)) o[id] = +byId(id).value;
     localStorage.setItem(STORE_KEY, JSON.stringify(o));
   } catch (e) { /* sans mémoire, la page marche quand même */ }
@@ -611,6 +615,11 @@ function saveKnobs() {
 function loadKnobs() {
   let o = null;
   try { o = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) { /* tant pis */ }
+  piDone = !!(o && o.pi);
+  if (!piDone && new URLSearchParams(location.search).has('pi')) {
+    o = Object.assign(o || {}, PI_LIGHT);
+    piDone = true;
+  }
   if (!o) return;
   for (const id of Object.keys(KNOBS))
     if (typeof o[id] === 'number') byId(id).value = bound(o[id], 0, 100);
