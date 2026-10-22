@@ -33,9 +33,9 @@ except ImportError:
 # commande -> numéro GPIO (BCM). Poussoirs : un message à l'appui, et
 # {'k': 'relache'} au relâché (pour /test/ ; plaque.relache n'existe pas).
 # Interrupteurs : un message à chaque changement, et l'état à la connexion.
-# allumage (GPIO 3) : lu tant que l'overlay gpio-shutdown ne le tient pas.
+# ALLUMAGE (GPIO 3) n'est pas lu ici : l'overlay gpio-shutdown le tient (config.txt).
 PUSH = {'arcEnCiel': 5, 'teleportation': 6, 'repere': 13, 'maison': 19}
-SWITCH = {'couloir': 17, 'couleur': 27, 'interface': 22, 'formule': 23, 'poeme': 24, 'allumage': 3}
+SWITCH = {'couloir': 17, 'couleur': 27, 'interface': 22, 'formule': 23, 'poeme': 24}
 
 clients = set()
 lock = threading.Lock()
