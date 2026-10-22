@@ -181,7 +181,7 @@ if (!initMap(glCv, invalidate, noteLoad)) {
 
   // La plaque, appelable par le Pi : window.plaque.maison(), .meteo(40)…
   window.plaque = plaque;
-  initPi();
+  initPi(invalidate);
   window.addEventListener('resize', resize);
   resize();
 

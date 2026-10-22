@@ -8,7 +8,7 @@
 
 import { view, beliefWeights, faceNorth, centre, centreVec, sx, sy,
          simDate, drift, driftChance, liveReperes,
-         beat, beatIdle, pixelCount, loadState } from './view.js';
+         beat, beatIdle, pixelCount, loadState, ZMAX, setZoomTarget } from './view.js';
 import { GAIN, SUN_MAX, SPILL_DEG, openFor, nearestLegend,
          LEGEND_POINTS, solar } from './sky.js';
 import { flatten, matT, geoVec } from './projection.js';
@@ -165,6 +165,10 @@ const KNOBS = {
   // ICÔNES : la taille de toutes les icônes de la carte.
   's-icon':     { fmt: t => Math.round(t * 100) + ' %',
                   apply: t => { view.look.icon = tween(9, 28, t); repaint(); } },
+
+  // ZOOM : de la carte entière (×1) à ×32, en progression géométrique.
+  's-zoom':     { fmt: t => '×' + Math.pow(ZMAX, t).toFixed(1),
+                  apply: t => { view.anchor = null; setZoomTarget(Math.pow(ZMAX, t)); repaint(); } },
 
   // LE POINT DU RÉTICULE. Zéro : à l'encre (usine). Au-delà, une teinte
   // franche, pour rester visible par-dessus une tache irisée.
@@ -984,7 +988,7 @@ function closeSrc() {
 // Les commandes gravées (TEXTES.md §9). Une entrée par commande, pour la
 // page comme pour le Pi ; chacune pose l'état et remet le curseur.
 //
-//     boutons rotatifs 0–100 %     plaque.meteo(55), plaque.icones(32)…
+//     boutons rotatifs 0–100 %     plaque.meteo(55), plaque.icones(32), plaque.zoom(0)…
 //     interrupteurs                plaque.couloir(true)
 //     boutons poussoirs            plaque.maison()
 //     Temps                        plaque.temps('hier' | 'maintenant' | 'demain')
@@ -1115,6 +1119,7 @@ export const plaque = {
   irisation:      p => turnKnob('s-franges', p),
   sensibilite:    p => turnKnob('s-seuil', p),
   icones:         p => turnKnob('s-icon', p),
+  zoom:           p => turnKnob('s-zoom', p),
   couloir:        on => { byId('s-porte').checked = !!on; showPorte(); },
   couleur:        on => { byId('s-couleur').checked = !!on; showCouleur(); }
 };
