@@ -9,7 +9,9 @@ Joystick_ joy(0x03, JOYSTICK_TYPE_JOYSTICK, 3, 0,
               true, true, true, true, true);        // Rudder Throttle Accelerator Brake Steering
 
 // Ordre des axes : X Y Z Rx Ry Rz Rudder Throttle Accelerator Brake Steering
-const uint8_t PINS[11] = {A0, A1, A2, A4, A5, A6, A7, A8, A9, A10, A11};
+// Câblage réel du tableau (22/10), pas celui de MATERIEL §7 : irisation A8,
+// sensibilité A6, icônes A7, zoom A10, joystick X A11, joystick Y A9.
+const uint8_t PINS[11] = {A0, A1, A2, A4, A5, A8, A6, A7, A10, A11, A9};
 //                        météo légendes chance terre mer irisation sensibilité icônes zoom joyX joyY
 
 void setup() {
@@ -21,6 +23,7 @@ void loop() {
   for (uint8_t i = 0; i < 11; i++) {
     analogRead(PINS[i]);                                         // lecture jetée : laisse le convertisseur se caler sur la source (inutile pour une broche libre)
     v[i] = analogRead(PINS[i]);                                  // 0..1023, plage par défaut
+    if (i < 9) v[i] = 1023 - v[i];  // les 9 rotatifs sont câblés à l'envers ; le joystick, non
   }
   joy.setXAxis(v[0]);   joy.setYAxis(v[1]);   joy.setZAxis(v[2]);
   joy.setRxAxis(v[3]);  joy.setRyAxis(v[4]);  joy.setRzAxis(v[5]);
@@ -28,7 +31,7 @@ void loop() {
   joy.setBrake(v[9]);   joy.setSteering(v[10]);
 
   analogRead(A3);                   // lecture jetée, comme ci-dessus
-  int t = analogRead(A3);           // Temps : 3 positions
+  int t = 1023 - analogRead(A3);    // Temps : 3 positions ; à l'envers comme les rotatifs
   joy.setButton(0, t < 341);
   joy.setButton(1, t >= 341 && t < 682);
   joy.setButton(2, t >= 682);
