@@ -75,8 +75,9 @@ def start_gpio():
         switches[name] = b  # garde la référence : sinon le ramasse-miettes la ferme
     for name, pin in SWITCH.items():
         b = Button(pin, pull_up=True, bounce_time=0.02)
-        b.when_pressed = lambda n=name: broadcast({'k': n, 'v': True})
-        b.when_released = lambda n=name: broadcast({'k': n, 'v': False})
+        # Câblés à l'envers sur le tableau (22/10) : contact fermé = sur –.
+        b.when_pressed = lambda n=name: broadcast({'k': n, 'v': False})
+        b.when_released = lambda n=name: broadcast({'k': n, 'v': True})
         switches[name] = b
 
 
@@ -122,7 +123,7 @@ class Handler(serve.Handler):
             try:
                 for name in SWITCH:
                     if name in switches:
-                        send(self.wfile, {'k': name, 'v': switches[name].is_pressed})
+                        send(self.wfile, {'k': name, 'v': not switches[name].is_pressed})
             except OSError:
                 return
             clients.add(self.wfile)
