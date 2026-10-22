@@ -630,6 +630,20 @@ body.bare .rail { display: none; }
 }
 .plein:hover { opacity: 1; color: var(--ink); border-color: var(--ink); }
 
+/* La commande qu'on vient de toucher sur le tableau (src/pi.js), à côté du plein écran. */
+.touche {
+  position: fixed;
+  z-index: 3;
+  left: calc(42px + env(safe-area-inset-left, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  color: var(--ink-soft);
+  letter-spacing: .05em;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .4s;
+}
+.touche.on { opacity: 1; transition: none; }
+
 /* Le poème, par-dessus la carte. Il ne prend pas la main. */
 .poeme {
   position: fixed;
