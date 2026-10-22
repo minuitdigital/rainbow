@@ -36,9 +36,9 @@ except ImportError:
 # ALLUMAGE (GPIO 3) n'est pas lu ici : l'overlay gpio-shutdown le tient (config.txt).
 PUSH = {'arcEnCiel': 5, 'teleportation': 6, 'repere': 13, 'maison': 19}
 SWITCH = {'couloir': 17, 'couleur': 27, 'interface': 22, 'formule': 23, 'poeme': 24}
-# LED du tableau, en PWM : la page envoie /led?0..1 (l'indice sous le piéton).
-# 3,3 kΩ en série : 20 % ≈ 0,04 mA, 100 % ≈ 0,2 mA (mesuré le 22/10).
-LED, LED_MIN = 18, 0.2
+# LED du tableau, en PWM, 470 Ω en série : la page envoie /led?0..1
+# (0 = papier sous le piéton, éteinte ; 1 = le plus fort de la Terre).
+LED = 18
 led = None
 
 clients = set()
@@ -73,7 +73,7 @@ def start_gpio():
     if Button is None:
         print('  gpiozero absent : pas de GPIO')
         return
-    led = PWMLED(LED, initial_value=LED_MIN)
+    led = PWMLED(LED)
     for name, pin in PUSH.items():
         b = Button(pin, pull_up=True, bounce_time=0.02)
         b.when_pressed = lambda n=name: broadcast({'k': n})
@@ -116,7 +116,7 @@ class Handler(serve.Handler):
             except ValueError:
                 return self.send_error(400)
             if led is not None:
-                led.value = LED_MIN + (1 - LED_MIN) * v
+                led.value = v
             self.send_response(204)
             return serve.http.server.SimpleHTTPRequestHandler.end_headers(self)
         if path != '/ws':

@@ -1056,7 +1056,28 @@ function walkTo(lon, lat) {
 function arcEnCiel() {
   const best = brightest(solar(simDate()), drift(), driftChance(),
                          beliefWeights(), centreVec());
+  bestV = best.v; bestAt = performance.now();
   if (best.v > 0) walkTo(best.lon, best.lat);
+}
+
+// LA LED du tableau (src/pi.js) : ce que la carte montre sous le piéton,
+// rapporté au point le plus fort de la Terre. Papier = éteinte ;
+// après ARC-EN-CIEL = pleine. Même passage que le shader : force, puis seuil.
+let bestV = 0, bestAt = -Infinity;
+const seen = x => {
+  const fv = Math.min(1, Math.pow(Math.max(0, x), 1.15) * 0.98 * view.look.tache);
+  const s = view.look.seuil;
+  if (s <= 0.001) return fv;
+  return fv < s ? 0 : 0.30 + 0.70 * Math.min(1, (fv - s) / Math.max(1 - s, 1e-3));
+};
+export function ledLevel() {
+  // shortcut: le plus fort de la Terre relu toutes les 60 s (~40 ms le calcul), pas à chaque réglage.
+  if (performance.now() - bestAt > 60000) {
+    bestV = brightest(solar(simDate()), drift(), driftChance(), beliefWeights(), centreVec()).v;
+    bestAt = performance.now();
+  }
+  const top = seen(bestV);
+  return top > 0 ? Math.min(1, seen(hereIdx) / top) : 0;
 }
 
 // TÉLÉPORTATION. Un haut lieu, au hasard — jamais celui où l'on est déjà.
@@ -1138,7 +1159,7 @@ export const plaque = {
 const HHMM = n => String(n).padStart(2, '0');
 
 /** L'indice d'arc-en-ciel sous le piéton, 0 – 1 (« h-idx »). */
-export let hereIdx = 0;
+let hereIdx = 0;
 
 /** À chaque image. `c` : le réticule ; `sun` : le soleil de l'instant simulé. */
 export function refreshPanel(sun, c, now) {
