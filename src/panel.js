@@ -1137,13 +1137,21 @@ export const plaque = {
 
 const HHMM = n => String(n).padStart(2, '0');
 
+/** L'indice d'arc-en-ciel sous le piéton, 0 – 1 (« h-idx »). */
+export let hereIdx = 0;
+
 /** À chaque image. `c` : le réticule ; `sun` : le soleil de l'instant simulé. */
 export function refreshPanel(sun, c, now) {
-  if (bare) return;
   const [lon, lat] = c;
   recall(lon, lat);
   const last = past[past.length - 1];
   const wt = beliefWeights();
+  // Même formule que le shader, au réticule (flaque = 1). Calculé même sans
+  // panneau : la LED du tableau la suit (src/pi.js).
+  const gC = Math.max(last.gate, last.spill * wt.c);
+  hereIdx = Math.min(1, ((last.m * wt.m + last.l * wt.l) * last.gate
+                      + last.c * wt.c * gC) * GAIN);
+  if (bare) return;
 
   byId('f-pos').textContent =
     `${Math.abs(lat).toFixed(1)}° ${lat >= 0 ? 'N' : 'S'}  ` +
@@ -1163,11 +1171,7 @@ export function refreshPanel(sun, c, now) {
                    : (last.h <= 0.4 ? 'nuit' : 'trop haut') +
                      (leak ? ' · la chance passe' : ''));
 
-  // Même formule que le shader, au réticule (flaque = 1).
-  const gC = Math.max(last.gate, last.spill * wt.c);
-  const idx = Math.min(1, ((last.m * wt.m + last.l * wt.l) * last.gate
-                        + last.c * wt.c * gC) * GAIN);
-  byId('h-idx').textContent = idx.toFixed(2);
+  byId('h-idx').textContent = hereIdx.toFixed(2);
 
   const near = nearestLegend(lon, lat);
   showSaid(near);

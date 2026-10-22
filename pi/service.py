@@ -26,9 +26,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 import serve  # noqa: E402
 
 try:
-    from gpiozero import Button
+    from gpiozero import Button, PWMLED
 except ImportError:
-    Button = None
+    Button = PWMLED = None
 
 # commande -> numéro GPIO (BCM). Poussoirs : un message à l'appui, et
 # {'k': 'relache'} au relâché (pour /test/ ; plaque.relache n'existe pas).
@@ -36,6 +36,10 @@ except ImportError:
 # ALLUMAGE (GPIO 3) n'est pas lu ici : l'overlay gpio-shutdown le tient (config.txt).
 PUSH = {'arcEnCiel': 5, 'teleportation': 6, 'repere': 13, 'maison': 19}
 SWITCH = {'couloir': 17, 'couleur': 27, 'interface': 22, 'formule': 23, 'poeme': 24}
+# LED du tableau, en PWM : la page envoie /led?0..1 (l'indice sous le piéton).
+# 3,3 kΩ en série : 20 % ≈ 0,04 mA, 100 % ≈ 0,2 mA (mesuré le 22/10).
+LED, LED_MIN = 18, 0.2
+led = None
 
 clients = set()
 lock = threading.Lock()
@@ -65,9 +69,11 @@ def broadcast(msg):
 
 
 def start_gpio():
+    global led
     if Button is None:
         print('  gpiozero absent : pas de GPIO')
         return
+    led = PWMLED(LED, initial_value=LED_MIN)
     for name, pin in PUSH.items():
         b = Button(pin, pull_up=True, bounce_time=0.02)
         b.when_pressed = lambda n=name: broadcast({'k': n})
@@ -103,7 +109,17 @@ def no_dead_zone():
 class Handler(serve.Handler):
 
     def do_GET(self):
-        if self.path.split('?')[0] != '/ws':
+        path, _, query = self.path.partition('?')
+        if path == '/led':
+            try:
+                v = min(1.0, max(0.0, float(query)))
+            except ValueError:
+                return self.send_error(400)
+            if led is not None:
+                led.value = LED_MIN + (1 - LED_MIN) * v
+            self.send_response(204)
+            return serve.http.server.SimpleHTTPRequestHandler.end_headers(self)
+        if path != '/ws':
             return super().do_GET()
         key = self.headers.get('Sec-WebSocket-Key')
         if not key:

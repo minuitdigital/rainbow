@@ -1,7 +1,7 @@
 // Le Pi parle à la page : le service (pi/service.py) pousse chaque appui et
 // chaque interrupteur par WebSocket ; la Leonardo, en manette, porte les
 // rotatifs et le joystick. Actif seulement avec « ?pi » dans l'adresse.
-import { plaque } from './panel.js';
+import { plaque, hereIdx } from './panel.js';
 import { nudge } from './view.js';
 
 // Axe n de la manette = PINS[n] de arduino/leonardo/leonardo.ino.
@@ -44,6 +44,14 @@ export function initPi(invalidate) {
     ws.onclose = () => setTimeout(open, 2000);
   };
   open();
+
+  // La LED (GPIO 18) suit l'indice sous le piéton ; le service fixe la plage.
+  let led = -1;
+  setInterval(() => {
+    if (Math.abs(hereIdx - led) < 0.01) return;
+    led = hereIdx;
+    fetch('/led?' + led.toFixed(3)).catch(() => {});
+  }, 250);
 
   const sent = {};       // dernière valeur passée à la plaque, par commande
   let last = performance.now();
