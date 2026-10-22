@@ -23,7 +23,7 @@ void loop() {
   for (uint8_t i = 0; i < 11; i++) {
     analogRead(PINS[i]);                                         // lecture jetée : laisse le convertisseur se caler sur la source (inutile pour une broche libre)
     v[i] = analogRead(PINS[i]);                                  // 0..1023, plage par défaut
-    if (i < 8 || i == 9) v[i] = 1023 - v[i];  // câblés à l'envers : 8 rotatifs (pas Zoom) et joystick X
+    if (i < 10) v[i] = 1023 - v[i];  // câblés à l'envers : les 9 rotatifs et joystick X
   }
   joy.setXAxis(v[0]);   joy.setYAxis(v[1]);   joy.setZAxis(v[2]);
   joy.setRxAxis(v[3]);  joy.setRyAxis(v[4]);  joy.setRzAxis(v[5]);
