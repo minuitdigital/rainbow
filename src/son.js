@@ -31,7 +31,7 @@ const freq = i => CENTRE * Math.pow(2, Math.log2(F0[i] / CENTRE) * etire());
 export const flashs = [0, 0, 0, 0, 0, 0];
 
 let ctx = null, level = () => 0, nodes = null, blanc = null, transpo = 1;
-let vitesse = 0, lent = 0, kLisse = 0, tPrec = 0, wake = () => {};
+let vitesse = 0, kLisse = 0, kPrec = 0, tEntree = -100, tPrec = 0, wake = () => {};
 const niveauxArc = [0, 0, 0, 0, 0, 0];   // ce que chantent les bandes, 0 – 1
 
 function source(buf) {
@@ -301,23 +301,27 @@ const SIGNAL = t => {
   allumer([5, 5, 5, 5, 5, 5], t + 0.1, 0.18);
 };
 
-// Les seuils : son, niveau, temps de garde (s). POUR-ORCA §8.
-// `transpose` : le même geste ne sonne jamais pareil (× 0,89 · 1 · 1 · 1,12 · 1,26).
-// Glissade et Pépiement, retenus tels quels, ne sont pas transposés.
+// Les dix sons tirés au sort, dans l'ordre de la maquette (ENERGIE).
+const ENERGIE = [THEREMINE, ONDES, ANNEAU, BANDE_ENVERS, ECHO, SINUS, BATTEMENTS, BIPS, FILTRE, SIGNAL];
+
+// Les seuils : niveau et temps de garde (s) ; le son est tiré au sort, jamais le
+// même que le précédent, et transposé au hasard (× 0,89 · 1 · 1 · 1,12 · 1,26).
+// Glissade et Pépiement sont fixes, et ne sont pas transposés. POUR-ORCA §8.
 const SEUILS = {
-  entrer:   { son: THEREMINE,    niveau: 0.55, garde: 1.5, transpose: true },
-  fort:     { son: PEPIEMENT,    niveau: 1,    garde: 4 },
-  sortir:   { son: BANDE_ENVERS, niveau: 0.5,  garde: 1.5, transpose: true },
-  lieu:     { son: GLISSADE,     niveau: 1,    garde: 0 },
-  cote:     { son: ONDES,        niveau: 0.4,  garde: 1.2, transpose: true },
-  demitour: { son: ANNEAU,       niveau: 0.6,  garde: 1.5, transpose: true },
-  vite:     { son: FILTRE,       niveau: 0.5,  garde: 3, transpose: true },
-  arret:    { son: BATTEMENTS,   niveau: 0.6,  garde: 2, transpose: true },
-  bord:     { son: ECHO,         niveau: 0.6,  garde: 2, transpose: true },
-  tour:     { son: SIGNAL,       niveau: 0.8,  garde: 2, transpose: true },
-  tele:     { son: BIPS,         niveau: 0.9,  garde: 0, transpose: true },
-  arc:      { son: SINUS,        niveau: 0.9,  garde: 0, transpose: true },
+  entrer:   { niveau: 0.55, garde: 1.5 },
+  fort:     { niveau: 1,    garde: 4, fixe: PEPIEMENT },
+  sortir:   { niveau: 0.5,  garde: 1.5 },
+  lieu:     { niveau: 1,    garde: 0, fixe: GLISSADE },
+  cote:     { niveau: 0.4,  garde: 1.2 },
+  demitour: { niveau: 0.6,  garde: 1.5 },
+  vite:     { niveau: 0.5,  garde: 3 },
+  arret:    { niveau: 0.6,  garde: 2 },
+  bord:     { niveau: 0.6,  garde: 2 },
+  tour:     { niveau: 0.8,  garde: 2 },
+  tele:     { niveau: 0.9,  garde: 0 },
+  arc:      { niveau: 0.9,  garde: 0 },
 };
+let precedent = -1;
 const dernier = {};
 
 /** Un seuil franchi. Son pas démarré, ou coupé : rien. */
@@ -331,8 +335,14 @@ export function evenement(id) {
   bus.connect(nodes.eclatBus);
   const avant = nodes.eclatBus;
   nodes.eclatBus = bus;
-  transpo = sn.transpose ? [0.89, 1, 1, 1.12, 1.26][Math.floor(Math.random() * 5)] : 1;
-  try { sn.son(ctx.currentTime + 0.03); }
+  let jouer = sn.fixe;
+  if (!jouer) {
+    let i;
+    do { i = Math.floor(Math.random() * ENERGIE.length); } while (i === precedent);
+    precedent = i; jouer = ENERGIE[i];
+    transpo = [0.89, 1, 1, 1.12, 1.26][Math.floor(Math.random() * 5)];
+  }
+  try { jouer(ctx.currentTime + 0.03); }
   finally { nodes.eclatBus = avant; transpo = 1; }
 }
 
@@ -401,13 +411,17 @@ function tick() {
   const saut = brut > 3;                      // un saut (TÉLÉPORTATION), pas une marche
   const v = saut ? 0 : Math.min(1, brut);
   vitesse = lisse(vitesse, v, dt, 0.06, 0.35);
-  lent = lisse(lent, vitesse, dt, 0.15, 1.2);
-  kLisse = lisse(kLisse, level(), dt, 0.12, 0.12);
+  const k = level();
+  kLisse = lisse(kLisse, k, dt, 0.12, 0.12);
+  // L'ouverture : elle part à l'entrée dans une tache, qu'on y reste ou non.
+  if (k > 0 && kPrec === 0) tEntree = t;
+  kPrec = k;
+  const u = t - tEntree;
+  const ouverture = u < 0.4 ? u / 0.4 : u < 1.2 ? 1 : Math.exp(-(u - 1.2) / 0.9);
   seuils(dt, saut);
 
-  // À l'arrêt sur une tache, les notes restent faibles (35 %) et remontent avec le mouvement.
   const souffle = 0.3 * vitesse * (1 - 0.75 * kLisse);
-  const notes = kLisse * (0.35 + 0.65 * lent);
+  const notes = kLisse * ouverture;
   const Q = 3 * Math.pow(400 / 3, Math.pow(kLisse, 0.6));
   const respire = 0.85 + 0.15 * Math.sin(t * 0.9) * Math.sin(t * 0.37 + 1);
   const now = ctx.currentTime, nyq = ctx.sampleRate / 2;

@@ -189,17 +189,6 @@
         </div>
       </div>
 
-      <!-- SON. Le volume général (src/son.js). -->
-      <div class="sub">
-        <div class="head"><span>SON</span></div>
-        <div class="dials">
-          <div class="dial">
-            <label for="s-son">Volume</label>
-            <input id="s-son" type="range" min="0" max="200" value="100"><output id="o-son">100 %</output>
-          </div>
-        </div>
-      </div>
-
       <!-- GRAPHISME. Quatre boutons rotatifs, deux interrupteurs. -->
       <div class="sub">
         <div class="head"><span>GRAPHISME</span></div>
@@ -354,6 +343,26 @@
         <div class="body" id="corps-dat">
 
   <!-- ============================================ LE TEMPS -->
+        <!-- LE SON (src/son.js) : admin seulement, rien sur la plaque. Volume : 100 %
+             = gain 2, jusqu'à 200 %. Écart : l'étirement des notes (0,6 d'origine). -->
+        <div class="sub">
+          <div class="head"><span>le son</span></div>
+          <div class="dials">
+            <div class="dial">
+              <label for="s-son">Volume</label>
+              <input id="s-son" type="range" min="0" max="200" value="100"><output id="o-son">100 %</output>
+            </div>
+            <div class="dial">
+              <label for="s-ecart">Écart</label>
+              <input id="s-ecart" type="range" min="0" max="100" value="60"><output id="o-ecart">60 %</output>
+            </div>
+            <div class="dial">
+              <label for="s-muet">Muet</label>
+              <input id="s-muet" type="checkbox"><output id="o-muet">OFF</output>
+            </div>
+          </div>
+        </div>
+
         <div class="sub">
           <div class="head quiet">
             <span>le temps</span>

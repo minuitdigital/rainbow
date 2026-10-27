@@ -1338,12 +1338,20 @@ export function initPanel(invalidate, resize, shaderProfile) {
   byId('p-formule').addEventListener('change', e => plaque.formule(e.target.checked));
   byId('formule-ecran').addEventListener('click', () => plaque.formule(false));
   byId('p-poeme').addEventListener('change', e => plaque.poeme(e.target.checked));
-  // Le volume : 100 % = l'état d'origine sur le web (gain 2), de 0 à 200 %. Le tableau garde le sien (0,6).
+  // LE SON, admin : volume (100 % = gain 2, de 0 à 200 %), écart, muet. Le tableau garde son volume (0,6).
   const volume = () => {
     reglage.volume = byId('s-son').value / 50;
     byId('o-son').textContent = byId('s-son').value + ' %';
   };
   byId('s-son').addEventListener('input', volume);
+  byId('s-ecart').addEventListener('input', e => {
+    reglage.ecart = e.target.value / 100;
+    byId('o-ecart').textContent = e.target.value + ' %';
+  });
+  byId('s-muet').addEventListener('change', e => {
+    reglage.muet = e.target.checked;
+    byId('o-muet').textContent = reglage.muet ? 'ON' : 'OFF';
+  });
   if (!q.has('pi')) volume();
   byId('p-arc').addEventListener('click', plaque.arcEnCiel);
   byId('p-repere').addEventListener('click', plaque.repere);

@@ -308,6 +308,36 @@ export const setZoomTarget = z => {
   view.zoomTarget = Math.max(1, Math.min(ZMAX, z));
 };
 
+// LE NORD. La carte tourne librement : au bout d'un moment, elle est de
+// travers. Une fois au repos, elle se redresse d'elle-même, le point visé
+// restant au centre (on ne fait tourner la carte que autour de lui).
+const LEVEL_WAIT_MS = 1500, LEVEL_RATE = 3, LEVEL_POLE = 85 * DEG;
+let calmSince = 0, left = null;
+
+/** 2 : on redresse ; 1 : au repos, on attend ; 0 : rien à faire. */
+export function levelNorth(dt, now) {
+  const R = view.R;
+  if (view.dragging || view.anchor || Math.abs(view.spin.rate) > 0.02) { left = null; return 0; }
+  // Tout ce qui a bougé R depuis la dernière image, ce n'est pas nous.
+  if (!left || left.some((v, i) => v !== R[i])) { calmSince = now; left = Float32Array.from(R); }
+  const a = Math.atan2(R[1], R[0]), sb = R[2], cb = Math.sqrt(1 - sb * sb);
+  if (Math.abs(Math.asin(clamp1(sb))) > LEVEL_POLE) return 0;   // au pôle, pas de nord
+  // Le haut de l'écran (ligne 3 de R) contre le nord du lieu, dans le plan tangent.
+  const e = [-Math.sin(a), Math.cos(a), 0], n = [-sb * Math.cos(a), -sb * Math.sin(a), cb];
+  const dot = (i, v) => R[i] * v[0] + R[i + 1] * v[1] + R[i + 2] * v[2];
+  const th = Math.atan2(dot(6, e), dot(6, n));
+  if (Math.abs(th) < 0.002) return 0;
+  if (now - calmSince < LEVEL_WAIT_MS) return 1;
+  const d = th * (1 - Math.exp(-dt * LEVEL_RATE)), c = Math.cos(d), sn = Math.sin(d);
+  for (let k = 0; k < 3; k++) {
+    const r = R[3 + k], u = R[6 + k];
+    R[3 + k] = r * c + u * sn;
+    R[6 + k] = u * c - r * sn;
+  }
+  left = Float32Array.from(R);
+  return 2;
+}
+
 /** L'élan qui reste après le glissé. Rend true tant qu'il faut redessiner. */
 export function coast(dt) {
   const s = view.spin;

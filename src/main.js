@@ -6,7 +6,7 @@
 // =========================================================================
 
 import { view, measure, centre, centreVec, coast, anchorTo, simDate, elapsedHours,
-         advanceClock, stride, drift, driftChance, beliefWeights,
+         advanceClock, stride, levelNorth, drift, driftChance, beliefWeights,
          beatFrame, rig, slotNow, wxOn, noteLoad } from './view.js';
 import { initWeather, keepFresh } from './weather.js';
 import { solar } from './sky.js';
@@ -98,6 +98,9 @@ function frame(now) {
   }
 
   if (coast(dt)) animating = true;
+  // Le nord se remet en haut une fois la carte au repos ; en attendant, on revient la voir.
+  const lv = levelNorth(dt, now);
+  if (lv === 2) animating = true; else if (lv === 1) setTimeout(invalidate, 400);
 
   // La foulée se mesure APRÈS toutes les rotations : elle lit le
   // déplacement, elle ne le décide pas.
