@@ -17,9 +17,12 @@
   --body-bg:   235, 237, 240;
 
   /* Les trois parts de la croyance sont des densités d'encre, pas des couleurs. */
-  --meteo:     #3b424b;      /* pilotée */
-  --legende:   #828a94;      /* pilotée */
-  --chance:    #c3c9d1;      /* pilotée */
+  /* Les couleurs ont le sens de la formule : soleil rouge, météo orange,
+     légendes jaune, chance vert (mêmes aplats que l'écran de la formule). */
+  --soleil:    #ff5a4e;
+  --meteo:     #ff9f1c;
+  --legende:   #ffd60a;
+  --chance:    #2ec27e;
 
   --mono: "Fragment Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
@@ -91,7 +94,7 @@ body.idle .rail { opacity: .62; }
 
 /* Chaque graphe a sa hauteur, écrite ici en clair. */
 #box-est { display: flex; flex-direction: column; }
-#p-sun { height: 92px; flex: none; }
+#p-sun { height: 130px; flex: none; }
 #p-idx { height: 118px; flex: none; }
 
 /* Replié, un registre n'est plus que son bandeau, sans filet. */
@@ -360,6 +363,23 @@ canvas.plot { display: block; width: 100%; margin-top: 5px; flex: 1; min-height:
 /* La note dit ce que le chiffre mesure, puis ce qui le fait monter. */
 #note-pourquoi { margin: 14px 0 0; color: var(--ink-soft); }
 
+/* Un réglage d'une couleur de la formule : un petit carré devant son nom. */
+.dial[data-c="meteo"]   { --c: var(--meteo); }
+.dial[data-c="legende"] { --c: var(--legende); }
+.dial[data-c="chance"]  { --c: var(--chance); }
+.dial[data-c] label::before {
+  content: ""; display: inline-block; width: 7px; height: 7px;
+  margin-right: 6px; background: var(--c);
+}
+
+/* Un interrupteur : l'étiquette est pleine, à l'encre, sur + ; vide sur –. */
+.dial:has(> input[type="checkbox"]) > label { justify-self: start; padding: 0 5px; margin-left: -5px; }
+.dial:has(> input[type="checkbox"]:checked) > label { background: var(--ink); color: var(--paper); }
+
+/* La légende de l'héliodon : S sur son aplat rouge. */
+.leg-s { margin: 0; padding: 2px 10px 0; font-size: 11px; color: var(--ink-soft); }
+.leg-s b { font-weight: normal; padding: 0 4px; background: var(--soleil); color: var(--ink); }
+
 /* La case à cocher : un carré plein, du même dessin que les poignées. */
 .dial input[type="checkbox"] {
   -webkit-appearance: none;
@@ -412,6 +432,8 @@ input[type="range"]::-moz-range-thumb {
 
 /* --- les hauts lieux */
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+#chips button { background: var(--legende); color: var(--ink); }
+#chips button[aria-pressed="true"] { color: var(--paper); background: var(--ink); }
 .chips button {
   font: inherit;
   letter-spacing: .05em;
@@ -590,6 +612,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* Les labels gravés sont plus longs (« Contraste Terre ») : colonne élargie. */
 .plaque .dial { grid-template-columns: 112px 1fr 44px; }
+.plaque .dial.wide { grid-template-columns: 112px 1fr 74px; }
 /* Temps et ses trois positions : le libellé prend sa largeur, pas plus. */
 .plaque .choice > span { width: auto; }
 
@@ -646,6 +669,31 @@ body.bare .rail { display: none; }
 }
 .touche.on { opacity: 1; transition: none; }
 
+/* Sur le tableau (?pi), pas de souris à l'écran. */
+html.pi, html.pi * { cursor: none !important; }
+/* Formule ouverte : la carte passe en noir et blanc. */
+html.formule canvas { filter: grayscale(1); }
+
+/* L'écran de la formule : un registre de la page, centré, deux tiers de la
+   largeur, la carte (en noir et blanc, plus bas) visible tout autour. */
+.fecran { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; }
+.fbox { width: 66%; max-width: 760px; }
+.fx { text-align: center; padding: 30px 8px 24px; font-size: 26px; letter-spacing: 0;
+      white-space: nowrap; -webkit-text-stroke: .5px currentColor; }
+.fx sub { font-size: .5em; vertical-align: -.3em; color: var(--ink-soft); -webkit-text-stroke: 0; }
+.fx .t { padding: 0 4px; }
+.fx .op { color: var(--ink-soft); }
+.flegende { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 16px; padding: 12px 12px 14px;
+      border-top: 1px solid var(--rule); font-size: 12px; line-height: 1.35; color: #3b424b; }
+.flegende div { display: flex; gap: 8px; align-items: baseline; }
+.flegende b { font-weight: normal; color: var(--ink); padding: 0 4px; flex: none; }
+.fecran .rouge { background: #ff5a4e; } .fecran .orange { background: #ff9f1c; }
+.fecran .jaune { background: #ffd60a; } .fecran .vert { background: #2ec27e; }
+.fecran .bleu { background: #5b8cff; } .fecran .violet { background: #a46bf0; }
+@media (max-width: 900px) {
+  .fbox { width: 92%; } .fx { font-size: 3.4vw; } .flegende { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* Le poème, par-dessus la carte. Il ne prend pas la main. */
 .poeme {
   position: fixed;
@@ -675,7 +723,7 @@ body.bare .rail { display: none; }
           padding-top: calc(8px + env(safe-area-inset-top, 0px)); gap: 6px; }
   .body { padding: 5px 8px 7px; gap: 5px; }
   .head { padding: 2px 8px; }
-  #p-sun { height: 70px; }
+  #p-sun { height: 115px; }
   #p-idx { height: 88px; }
   .head { letter-spacing: .08em; }
   .reading { letter-spacing: 0; gap: 4px; flex-wrap: wrap; }

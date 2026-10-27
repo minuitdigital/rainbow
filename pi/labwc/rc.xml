@@ -7,4 +7,11 @@
       <action name="Execute" command="/sbin/shutdown -h now" />
     </keybind>
   </keyboard>
+  <windowRules>
+    <!-- Pas de souris sur le tableau : le curseur est caché à l'ouverture de Chromium. -->
+    <windowRule identifier="chromium*">
+      <action name="HideCursor" />
+      <action name="WarpCursor" x="-1" y="-1" />
+    </windowRule>
+  </windowRules>
 </openbox_config>

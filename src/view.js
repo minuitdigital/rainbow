@@ -35,7 +35,7 @@ export const view = {
   dragging: false,
 
   /** Vitesse du temps simulé. 0 fige tout. */
-  speed: 3981,
+  speed: 398,
 
   /**
    * LA CROYANCE. Trois poids bruts de 0 à 100, indépendants. Seul compte
@@ -408,9 +408,9 @@ const TURN_MIN_PX = 0.6;
  *  angle  le cap, pour la flèche
  *  moved  a-t-on déjà marché
  */
-export const gait = { phase: GAIT_REST, angle: 0, moved: false };
+export const gait = { phase: GAIT_REST, angle: 0, moved: false, speed: 0, at: 0, dx: 0, dy: 0 };
 
-let gaitPrev = null, gaitAim = 0;
+let gaitPrev = null, gaitAim = 0, gaitT = 0;
 
 /** Le plus court chemin d'un angle à l'autre : par la gauche ou la droite. */
 const shortest = a => { a = wrap(a); return a > Math.PI ? a - TAU : a; };
@@ -425,6 +425,12 @@ export function stride(dt) {
   const f = flatten(matT(view.R), geoVec(gaitPrev[0], gaitPrev[1]));
   const dx = view.W / 2 + view.ox - sx(f[0]), dy = view.H / 2 - sy(f[1]);
   gaitPrev = c;
+
+  // Vitesse réelle en px/s, pour le son (non bornée, et `at` dit si elle est fraîche).
+  const now = performance.now();
+  gait.speed = Math.hypot(dx, dy) / Math.max(1e-3, (now - gaitT) / 1000);
+  gait.dx = dx; gait.dy = dy;
+  gait.at = gaitT = now;
 
   const d = Math.min(GAIT_MAX, Math.hypot(dx, dy));
   const moving = d > 0.25;

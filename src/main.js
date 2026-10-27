@@ -13,8 +13,9 @@ import { solar } from './sky.js';
 import { scan } from './zones.js';
 import { initMap, paint, uploadWeather, profileShader } from './map.js';
 import { initInk, rescale, trace } from './ink.js';
-import { initPanel, refreshPanel, weatherArrived, plaque } from './panel.js';
+import { initPanel, refreshPanel, weatherArrived, plaque, ledLevel } from './panel.js';
 import { initPi } from './pi.js';
+import { initSon, arcActive } from './son.js';
 import { bind } from './chrome.js';
 
 const glCv = document.getElementById('gl');
@@ -115,8 +116,10 @@ function frame(now) {
 
   // Le piéton seul (il finit son pas après un glissé) ne redessine que
   // l'encre : refaire le shader pour ses jambes saccadait sur le Pi.
-  const legsOnly = walking && !dirty && !animating;
-  if (walking) animating = true;
+  // Le petit arc (son) ne redessine, lui aussi, que l'encre.
+  const sounding = arcActive();
+  const legsOnly = (walking || sounding) && !dirty && !animating;
+  if (walking || sounding) animating = true;
 
   if (legsOnly) trace(centre());
   else if (dirty || animating) {
@@ -178,10 +181,14 @@ if (!initMap(glCv, invalidate, noteLoad)) {
   // avant la première image. `resize` sert au changement de machine (dpr).
   initPanel(invalidate, resize, () => profileShader(glCv, solar(simDate()), slotNow()));
   bind(inkCv, invalidate);
+  // « ?interface » : les réglages de la plaque s'ouvrent d'emblée.
+  const pli = document.getElementById('pli-reg');
+  if (location.search.includes('interface') && pli.getAttribute('aria-expanded') === 'false') pli.click();
 
   // La plaque, appelable par le Pi : window.plaque.maison(), .meteo(40)…
   window.plaque = plaque;
   initPi(invalidate);
+  initSon(ledLevel, () => { if (!rafId) rafId = requestAnimationFrame(frame); });
   window.addEventListener('resize', resize);
   resize();
 

@@ -62,6 +62,7 @@
       <div class="sub short">
         <div class="head"><span>héliodon</span><em id="h-sun">—</em></div>
         <canvas class="plot" id="p-sun"></canvas>
+        <p class="leg-s"><b>S</b> — la porte, de 0° à 42°</p>
       </div>
 
     </div>
@@ -145,17 +146,17 @@
       <div class="sub">
         <div class="head"><span>ALGORITHME</span></div>
         <div class="dials">
-          <div class="dial">
+          <div class="dial" data-c="meteo">
             <label for="w-m">Météo</label>
             <input id="w-m" type="range" min="0" max="100" step="1" value="55" style="--fill: var(--meteo)">
             <output id="o-m">—</output>
           </div>
-          <div class="dial">
+          <div class="dial" data-c="legende">
             <label for="w-l">Légendes</label>
             <input id="w-l" type="range" min="0" max="100" step="1" value="20" style="--fill: var(--legende)">
             <output id="o-l">—</output>
           </div>
-          <div class="dial">
+          <div class="dial" data-c="chance">
             <label for="w-c">Chance</label>
             <input id="w-c" type="range" min="0" max="100" step="1" value="25" style="--fill: var(--chance)">
             <output id="o-c">—</output>
@@ -179,6 +180,22 @@
             <label id="l-hier"><input type="radio" name="temps" id="t-hier"><b>Hier</b></label>
             <label id="l-maintenant"><input type="radio" name="temps" id="t-maintenant" checked><b>Maintenant</b></label>
             <label id="l-demain"><input type="radio" name="temps" id="t-demain"><b>Demain</b></label>
+          </div>
+          <!-- Vitesse du temps inventé (horloge « dev ») ; éteinte avec la météo. -->
+          <div class="dial wide">
+            <label for="s-time" id="l-time">Vitesse</label>
+            <input id="s-time" type="range" min="0" max="100" value="52"><output id="o-time">&#8212;</output>
+          </div>
+        </div>
+      </div>
+
+      <!-- SON. Le volume général (src/son.js). -->
+      <div class="sub">
+        <div class="head"><span>SON</span></div>
+        <div class="dials">
+          <div class="dial">
+            <label for="s-son">Volume</label>
+            <input id="s-son" type="range" min="0" max="200" value="100"><output id="o-son">100 %</output>
           </div>
         </div>
       </div>
@@ -356,12 +373,6 @@
                       aria-label="Que fait ce r&#233;glage" title="Que fait ce r&#233;glage">?</button>
             </div>
 
-            <!-- Colonne de droite plus large : « ×100 000 » déborde de 44 px.
-                 La vitesse ne vaut qu'en dev ; en météo, c'est Temps qui dit quand. -->
-            <div class="dial wide">
-              <label for="s-time" id="l-time">vitesse</label>
-              <input id="s-time" type="range" min="0" max="100" value="72"><output id="o-time">&#8212;</output>
-            </div>
           </div>
         </div>
 
@@ -521,6 +532,26 @@
     </div>
   </section>
 
+</div>
+
+<!-- L'ÉCRAN DE LA FORMULE (interrupteur « Formule » = +) : un registre au
+     style de la page, centré, la carte visible autour. Mots : TEXTES §5.
+     Un clic le ferme. -->
+<div class="fecran" id="formule-ecran" hidden>
+  <div class="box fbox">
+    <div class="head"><span>formule</span><em>présence, de 0 à 1</em></div>
+    <div class="fx">P <span class="op">=</span> <span class="t rouge">S</span><span class="op">·(</span>w<sub>M</sub><span class="t orange">M</span> <span class="op">+</span> w<sub>L</sub><span class="t jaune">L</span><span class="op">)</span> <span class="op">+</span> w<sub>C</sub><span class="t vert">C</span><span class="t bleu">F</span><span class="op">·max(</span><span class="t rouge">S</span><span class="op">,</span> w<sub>C</sub><span class="t violet">&phi;</span><span class="op">)</span></div>
+    <div class="flegende">
+      <div><b>P</b>présence d'un arc-en-ciel</div>
+      <div><b class="rouge">S</b>soleil, de 0° à 42°</div>
+      <div><b class="orange">M</b>météo : pluie et trouée</div>
+      <div><b class="jaune">L</b>légende la plus proche</div>
+      <div><b class="vert">C</b>chance</div>
+      <div><b class="bleu">F</b>autour de nous</div>
+      <div><b class="violet">&phi;</b>chance sans soleil</div>
+      <div><b>w</b>variable algorithme</div>
+    </div>
+  </div>
 </div>
 
 <!-- LE POÈME, par-dessus la carte (interrupteur « Poème »). Texte

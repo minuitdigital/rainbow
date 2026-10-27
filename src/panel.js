@@ -14,6 +14,7 @@ import { GAIN, SUN_MAX, SPILL_DEG, openFor, nearestLegend,
 import { flatten, matT, geoVec } from './projection.js';
 import { past, recall, posOf, AGE_MAX } from './history.js';
 import { brightest } from './zones.js';
+import { evenement, reglage } from './son.js';
 import { weatherReach, weatherInfo } from './weather.js';
 import { gpuMs } from './map.js';
 import { measureRail } from './ink.js';
@@ -102,9 +103,6 @@ function setContrast(t) {
   root.style.setProperty('--ink-soft',  L(68, 40));
   root.style.setProperty('--ink-faint', L(82, 62));
   root.style.setProperty('--rule',      L(93, 74));
-  root.style.setProperty('--meteo',     L(58, 22));
-  root.style.setProperty('--legende',   L(76, 52));
-  root.style.setProperty('--chance',    L(90, 78));
 }
 
 /**
@@ -545,7 +543,6 @@ function openNote(key) {
   const n = NOTES[key];
   if (!n) return;
   noted = key;
-  showSwitch('p-formule', key === 'formule');
   byId('note-nom').textContent = n.nom;
   byId('note-quoi').textContent = n.quoi;
 
@@ -582,7 +579,6 @@ function openNote(key) {
 function closeNote() {
   byId('note-sheet').hidden = true;
   noted = null;
-  showSwitch('p-formule', false);
 }
 
 // Réglages mémorisés. Le stockage peut être refusé : tout est enveloppé.
@@ -739,7 +735,7 @@ function drawHeliodon() {
     g.fillRect(0, y0, plotW, yb(0.4 - SPILL_DEG) - y0);
   }
 
-  g.fillStyle = 'rgba(20,22,26,0.05)';
+  g.fillStyle = 'rgba(255,90,78,0.22)';           // la porte, en rouge pâle : le soleil
   g.fillRect(0, y42, plotW, y0 - y42);
 
   for (const age of [24, 6, 1]) {
@@ -1029,12 +1025,13 @@ function showInterface() {
   saveKnobs();
 }
 
-// FORMULE. La même feuille que le « ? » du registre ALGORITHME : ouvrir
-// l'un coche l'autre, fermer la feuille éteint l'interrupteur.
+// FORMULE. L'écran de la formule, par-dessus tout ; un clic le ferme et
+// éteint l'interrupteur. Le « ? » du registre ALGORITHME garde sa note.
 function showFormule() {
-  if (byId('p-formule').checked) openNote('formule');
-  else if (noted === 'formule') closeNote();
-  else showSwitch('p-formule', false);
+  const on = byId('p-formule').checked;
+  showSwitch('p-formule', on);
+  byId('formule-ecran').hidden = !on;
+  document.documentElement.classList.toggle('formule', on);
 }
 
 // POÈME. Par-dessus la carte ; le texte est dans index.html.
@@ -1058,6 +1055,7 @@ function arcEnCiel() {
                          beliefWeights(), centreVec());
   bestV = best.v; bestAt = performance.now();
   if (best.v > 0) walkTo(best.lon, best.lat);
+  evenement('arc');
 }
 
 // LA LED du tableau (src/pi.js) : ce que la carte montre sous le piéton,
@@ -1087,6 +1085,7 @@ function teleportation() {
   const pool = LEGEND_POINTS.filter(l => l !== here);
   const l = pool[Math.floor(Math.random() * pool.length)];
   walkTo(l.lon, l.lat);
+  evenement('tele');
 }
 
 // MAISON. Paris. Le nom de la ville n'est pas gravé.
@@ -1216,6 +1215,9 @@ export function initPanel(invalidate, resize, shaderProfile) {
   for (const [, bodyId, openByDefault] of FOLDS) folded[bodyId] = !openByDefault;
 
   loadKnobs();
+  // Sur le web, l'adresse décide : la carte seule, ou « ?interface » avec la plaque.
+  const q = new URLSearchParams(location.search);
+  if (!q.has('pi')) byId('p-interface').checked = q.has('interface');
   loadReperes();
   buildChips();
 
@@ -1224,7 +1226,7 @@ export function initPanel(invalidate, resize, shaderProfile) {
   byId('box-admin').hidden = !admin;
   // LÉGENDES et RÉGLAGES : admin seulement. La plaque passe toujours par `plaque`.
   byId('box-leg').hidden = !admin;
-  byId('box-reg').hidden = !admin;
+  byId('box-reg').hidden = !admin && !q.has('interface');   // la plaque à la souris
 
   for (const [id, key] of SHARES) {
     const input = byId(id);
@@ -1334,7 +1336,15 @@ export function initPanel(invalidate, resize, shaderProfile) {
   byId('s-porte').addEventListener('change', e => plaque.couloir(e.target.checked));
   byId('p-interface').addEventListener('change', e => plaque.interface(e.target.checked));
   byId('p-formule').addEventListener('change', e => plaque.formule(e.target.checked));
+  byId('formule-ecran').addEventListener('click', () => plaque.formule(false));
   byId('p-poeme').addEventListener('change', e => plaque.poeme(e.target.checked));
+  // Le volume : 100 % = l'état d'origine sur le web (gain 2), de 0 à 200 %. Le tableau garde le sien (0,6).
+  const volume = () => {
+    reglage.volume = byId('s-son').value / 50;
+    byId('o-son').textContent = byId('s-son').value + ' %';
+  };
+  byId('s-son').addEventListener('input', volume);
+  if (!q.has('pi')) volume();
   byId('p-arc').addEventListener('click', plaque.arcEnCiel);
   byId('p-repere').addEventListener('click', plaque.repere);
   byId('p-teleport').addEventListener('click', plaque.teleportation);

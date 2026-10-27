@@ -20,6 +20,7 @@ const SPEED = 700;       // px/s, joystick en butée
 
 export function initPi(invalidate) {
   if (!new URLSearchParams(location.search).has('pi')) return;
+  document.documentElement.classList.add('pi');
 
   const tag = document.body.appendChild(document.createElement('div'));
   tag.className = 'touche';

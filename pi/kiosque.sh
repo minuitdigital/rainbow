@@ -29,4 +29,5 @@ rm -f "$P"/Singleton*
 sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$P/Default/Preferences" 2>/dev/null
 
 exec chromium --kiosk --noerrdialogs --disable-infobars --no-first-run \
-  --password-store=basic --disable-features=Translate "http://localhost:8000/$PAGE"
+  --password-store=basic --disable-features=Translate \
+  --autoplay-policy=no-user-gesture-required "http://localhost:8000/$PAGE"

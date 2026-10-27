@@ -8,6 +8,7 @@
 // =========================================================================
 
 import { DEG, RAD, M, fy, fyp, clamp1, flatten, matT, geoVec, angDist } from './projection.js';
+import { arcLevel } from './son.js';
 import { view, scale, sx, sy, gait, liveReperes, coastWidth } from './view.js';
 import { zones } from './zones.js';
 import { CITY, tierAt, placeLine } from './ground.js';
@@ -608,8 +609,25 @@ function drawArrow(cx, cy, S) {
   ink.fill();
 }
 
+// LE PETIT ARC autour du point : six anneaux, rouge dehors, dont chacune
+// s'allume avec sa note (src/son.js). Il rend les notes lisibles.
+function drawArc(cx, cy, k) {
+  ink.lineWidth = 1.8 * k;
+  for (let i = 0; i < 6; i++) {
+    const a = arcLevel(i);
+    if (a < 0.01) continue;
+    ink.globalAlpha = a;
+    ink.strokeStyle = BANDS[i];
+    ink.beginPath();
+    ink.arc(cx, cy, (20 - i * 2.2) * k, 0, 6.2832);
+    ink.stroke();
+  }
+  ink.globalAlpha = 1;
+}
+
 function drawReticle(cx, cy) {
   const k = view.look.icon / GLYPH_PX;
+  drawArc(cx, cy, k);
 
   // Un point, sans croix : il marque l'endroit exact sans occuper de direction.
   ink.beginPath();
